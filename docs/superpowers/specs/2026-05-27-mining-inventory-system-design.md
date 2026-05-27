@@ -193,11 +193,15 @@ Inventory is modeled as a **ledger**, not a counter, for full auditability.
 ## 9. Authentication & Provisioning
 
 - **No public signup.** The Owner provisions every account from his dashboard: enters
-  name + role + site; the system generates a **one-time setup code / temporary password**.
-- The Owner hands the code to the employee over **WhatsApp** (their existing channel — no
-  email dependency).
-- The employee logs in with the code and sets their own password. Role and site are fixed
-  by the owner and cannot be self-assigned.
+  name + **username** + role + site; the system generates a **one-time temporary password**.
+- **Email-free login.** Since the owner doesn't use email, login is by **username**. Under
+  the hood each user maps to a synthetic internal email (`<username>@magneticjoezion.local`)
+  so Supabase Auth can be used without a real mailbox.
+- The Owner hands the username + temporary password to the employee over **WhatsApp** (their
+  existing channel — no email dependency).
+- The employee logs in with the temporary password and is **forced to set a new password on
+  first login** (`profiles.must_change_password`). Role and site are fixed by the owner and
+  cannot be self-assigned.
 - Provisioning runs in a server action using the Supabase service-role key.
 
 ---
