@@ -1,0 +1,8 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - heading "MAGNETIC JOEZION NIG. LTD" [level=1] [ref=e3]
+    - generic [ref=e4]:
+      - textbox "Username" [ref=e5]
+      - textbox "Password" [ref=e6]
+      - button "Sign in" [ref=e7]
+  - alert [ref=e8]

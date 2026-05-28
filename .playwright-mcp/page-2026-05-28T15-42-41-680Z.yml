@@ -1,0 +1,7 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - heading "Owner — Oversight" [level=1] [ref=e3]
+    - paragraph [ref=e4]: Signed in as Test Gate (test_gate)
+  - button "Open Next.js Dev Tools" [ref=e10] [cursor=pointer]:
+    - img [ref=e11]
+  - alert [ref=e14]

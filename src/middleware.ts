@@ -37,11 +37,13 @@ export async function middleware(req: NextRequest) {
     return redirectWithSession(req, res, "/login");
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profErr } = await supabase
     .from("profiles")
     .select("role, must_change_password, status")
     .eq("id", user.id)
     .single();
+
+  console.log("[middleware]", { path, userId: user.id, profile, profErr: profErr?.message });
 
   if (!profile) return redirectWithSession(req, res, "/login");
 
