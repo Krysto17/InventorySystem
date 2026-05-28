@@ -8,5 +8,15 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     testTimeout: 20000,
     fileParallelism: false, // RLS tests share one local DB
+    server: {
+      deps: {
+        inline: ["server-only"],
+      },
+    },
+  },
+  resolve: {
+    alias: {
+      "server-only": new URL("./tests/setup/server-only-shim.ts", import.meta.url).pathname,
+    },
   },
 });
