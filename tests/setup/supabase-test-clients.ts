@@ -6,6 +6,18 @@ const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
+// Cloud-safety guard: these tests wipe ALL auth users and must NEVER run against
+// a cloud/production Supabase project. Fail fast if the URL is not local.
+if (!URL.includes("127.0.0.1") && !URL.includes("localhost")) {
+  throw new Error(
+    `TEST SAFETY: NEXT_PUBLIC_SUPABASE_URL must point to 127.0.0.1 (local Supabase). Got: ${URL}. ` +
+    `These tests wipe ALL auth users and must NEVER run against cloud.`,
+  );
+}
+
+export type TestRole =
+  | "gate" | "processing" | "receiving" | "manager" | "accounting" | "inventory" | "owner";
+
 export function adminClient(): SupabaseClient {
   return createClient(URL, SERVICE, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -15,11 +27,12 @@ export function adminClient(): SupabaseClient {
 // Create a confirmed auth user + profile and return a client signed in as them.
 export async function makeUser(opts: {
   username: string;
-  role: string;
+  role: TestRole;
   siteId: string | null;
 }): Promise<{ client: SupabaseClient; id: string }> {
   const admin = adminClient();
-  const email = `${opts.username}@magneticjoezion.local`;
+  const domain = process.env.SYNTHETIC_EMAIL_DOMAIN ?? "magneticjoezion.local";
+  const email = `${opts.username}@${domain}`;
   const password = "test-password-123";
   const { data, error } = await admin.auth.admin.createUser({
     email,
