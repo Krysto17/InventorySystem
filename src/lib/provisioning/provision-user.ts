@@ -39,17 +39,32 @@ export async function provisionUser(input: ProvisionInput, createdBy: string) {
     created_by: createdBy,
   });
   if (profErr) {
-    await admin.auth.admin.deleteUser(userId); // roll back the orphaned auth user
+    const { error: rollbackErr } = await admin.auth.admin.deleteUser(userId);
+    if (rollbackErr) {
+      console.error("provisionUser: rollback failed; auth user orphaned", {
+        userId,
+        profileError: profErr.message,
+        rollbackError: rollbackErr.message,
+      });
+    }
     throw new Error(profErr.message);
   }
 
-  await admin.from("setup_codes").insert({
+  const { error: codeErr } = await admin.from("setup_codes").insert({
     user_id: userId,
     username,
     role: input.role,
     site_id: input.role === "owner" ? null : input.siteId,
     created_by: createdBy,
   });
+  if (codeErr) {
+    console.error("provisionUser: failed to insert setup_codes audit row", {
+      userId,
+      username,
+      error: codeErr.message,
+    });
+    // Do NOT roll back; the user account is valid. The audit row can be backfilled.
+  }
 
   return { userId, username, tempPassword };
 }
