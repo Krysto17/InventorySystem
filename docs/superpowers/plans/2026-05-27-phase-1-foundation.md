@@ -12,6 +12,26 @@
 
 ---
 
+## Pre-flight (already done before this plan starts)
+
+These were completed in the setup session immediately before Phase 1 begins — do **not** redo them:
+
+- `.gitignore` and `.env.example` exist; `.env.local` exists and is pre-filled with **local** Supabase keys from `supabase status -o env`. `.env.cloud.local` separately holds the cloud project's creds for later Vercel deploy. Both are gitignored.
+- `npx supabase init` has been run — `supabase/config.toml` exists and is committed. **Do NOT re-run `supabase init`.**
+- `npx supabase start` is already running (local stack on `http://127.0.0.1:54321`, Studio at `http://127.0.0.1:54323`). If it has stopped, restart with `npx supabase start`.
+- The cloud project (`wevkljmhucuhfqjgeqcb`) has **"Allow new users to sign up"** turned **OFF** in Authentication settings (required for the security model).
+
+Verify pre-flight at the start of execution:
+
+```bash
+test -f .env.local && grep -q "127.0.0.1:54321" .env.local && echo "env OK" || echo "env MISSING — abort"
+test -f supabase/config.toml && echo "supabase init OK" || echo "supabase init MISSING — abort"
+npx supabase status >/dev/null 2>&1 && echo "supabase running OK" || echo "supabase NOT running — run 'npx supabase start'"
+```
+Expected: three "OK" lines.
+
+---
+
 ## File Structure
 
 ```
@@ -200,24 +220,24 @@ git commit -m "feat: add supabase clients and env template"
 
 ---
 
-## Task 3: Initialize Supabase local dev + first migration (sites)
+## Task 3: First migration (sites)
 
 **Files:**
-- Create: `supabase/config.toml` (generated), `supabase/migrations/0001_sites.sql`
+- Create: `supabase/migrations/0001_sites.sql`
 
-- [ ] **Step 1: Initialize Supabase CLI project**
+> `supabase init` and `supabase start` were completed in pre-flight — do not re-run them.
+> Confirm the stack is up with `npx supabase status` before continuing.
 
-```bash
-npx supabase init
-```
-Expected: `supabase/config.toml` created. Answer "N" if asked to generate VS Code settings.
-
-- [ ] **Step 2: Start the local stack**
+- [ ] **Step 1: Confirm the stack is running**
 
 ```bash
-npx supabase start
+npx supabase status
 ```
-Expected: prints local `API URL`, `anon key`, and `service_role key`. Copy these into `.env.local` (create it from `.env.example`).
+Expected: prints the API URL, DB URL, and keys. If it errors, run `npx supabase start` and try again.
+
+- [ ] **Step 2: (intentionally empty — `start` already done in pre-flight)**
+
+Skip; proceed to Step 3.
 
 - [ ] **Step 3: Write the sites migration**
 
@@ -256,9 +276,10 @@ Expected: reset re-applies all migrations and seeds 3 sites without error (confi
 - [ ] **Step 6: Commit**
 
 ```bash
-git add supabase/config.toml supabase/migrations/0001_sites.sql
-git commit -m "feat: supabase init + sites table migration"
+git add supabase/migrations/0001_sites.sql
+git commit -m "feat: sites table migration"
 ```
+(`supabase/config.toml` was already committed in pre-flight.)
 
 ---
 
