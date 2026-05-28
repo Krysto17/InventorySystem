@@ -2,13 +2,18 @@
 
 import { getProfile } from "@/lib/auth/get-profile";
 import { provisionUser } from "@/lib/provisioning/provision-user";
-import type { Role } from "@/lib/auth/roles";
+import { ROLES, type Role } from "@/lib/auth/roles";
 
 export async function addEmployee(_prev: unknown, formData: FormData) {
   const me = await getProfile();
   if (!me || me.role !== "owner") return { error: "Not authorized" };
 
-  const role = String(formData.get("role")) as Role;
+  const roleRaw = String(formData.get("role") ?? "");
+  if (!(ROLES as readonly string[]).includes(roleRaw)) {
+    return { error: "Invalid role" };
+  }
+  const role = roleRaw as Role;
+
   const siteId = formData.get("siteId") ? String(formData.get("siteId")) : null;
   try {
     const result = await provisionUser(

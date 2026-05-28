@@ -13,11 +13,18 @@ export async function setPassword(_prev: unknown, formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { error } = await supabase.auth.updateUser({ password });
-  if (error) return { error: error.message };
+  const { error: updErr } = await supabase.auth.updateUser({ password });
+  if (updErr) return { error: updErr.message };
 
-  await supabase.from("profiles").update({ must_change_password: false }).eq("id", user!.id);
+  const { error: flagErr } = await supabase
+    .from("profiles")
+    .update({ must_change_password: false })
+    .eq("id", user!.id);
+  if (flagErr) {
+    return { error: "Password changed but session setup failed — contact the owner." };
+  }
 
   const profile = await getProfile();
-  redirect(ROLE_HOME[profile!.role]);
+  if (!profile) return { error: "Password changed but profile lookup failed — please log out and back in." };
+  redirect(ROLE_HOME[profile.role]);
 }

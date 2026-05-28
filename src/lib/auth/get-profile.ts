@@ -8,6 +8,7 @@ export type Profile = {
   role: Role;
   site_id: string | null;
   must_change_password: boolean;
+  status: "active" | "disabled";
 };
 
 export async function getProfile(): Promise<Profile | null> {
@@ -16,7 +17,7 @@ export async function getProfile(): Promise<Profile | null> {
   if (!user) return null;
   const { data } = await supabase
     .from("profiles")
-    .select("id, full_name, username, role, site_id, must_change_password")
+    .select("id, full_name, username, role, site_id, must_change_password, status")
     .eq("id", user.id)
     .single();
   return (data as Profile) ?? null;
