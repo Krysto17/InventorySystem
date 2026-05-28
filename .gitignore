@@ -34,3 +34,9 @@ yarn-error.log*
 # supabase
 supabase/.branches
 supabase/.temp
+
+# brainstorming mockups
+.superpowers/
+
+# playwright debug artifacts
+.playwright-mcp/
