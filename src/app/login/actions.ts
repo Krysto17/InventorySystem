@@ -11,11 +11,18 @@ export async function signIn(_prev: unknown, formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const domain = process.env.SYNTHETIC_EMAIL_DOMAIN ?? "magneticjoezion.local";
 
+  // Normalize username → synthetic email. Invalid chars (e.g. dots, hyphens,
+  // unicode) throw from normalizeUsername; treat that as a generic credential
+  // failure rather than crashing the request with a 500.
+  let email: string;
+  try {
+    email = usernameToEmail(username, domain);
+  } catch {
+    return { error: "Invalid username or password" };
+  }
+
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({
-    email: usernameToEmail(username, domain),
-    password,
-  });
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: "Invalid username or password" };
 
   const profile = await getProfile();
