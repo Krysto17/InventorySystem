@@ -2,6 +2,8 @@
 
 > **Handoff document.** This file is the index for whoever is taking over the build. Start here, then drill into the linked spec/plan files. The owner who briefed me is on WhatsApp for clarifications; the manager taking over this document is expected to know the business better than the original briefing and should feel free to amend decisions captured in the phase docs.
 
+> **For the manager:** You don't need to be a developer to drive this. Almost every step here is run by a Claude Code agent — you read each phase, copy the relevant section into Claude, and Claude does the work. You stay in the driver's seat for **business decisions** (what materials, what grades, when to override pricing, etc.). Git, Supabase, and Next.js are the agent's job, not yours. When this document gives you a shell command, copy it exactly as written. When it uses a term you don't know, search this file for "Glossary" — it's at the very end.
+
 **System purpose:** Role-based data-monitoring web app for a family-run tin / raw-metals processing and purchasing business with **three sites**. Tracks the full lifecycle of every supplier visit (gate → processing → analysis → pricing → payment → stock) plus outbound bulk sales of stored stock. Owner needs full cross-site oversight; every subprocess exports a branded PDF.
 
 **Stack (hard constraints):**
@@ -743,9 +745,9 @@ PASS criteria: every action completes within a reasonable time; no console error
 
 # Quick reference
 
-**Branching strategy:**
+**Branching strategy (read once; ask Claude to run the commands each time):**
 
-Each phase branches from the **previous phase's branch**, not from `main`. Phases are cumulative — Phase 3 needs Phase 2's tables to test anything, Phase 4 needs Phase 3's payments ledger, etc. Branching from `main` (which lags until merges happen) means the next phase can't run integration tests against real predecessor code. We learned this the hard way: Phase 2 was branched from `main`, hit "Phase 1 files missing," and had to carry Phase 1 forward in a wasted commit (`70f58ff`).
+Each phase **branches from the previous phase's branch**, not from `main`. Phases are cumulative — Phase 3 needs Phase 2's tables to test anything, Phase 4 needs Phase 3's payments ledger, etc. Branching from `main` (which doesn't have the previous phase's code until merges happen at the end) means the next phase can't run integration tests against real predecessor code. We learned this the hard way: Phase 2 was originally branched from `main` and had to be cleaned up afterward.
 
 ```
 main (trunk; only has docs until first merge)
@@ -759,9 +761,35 @@ main (trunk; only has docs until first merge)
  │                    └── phase-4-inventory ───► ...
 ```
 
-**PR convention to keep diffs readable:** open the Phase N+1 PR with the previous phase's branch as the base. After Phase N merges to main, run `git rebase --onto main phase-N phase-N+1` and the PR base swaps to main automatically. This shows reviewers only the new phase's changes, not the cumulative diff.
+### Starting a new phase — copy-paste these commands
 
-**Tradeoff to manage:** don't let three phases stack unreviewed. Review the current phase promptly; the next phase can be in planning meanwhile, but don't start coding it until the previous phase is at least past code review.
+When you're ready to start Phase 3, open a terminal in the project folder and run:
+
+```bash
+# 1. Switch to the previous phase's branch (the one you're building on top of)
+git checkout phase-2-visit-workflow
+
+# 2. Make sure you have its latest version from GitHub
+git pull
+
+# 3. Create + switch to a new branch for the phase you're starting
+git checkout -b phase-3-financial-model
+
+# 4. Publish the new branch to GitHub (only needed the first time)
+git push -u origin phase-3-financial-model
+```
+
+For Phase 4: substitute `phase-2-visit-workflow` → `phase-3-financial-model` and `phase-3-financial-model` → `phase-4-inventory`. Same pattern for Phases 5 and 6.
+
+If unsure, ask Claude: **"Start a new branch for Phase N off the previous phase, following BUILD_PHASES.md."** Claude can run the commands for you.
+
+### How phases get merged into main (at the end)
+
+When all phases are built and tested, you (or Claude) run the merges in order: Phase 1 → main first, then Phase 2 → main, etc. Each merge uses a **Pull Request** on GitHub — that's a web page on github.com that shows the diff before you accept it. Detailed steps are in **Phase 7 — Merge to Main** below. You don't need to do this until every phase is built.
+
+**PR convention to keep diffs readable:** when opening a PR for phase N+1, set the PR "base" branch to phase N's branch (not main). GitHub will show only the new phase's changes. After phase N merges into main, ask Claude to "rebase phase N+1 onto main" — that's a one-command cleanup the agent does, not you.
+
+**Tradeoff to manage:** don't let three phases stack unreviewed. Finish reviewing each phase before the next one's code is written.
 
 **Branch naming:**
 - `phase-N-<short-name>` for in-progress phases
@@ -906,4 +934,76 @@ The Owner is also the only role allowed to record "adjustment" stock movements (
 ### No in-app communication
 
 WhatsApp handles every human comm: temp passwords, payment-term negotiations, bulk-sale approvals, dispute resolution. The app makes no attempt to message users; no in-app inbox, no notifications, no chat. Be skeptical of any feature request that adds messaging — it's almost certainly out of scope.
+
+---
+
+## Glossary
+
+Plain-English definitions for terms used throughout this document. If you see a word you don't recognize, check here first.
+
+**Branch (git):** A parallel line of work in the codebase. `phase-2-visit-workflow` is a branch; so is `main`. You "switch to" a branch with `git checkout`. Your changes live on whatever branch you're currently on until you merge them somewhere else.
+
+**Brainstorming (Superpowers skill):** The first step in any phase. The Claude agent asks the owner/manager questions about what to build before writing code. Always do this before implementation.
+
+**CHECK constraint (Postgres):** A rule the database enforces on every row. Example: `CHECK (amount > 0)` means the database refuses to save a row whose `amount` is zero or negative. Faster and safer than checking in app code.
+
+**Cherry-pick (git):** Copy a single commit from one branch to another. We used this to put BUILD_PHASES.md on multiple branches.
+
+**Claude Code agent / subagent:** Claude running in agent mode — it can read files, write code, run tests, and commit. The handoff plan dispatches a fresh subagent per task so each one has clean context.
+
+**Commit (git):** A snapshot of your changes with a message describing what you did. Created with `git commit`. Lives on whatever branch you're on.
+
+**Cron / cron job:** A scheduled task that runs automatically (e.g., "every night at 2 a.m."). We don't use any yet; Phase 5 might add a materialized-view refresh cron.
+
+**CRUD:** Create / Read / Update / Delete. The four operations on database rows. An "Owner CRUD page" lets the Owner do all four.
+
+**Enum:** A fixed list of allowed values. Example: `entry_path` can only be `'unprocessed'` or `'pre_processed'`. Enforced by a `CHECK` constraint.
+
+**FK (foreign key):** A column whose value must match an existing ID in another table. Example: `visits.supplier_id` is a FK pointing at `suppliers.id`.
+
+**Force-push (git):** `git push --force`. Overwrites the remote branch with your local version, even if the remote has different commits. Dangerous if other people have pulled the branch. We use `--force-with-lease` instead, which refuses to overwrite if the remote has changed unexpectedly.
+
+**JSONB (Postgres):** A column type that stores structured JSON data (like `{"Sn": 58.2, "Fe": 12.1}`) and lets you query inside it. Used for flexible fields like XRF readings and audit-log payloads.
+
+**Merge (git):** Combine changes from one branch into another. `git merge phase-2-visit-workflow` while on `main` brings Phase 2's commits into main.
+
+**Middleware (Next.js):** Code that runs before every page request. Our middleware checks if the user is logged in, what role they have, and redirects them away from pages they shouldn't see.
+
+**Migration (database):** A SQL file that changes the database schema (adds tables, columns, constraints, etc.). Numbered sequentially. Once merged to main, **never edit a migration** — write a new one to fix anything.
+
+**Next.js (App Router):** The web framework we use. Pages live in `src/app/`. The "App Router" is the modern version (vs. the older "Pages Router").
+
+**PR (Pull Request):** A web page on GitHub for proposing a merge. Shows the diff, lets reviewers comment, and has an "Approve & Merge" button.
+
+**Postgres:** The database engine, accessed via Supabase. SQL is the language used to query it.
+
+**Rebase (git):** Re-anchor a branch to a different starting point. Used to keep branches up to date without merge commits. Rewrites history; needs force-push.
+
+**Repository / repo:** The whole project's code and history, stored in git. Cloned via `git clone`.
+
+**RLS (Row-Level Security):** Postgres policies that decide who can read or write each row. Example: a Gate user can only read visits from their own site. Enforced by the database, not by app code.
+
+**Server action (Next.js):** A function marked `"use server"` that runs on the server when a form is submitted. Replaces traditional REST API routes for most form work.
+
+**Service-role key (Supabase):** A secret key that bypasses all RLS rules. Used only on the server for owner-only operations like creating new user accounts. Must never reach the browser.
+
+**Squash merge / squash-merge:** A PR-merge style that condenses every commit on the branch into a single commit on the target branch. Cleaner history; loses individual commit messages.
+
+**Supabase:** A service that gives us Postgres + Authentication + File Storage with one set of keys. Runs locally for development (`npx supabase start`) and in the cloud for production.
+
+**Tailwind v4:** A CSS framework. Lets you style things by adding classes like `px-4 py-2 bg-black` directly to HTML, instead of writing separate CSS files.
+
+**TDD (Test-Driven Development):** Write the failing test first, then write the minimum code to make it pass, then commit. Every Phase 2 task uses this pattern.
+
+**Tag (git):** A label pinned to a specific commit. Used for releases or milestones. We tag `phase-N-merged` on main after each merge.
+
+**Trigger (Postgres):** A function the database runs automatically when something happens (e.g., "when a row is inserted into `processing_records`, also update `visits.state`"). Used for our state-machine and audit log.
+
+**TypeScript:** JavaScript with type annotations. Catches type errors at build time. All our code is TypeScript.
+
+**Vercel:** The hosting service where the production app runs. We push to GitHub → Vercel auto-deploys.
+
+**Vitest:** The test runner. `npm run test` invokes it. Runs every `.test.ts` file in `tests/`.
+
+**Worktree (git):** A separate working copy of the repo, lets you work on multiple branches simultaneously without switching. We don't currently use these; the Claude agent might, optionally.
 
