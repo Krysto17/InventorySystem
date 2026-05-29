@@ -3,7 +3,7 @@ create table public.material_types (
   name        text not null unique,
   active      boolean not null default true,
   created_at  timestamptz not null default now(),
-  created_by  uuid references public.profiles(id)
+  created_by  uuid references public.profiles(id) on delete set null
 );
 
 alter table public.material_types enable row level security;
