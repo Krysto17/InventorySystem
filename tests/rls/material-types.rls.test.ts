@@ -6,6 +6,13 @@ describe("material_types RLS", () => {
   let gate: TestUser, owner: TestUser;
 
   beforeAll(async () => {
+    // Clean up test-inserted rows and auth users from prior runs.
+    await adminClient().from("material_types").delete().in("name", ["Coltan", "Wolframite"]);
+    const admin = adminClient();
+    const { data: users } = await admin.auth.admin.listUsers({ perPage: 1000 });
+    for (const u of users.users.filter(u => u.email?.startsWith("mt-"))) {
+      await admin.auth.admin.deleteUser(u.id);
+    }
     siteId = await firstSiteId();
     gate = await makeUser({ username: "mt-gate", role: "gate", siteId });
     owner = await makeUser({ username: "mt-owner", role: "owner", siteId: null });
