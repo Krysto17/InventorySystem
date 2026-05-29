@@ -234,7 +234,7 @@ PASS criteria: open visits are editable by the recording role; closed visits are
 **Artifacts (when planning):**
 - Spec to create: `docs/superpowers/specs/YYYY-MM-DD-phase-3-financial-model-design.md`
 - Plan to create: `docs/superpowers/plans/YYYY-MM-DD-phase-3-financial-model.md`
-- Suggested branch: `phase-3-financial-model` (off main, or off the merged result of Phase 2)
+- Suggested branch: `phase-3-financial-model` — **branch from `phase-2-visit-workflow`**, not from main (see "Branching strategy" in Quick Reference). Phase 3 needs Phase 2's schema to run any integration test.
 
 **What Phase 3 builds (per existing spec §5):**
 
@@ -321,7 +321,7 @@ NO-AGREEMENT carry-over (Phase 2 unhappy):
 **Artifacts (when planning):**
 - Spec to create: `docs/superpowers/specs/YYYY-MM-DD-phase-4-inventory-design.md`
 - Plan to create: `docs/superpowers/plans/YYYY-MM-DD-phase-4-inventory.md`
-- Suggested branch: `phase-4-inventory`
+- Suggested branch: `phase-4-inventory` — **branch from `phase-3-financial-model`** (or from main if Phase 3 has already been merged); needs Phase 3's `payments` table to test settled → awaiting_stock_intake transition.
 
 **What Phase 4 builds (per spec §7):**
 
@@ -440,7 +440,7 @@ REJECTION (optional Playwright):
 **Artifacts (when planning):**
 - Spec to create: `docs/superpowers/specs/YYYY-MM-DD-phase-5-owner-dashboard-design.md`
 - Plan to create: `docs/superpowers/plans/YYYY-MM-DD-phase-5-owner-dashboard.md`
-- Suggested branch: `phase-5-dashboard`
+- Suggested branch: `phase-5-dashboard` — **branch from `phase-4-inventory`** (or from main if Phase 4 has been merged); the dashboard aggregates across all prior phases' tables.
 
 **What Phase 5 builds:**
 
@@ -519,7 +519,7 @@ PRE: Phases 1-4 done. At least 10 visits seeded across 2-3 sites with various st
 **Artifacts (when planning):**
 - Spec to create: `docs/superpowers/specs/YYYY-MM-DD-phase-6-pdf-export-design.md`
 - Plan to create: `docs/superpowers/plans/YYYY-MM-DD-phase-6-pdf-export.md`
-- Suggested branch: `phase-6-pdf-export`
+- Suggested branch: `phase-6-pdf-export` — **branch from `phase-5-dashboard`** (or from main if Phase 5 has been merged); PDFs render data from every prior phase.
 
 **What Phase 6 builds (per spec §11):**
 
@@ -742,6 +742,26 @@ PASS criteria: every action completes within a reasonable time; no console error
 ---
 
 # Quick reference
+
+**Branching strategy:**
+
+Each phase branches from the **previous phase's branch**, not from `main`. Phases are cumulative — Phase 3 needs Phase 2's tables to test anything, Phase 4 needs Phase 3's payments ledger, etc. Branching from `main` (which lags until merges happen) means the next phase can't run integration tests against real predecessor code. We learned this the hard way: Phase 2 was branched from `main`, hit "Phase 1 files missing," and had to carry Phase 1 forward in a wasted commit (`70f58ff`).
+
+```
+main (trunk; only has docs until first merge)
+ │
+ ├── phase-1-foundation ───────────► PR merges to main first
+ │      │
+ │      └── phase-2-visit-workflow ───► rebase onto main, then PR → main
+ │             │
+ │             └── phase-3-financial-model ───► rebase onto main, then PR → main
+ │                    │
+ │                    └── phase-4-inventory ───► ...
+```
+
+**PR convention to keep diffs readable:** open the Phase N+1 PR with the previous phase's branch as the base. After Phase N merges to main, run `git rebase --onto main phase-N phase-N+1` and the PR base swaps to main automatically. This shows reviewers only the new phase's changes, not the cumulative diff.
+
+**Tradeoff to manage:** don't let three phases stack unreviewed. Review the current phase promptly; the next phase can be in planning meanwhile, but don't start coding it until the previous phase is at least past code review.
 
 **Branch naming:**
 - `phase-N-<short-name>` for in-progress phases
