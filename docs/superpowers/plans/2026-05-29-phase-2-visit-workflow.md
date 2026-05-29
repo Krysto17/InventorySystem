@@ -128,7 +128,7 @@ describe("material_types RLS", () => {
   });
 
   it("non-owner cannot update material_types", async () => {
-    const { data: row } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: row } = await adminClient().from("material_types").select("id").limit(1).single();
     const { error } = await gate.client
       .from("material_types")
       .update({ active: false })
@@ -140,7 +140,7 @@ describe("material_types RLS", () => {
   });
 
   it("owner can soft-delete (set active=false)", async () => {
-    const { data: row } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: row } = await adminClient().from("material_types").select("id").limit(1).single();
     const { error } = await owner.client
       .from("material_types")
       .update({ active: false })
@@ -248,7 +248,7 @@ describe("suppliers RLS", () => {
 
   beforeAll(async () => {
     siteId = await firstSiteId();
-    const { data: sites } = await adminClient.from("sites").select("id").limit(2);
+    const { data: sites } = await adminClient().from("sites").select("id").limit(2);
     const siteAId = sites![0].id;
     const siteBId = sites![1].id;
     gateA = await makeUser({ username: "sup-gate-a", role: "gate", siteId: siteAId });
@@ -276,7 +276,7 @@ describe("suppliers RLS", () => {
     const { data: row } = await adminClient
       .from("suppliers").insert({ name: "Editable", phone: "07088000000" }).select("id").single();
     await gateA.client.from("suppliers").update({ name: "Changed" }).eq("id", row!.id);
-    const { data: after } = await adminClient.from("suppliers").select("name").eq("id", row!.id).single();
+    const { data: after } = await adminClient().from("suppliers").select("name").eq("id", row!.id).single();
     expect(after?.name).toBe("Editable");
   });
 
@@ -381,14 +381,14 @@ describe("machines RLS", () => {
   let machineAId: string;
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient.from("sites").select("id").limit(2);
+    const { data: sites } = await adminClient().from("sites").select("id").limit(2);
     siteAId = sites![0].id;
     siteBId = sites![1].id;
     procA = await makeUser({ username: "mach-proc-a", role: "processing", siteId: siteAId });
     procB = await makeUser({ username: "mach-proc-b", role: "processing", siteId: siteBId });
     owner = await makeUser({ username: "mach-owner", role: "owner", siteId: null });
 
-    const { data: machine } = await adminClient.from("machines")
+    const { data: machine } = await adminClient().from("machines")
       .insert({ site_id: siteAId, name: "Crusher #1", charge_basis: "weight", rate: 15.0 })
       .select("id").single();
     machineAId = machine!.id;
@@ -515,7 +515,7 @@ import { adminClient } from "../setup/supabase-test-clients";
 
 describe("jsonb_diff_changed", () => {
   async function diff(old: object, neu: object): Promise<Record<string, { old: unknown; new: unknown }>> {
-    const { data, error } = await adminClient.rpc("jsonb_diff_changed", {
+    const { data, error } = await adminClient().rpc("jsonb_diff_changed", {
       old: old as object,
       new: neu as object,
     });
@@ -577,7 +577,7 @@ describe("transaction_events RLS (pre-visits)", () => {
   });
 
   it("owner SELECT returns rows when admin seeds one", async () => {
-    await adminClient.from("transaction_events").insert({
+    await adminClient().from("transaction_events").insert({
       visit_id: "00000000-0000-0000-0000-000000000001",
       event_type: "visit_created",
       payload: { seeded: true },
@@ -858,14 +858,14 @@ describe("visits state machine — transitions", () => {
   let supplierId: string, materialTypeId: string;
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient.from("sites").select("id").limit(1);
+    const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteId = sites![0].id;
     gate = await makeUser({ username: "sm-gate", role: "gate", siteId });
     owner = await makeUser({ username: "sm-owner", role: "owner", siteId: null });
     const { data: s } = await adminClient
       .from("suppliers").insert({ name: "SM Supplier", phone: "07000000000" }).select("id").single();
     supplierId = s!.id;
-    const { data: m } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
     materialTypeId = m!.id;
   });
 
@@ -920,7 +920,7 @@ describe("visits state machine — transitions", () => {
     await owner.client.from("gate_exit_authorizations").insert({ visit_id: id, authorized_by: owner.userId });
     const { error } = await owner.client.from("visits").update({ state: "exited" }).eq("id", id);
     expect(error).toBeNull();
-    const { data: v } = await adminClient.from("visits").select("closed_at").eq("id", id).single();
+    const { data: v } = await adminClient().from("visits").select("closed_at").eq("id", id).single();
     expect(v?.closed_at).not.toBeNull();
   });
 });
@@ -941,7 +941,7 @@ describe("visits RLS", () => {
   let supplierId: string, materialTypeId: string;
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient.from("sites").select("id").limit(2);
+    const { data: sites } = await adminClient().from("sites").select("id").limit(2);
     siteAId = sites![0].id;
     siteBId = sites![1].id;
     gateA = await makeUser({ username: "v-gate-a", role: "gate", siteId: siteAId });
@@ -951,7 +951,7 @@ describe("visits RLS", () => {
     const { data: s } = await adminClient
       .from("suppliers").insert({ name: "V Supplier", phone: "07011110000" }).select("id").single();
     supplierId = s!.id;
-    const { data: m } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
     materialTypeId = m!.id;
   });
 
@@ -1215,7 +1215,7 @@ describe("processing_records RLS + state transition", () => {
   let supplierId: string, materialTypeId: string, machineAId: string;
 
   async function newOpenVisit(siteId: string) {
-    const { data } = await adminClient.from("visits").insert({
+    const { data } = await adminClient().from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: materialTypeId,
       entry_path: "unprocessed", state: "in_processing", created_by: gateA.userId,
     }).select("id").single();
@@ -1223,18 +1223,18 @@ describe("processing_records RLS + state transition", () => {
   }
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient.from("sites").select("id").limit(2);
+    const { data: sites } = await adminClient().from("sites").select("id").limit(2);
     siteAId = sites![0].id; siteBId = sites![1].id;
     gateA  = await makeUser({ username: "pr-gate-a", role: "gate",       siteId: siteAId });
     procA  = await makeUser({ username: "pr-proc-a", role: "processing", siteId: siteAId });
     procB  = await makeUser({ username: "pr-proc-b", role: "processing", siteId: siteBId });
     owner  = await makeUser({ username: "pr-owner",  role: "owner",      siteId: null });
-    const { data: s } = await adminClient.from("suppliers")
+    const { data: s } = await adminClient().from("suppliers")
       .insert({ name: "PR Supp", phone: "07022220000" }).select("id").single();
     supplierId = s!.id;
-    const { data: m } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
     materialTypeId = m!.id;
-    const { data: machine } = await adminClient.from("machines")
+    const { data: machine } = await adminClient().from("machines")
       .insert({ site_id: siteAId, name: "PR Crusher", charge_basis: "weight", rate: 10 })
       .select("id").single();
     machineAId = machine!.id;
@@ -1251,7 +1251,7 @@ describe("processing_records RLS + state transition", () => {
     const vid = await newOpenVisit(siteAId);
     await procA.client.from("processing_records")
       .insert({ visit_id: vid, recorded_by: procA.userId });
-    const { data } = await adminClient.from("visits").select("state").eq("id", vid).single();
+    const { data } = await adminClient().from("visits").select("state").eq("id", vid).single();
     expect(data?.state).toBe("in_receiving");
   });
 
@@ -1449,7 +1449,7 @@ describe("analysis_records RLS + state transition", () => {
   let supplierId: string, materialTypeId: string;
 
   async function newReceivingVisit() {
-    const { data } = await adminClient.from("visits").insert({
+    const { data } = await adminClient().from("visits").insert({
       site_id: siteAId, supplier_id: supplierId, declared_material_type_id: materialTypeId,
       entry_path: "pre_processed", state: "in_receiving", created_by: recvA.userId,
     }).select("id").single();
@@ -1457,15 +1457,15 @@ describe("analysis_records RLS + state transition", () => {
   }
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient.from("sites").select("id").limit(1);
+    const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteAId = sites![0].id;
     recvA  = await makeUser({ username: "ar-recv-a", role: "receiving",  siteId: siteAId });
     procA  = await makeUser({ username: "ar-proc-a", role: "processing", siteId: siteAId });
     owner  = await makeUser({ username: "ar-owner",  role: "owner",      siteId: null });
-    const { data: s } = await adminClient.from("suppliers")
+    const { data: s } = await adminClient().from("suppliers")
       .insert({ name: "AR Supp", phone: "07033330000" }).select("id").single();
     supplierId = s!.id;
-    const { data: m } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
     materialTypeId = m!.id;
   });
 
@@ -1480,7 +1480,7 @@ describe("analysis_records RLS + state transition", () => {
     const vid = await newReceivingVisit();
     await recvA.client.from("analysis_records")
       .insert({ visit_id: vid, weight: 305, recorded_by: recvA.userId });
-    const { data } = await adminClient.from("visits").select("state").eq("id", vid).single();
+    const { data } = await adminClient().from("visits").select("state").eq("id", vid).single();
     expect(data?.state).toBe("pricing");
   });
 
@@ -1492,7 +1492,7 @@ describe("analysis_records RLS + state transition", () => {
   });
 
   it("receiving cannot insert analysis when visit is not in_receiving", async () => {
-    const { data: v } = await adminClient.from("visits").insert({
+    const { data: v } = await adminClient().from("visits").insert({
       site_id: siteAId, supplier_id: supplierId, declared_material_type_id: materialTypeId,
       entry_path: "unprocessed", state: "in_processing", created_by: recvA.userId,
     }).select("id").single();
@@ -1506,7 +1506,7 @@ describe("analysis_records RLS + state transition", () => {
     const { data: rec } = await recvA.client.from("analysis_records")
       .insert({ visit_id: vid, weight: 305, recorded_by: recvA.userId }).select("id").single();
     await recvA.client.from("analysis_records").update({ weight: 310 }).eq("id", rec!.id);
-    const { data: events } = await adminClient.from("transaction_events")
+    const { data: events } = await adminClient().from("transaction_events")
       .select("event_type, payload").eq("visit_id", vid).eq("event_type", "record_edited");
     expect(events!.length).toBeGreaterThan(0);
     const diff = (events![0].payload as { diff: { weight?: { old: number; new: number } } }).diff;
@@ -1709,26 +1709,26 @@ describe("pricing RLS + transition + purchase_amount", () => {
   let supplierId: string, materialTypeId: string;
 
   async function newPricingVisitWithAnalysis(weight: number) {
-    const { data: v } = await adminClient.from("visits").insert({
+    const { data: v } = await adminClient().from("visits").insert({
       site_id: siteAId, supplier_id: supplierId, declared_material_type_id: materialTypeId,
       entry_path: "pre_processed", state: "in_receiving", created_by: mgrA.userId,
     }).select("id").single();
-    await adminClient.from("analysis_records")
+    await adminClient().from("analysis_records")
       .insert({ visit_id: v!.id, weight, recorded_by: recvA.userId });
     // analysis insert auto-transitions to pricing
     return v!.id;
   }
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient.from("sites").select("id").limit(1);
+    const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteAId = sites![0].id;
     mgrA  = await makeUser({ username: "pp-mgr-a",  role: "manager",   siteId: siteAId });
     recvA = await makeUser({ username: "pp-recv-a", role: "receiving", siteId: siteAId });
     owner = await makeUser({ username: "pp-owner",  role: "owner",     siteId: null });
-    const { data: s } = await adminClient.from("suppliers")
+    const { data: s } = await adminClient().from("suppliers")
       .insert({ name: "PP Supp", phone: "07044440000" }).select("id").single();
     supplierId = s!.id;
-    const { data: m } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
     materialTypeId = m!.id;
   });
 
@@ -1739,7 +1739,7 @@ describe("pricing RLS + transition + purchase_amount", () => {
       payment_terms: "immediate", priced_by: mgrA.userId,
     });
     expect(error).toBeNull();
-    const { data: v } = await adminClient.from("visits").select("state").eq("id", vid).single();
+    const { data: v } = await adminClient().from("visits").select("state").eq("id", vid).single();
     expect(v?.state).toBe("in_accounting");
   });
 
@@ -1748,7 +1748,7 @@ describe("pricing RLS + transition + purchase_amount", () => {
     await mgrA.client.from("pricing").insert({
       visit_id: vid, unit_price: 1500, agreement_status: "pending", priced_by: mgrA.userId,
     });
-    const { data: p } = await adminClient.from("pricing").select("purchase_amount").eq("visit_id", vid).single();
+    const { data: p } = await adminClient().from("pricing").select("purchase_amount").eq("visit_id", vid).single();
     expect(Number(p?.purchase_amount)).toBe(250 * 1500);
   });
 
@@ -1773,7 +1773,7 @@ describe("pricing RLS + transition + purchase_amount", () => {
     await mgrA.client.from("pricing").insert({
       visit_id: vid, agreement_status: "not_agreed", priced_by: mgrA.userId,
     });
-    const { data: v } = await adminClient.from("visits").select("state").eq("id", vid).single();
+    const { data: v } = await adminClient().from("visits").select("state").eq("id", vid).single();
     expect(v?.state).toBe("awaiting_gate_exit");
   });
 
@@ -1782,8 +1782,8 @@ describe("pricing RLS + transition + purchase_amount", () => {
     await mgrA.client.from("pricing").insert({
       visit_id: vid, unit_price: 2000, agreement_status: "pending", priced_by: mgrA.userId,
     });
-    await adminClient.from("analysis_records").update({ weight: 110 }).eq("visit_id", vid);
-    const { data: p } = await adminClient.from("pricing").select("purchase_amount").eq("visit_id", vid).single();
+    await adminClient().from("analysis_records").update({ weight: 110 }).eq("visit_id", vid);
+    const { data: p } = await adminClient().from("pricing").select("purchase_amount").eq("visit_id", vid).single();
     expect(Number(p?.purchase_amount)).toBe(110 * 2000);
   });
 
@@ -1900,7 +1900,7 @@ describe("gate_exit_authorizations RLS", () => {
   let supplierId: string, materialTypeId: string;
 
   async function newAwaitingExitVisit() {
-    const { data: v } = await adminClient.from("visits").insert({
+    const { data: v } = await adminClient().from("visits").insert({
       site_id: siteAId, supplier_id: supplierId, declared_material_type_id: materialTypeId,
       entry_path: "pre_processed", state: "awaiting_gate_exit", created_by: gateA.userId,
     }).select("id").single();
@@ -1908,15 +1908,15 @@ describe("gate_exit_authorizations RLS", () => {
   }
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient.from("sites").select("id").limit(1);
+    const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteAId = sites![0].id;
     gateA = await makeUser({ username: "gea-gate-a", role: "gate",    siteId: siteAId });
     mgrA  = await makeUser({ username: "gea-mgr-a",  role: "manager", siteId: siteAId });
     owner = await makeUser({ username: "gea-owner",  role: "owner",   siteId: null });
-    const { data: s } = await adminClient.from("suppliers")
+    const { data: s } = await adminClient().from("suppliers")
       .insert({ name: "GEA Supp", phone: "07055550000" }).select("id").single();
     supplierId = s!.id;
-    const { data: m } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
     materialTypeId = m!.id;
   });
 
@@ -1936,7 +1936,7 @@ describe("gate_exit_authorizations RLS", () => {
 
   it("gate at site A can read authorization (to render Release button)", async () => {
     const vid = await newAwaitingExitVisit();
-    await adminClient.from("gate_exit_authorizations").insert({ visit_id: vid, authorized_by: owner.userId });
+    await adminClient().from("gate_exit_authorizations").insert({ visit_id: vid, authorized_by: owner.userId });
     const { data, error } = await gateA.client
       .from("gate_exit_authorizations").select("id").eq("visit_id", vid);
     expect(error).toBeNull();
@@ -1947,7 +1947,7 @@ describe("gate_exit_authorizations RLS", () => {
     const vid = await newAwaitingExitVisit();
     await owner.client.from("gate_exit_authorizations")
       .insert({ visit_id: vid, authorized_by: owner.userId, note: "audit-test" });
-    const { data } = await adminClient.from("transaction_events")
+    const { data } = await adminClient().from("transaction_events")
       .select("event_type, payload").eq("visit_id", vid).eq("event_type", "gate_exit_authorized");
     expect(data?.length).toBe(1);
     expect((data![0].payload as { note: string }).note).toBe("audit-test");
@@ -1958,7 +1958,7 @@ describe("gate_exit_authorizations RLS", () => {
     await owner.client.from("gate_exit_authorizations").insert({ visit_id: vid, authorized_by: owner.userId });
     const { error } = await gateA.client.from("visits").update({ state: "exited" }).eq("id", vid);
     expect(error).toBeNull();
-    const { data } = await adminClient.from("visits").select("state, closed_at").eq("id", vid).single();
+    const { data } = await adminClient().from("visits").select("state, closed_at").eq("id", vid).single();
     expect(data?.state).toBe("exited");
     expect(data?.closed_at).not.toBeNull();
   });
@@ -2658,7 +2658,7 @@ describe("gate intake action — direct DB equivalent", () => {
   beforeAll(async () => {
     siteId = await firstSiteId();
     gate = await makeUser({ username: "gi-gate", role: "gate", siteId });
-    const { data: m } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
     materialTypeId = m!.id;
   });
 
@@ -2688,7 +2688,7 @@ describe("gate intake action — direct DB equivalent", () => {
     expect(tErr).toBeNull();
 
     // Verify events
-    const { data: events } = await adminClient.from("transaction_events")
+    const { data: events } = await adminClient().from("transaction_events")
       .select("event_type").eq("visit_id", v!.id).order("created_at");
     expect(events!.map(e => e.event_type)).toEqual(["visit_created", "state_changed"]);
   });
@@ -2701,7 +2701,7 @@ describe("gate intake action — direct DB equivalent", () => {
       entry_path: "pre_processed", state: "at_gate_in", created_by: gate.userId,
     }).select("id").single();
     await gate.client.from("visits").update({ state: "in_receiving" }).eq("id", v!.id);
-    const { data: after } = await adminClient.from("visits").select("state").eq("id", v!.id).single();
+    const { data: after } = await adminClient().from("visits").select("state").eq("id", v!.id).single();
     expect(after?.state).toBe("in_receiving");
   });
 });
@@ -4560,7 +4560,7 @@ describe("happy path: unprocessed → agreed → in_accounting", () => {
   let supplierId: string, materialTypeId: string, machineId: string;
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient.from("sites").select("id").limit(1);
+    const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteId = sites![0].id;
     gate  = await makeUser({ username: "hpu-gate",  role: "gate",       siteId });
     proc  = await makeUser({ username: "hpu-proc",  role: "processing", siteId });
@@ -4570,9 +4570,9 @@ describe("happy path: unprocessed → agreed → in_accounting", () => {
     const { data: s } = await adminClient
       .from("suppliers").insert({ name: "HPU Supp", phone: "07088880000" }).select("id").single();
     supplierId = s!.id;
-    const { data: m } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
     materialTypeId = m!.id;
-    const { data: mc } = await adminClient.from("machines")
+    const { data: mc } = await adminClient().from("machines")
       .insert({ site_id: siteId, name: "HPU Crusher", charge_basis: "weight", rate: 15 })
       .select("id").single();
     machineId = mc!.id;
@@ -4598,14 +4598,14 @@ describe("happy path: unprocessed → agreed → in_accounting", () => {
     });
 
     // State should now be in_receiving (transition trigger fired)
-    let { data: state1 } = await adminClient.from("visits").select("state").eq("id", v!.id).single();
+    let { data: state1 } = await adminClient().from("visits").select("state").eq("id", v!.id).single();
     expect(state1?.state).toBe("in_receiving");
 
     // Analysis
     await recv.client.from("analysis_records").insert({
       visit_id: v!.id, weight: 305, grade: "A", purity: 65, recorded_by: recv.userId,
     });
-    let { data: state2 } = await adminClient.from("visits").select("state").eq("id", v!.id).single();
+    let { data: state2 } = await adminClient().from("visits").select("state").eq("id", v!.id).single();
     expect(state2?.state).toBe("pricing");
 
     // Pricing — agreed
@@ -4613,15 +4613,15 @@ describe("happy path: unprocessed → agreed → in_accounting", () => {
       visit_id: v!.id, unit_price: 1200, agreement_status: "agreed",
       payment_terms: "installment", priced_by: mgr.userId,
     });
-    let { data: state3 } = await adminClient.from("visits").select("state").eq("id", v!.id).single();
+    let { data: state3 } = await adminClient().from("visits").select("state").eq("id", v!.id).single();
     expect(state3?.state).toBe("in_accounting");
 
     // Verify purchase_amount = 305 × 1200
-    const { data: p } = await adminClient.from("pricing").select("purchase_amount").eq("visit_id", v!.id).single();
+    const { data: p } = await adminClient().from("pricing").select("purchase_amount").eq("visit_id", v!.id).single();
     expect(Number(p?.purchase_amount)).toBe(305 * 1200);
 
     // Verify event log shape
-    const { data: events } = await adminClient.from("transaction_events")
+    const { data: events } = await adminClient().from("transaction_events")
       .select("event_type").eq("visit_id", v!.id).order("created_at");
     const types = events!.map(e => e.event_type);
     expect(types).toEqual(expect.arrayContaining([
@@ -4671,15 +4671,15 @@ describe("happy path: pre_processed → agreed → in_accounting (no processing 
   let supplierId: string, materialTypeId: string;
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient.from("sites").select("id").limit(1);
+    const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteId = sites![0].id;
     gate = await makeUser({ username: "hpp-gate", role: "gate",      siteId });
     recv = await makeUser({ username: "hpp-recv", role: "receiving", siteId });
     mgr  = await makeUser({ username: "hpp-mgr",  role: "manager",   siteId });
-    const { data: s } = await adminClient.from("suppliers")
+    const { data: s } = await adminClient().from("suppliers")
       .insert({ name: "HPP Supp", phone: "07099990000" }).select("id").single();
     supplierId = s!.id;
-    const { data: m } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
     materialTypeId = m!.id;
   });
 
@@ -4696,11 +4696,11 @@ describe("happy path: pre_processed → agreed → in_accounting (no processing 
       visit_id: v!.id, unit_price: 1500, agreement_status: "agreed",
       payment_terms: "immediate", priced_by: mgr.userId,
     });
-    const { data } = await adminClient.from("visits").select("state").eq("id", v!.id).single();
+    const { data } = await adminClient().from("visits").select("state").eq("id", v!.id).single();
     expect(data?.state).toBe("in_accounting");
 
     // Verify no processing record exists
-    const { data: pr } = await adminClient.from("processing_records").select("id").eq("visit_id", v!.id);
+    const { data: pr } = await adminClient().from("processing_records").select("id").eq("visit_id", v!.id);
     expect(pr?.length).toBe(0);
   });
 });
@@ -4719,18 +4719,18 @@ describe("no-agreement exit path", () => {
   let supplierId: string, materialTypeId: string, machineId: string;
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient.from("sites").select("id").limit(1);
+    const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteId = sites![0].id;
     gate  = await makeUser({ username: "nae-gate",  role: "gate",       siteId });
     recv  = await makeUser({ username: "nae-recv",  role: "receiving",  siteId });
     mgr   = await makeUser({ username: "nae-mgr",   role: "manager",    siteId });
     owner = await makeUser({ username: "nae-owner", role: "owner",      siteId: null });
-    const { data: s } = await adminClient.from("suppliers")
+    const { data: s } = await adminClient().from("suppliers")
       .insert({ name: "NAE Supp", phone: "07011110001" }).select("id").single();
     supplierId = s!.id;
-    const { data: m } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
     materialTypeId = m!.id;
-    const { data: mc } = await adminClient.from("machines")
+    const { data: mc } = await adminClient().from("machines")
       .insert({ site_id: siteId, name: "NAE Crusher", charge_basis: "weight", rate: 10 })
       .select("id").single();
     machineId = mc!.id;
@@ -4758,7 +4758,7 @@ describe("no-agreement exit path", () => {
     await mgr.client.from("pricing").insert({
       visit_id: v!.id, agreement_status: "not_agreed", priced_by: mgr.userId,
     });
-    let { data: s1 } = await adminClient.from("visits").select("state").eq("id", v!.id).single();
+    let { data: s1 } = await adminClient().from("visits").select("state").eq("id", v!.id).single();
     expect(s1?.state).toBe("awaiting_gate_exit");
 
     // Owner authorizes
@@ -4767,12 +4767,12 @@ describe("no-agreement exit path", () => {
 
     // Gate releases
     await gate.client.from("visits").update({ state: "exited" }).eq("id", v!.id);
-    const { data: final } = await adminClient.from("visits").select("state, closed_at").eq("id", v!.id).single();
+    const { data: final } = await adminClient().from("visits").select("state, closed_at").eq("id", v!.id).single();
     expect(final?.state).toBe("exited");
     expect(final?.closed_at).not.toBeNull();
 
     // Processing fee still owed: usage rows exist
-    const { data: usage } = await adminClient.from("processing_machine_usage")
+    const { data: usage } = await adminClient().from("processing_machine_usage")
       .select("line_cost").eq("processing_record_id", pr!.id);
     expect(Number(usage![0].line_cost)).toBe(100 * 10);
   });
@@ -4791,7 +4791,7 @@ describe("no-agreement exit path", () => {
       .insert({ visit_id: v!.id, authorized_by: owner.userId });
     await gate.client.from("visits").update({ state: "exited" }).eq("id", v!.id);
 
-    const { data: pr } = await adminClient.from("processing_records").select("id").eq("visit_id", v!.id);
+    const { data: pr } = await adminClient().from("processing_records").select("id").eq("visit_id", v!.id);
     expect(pr?.length).toBe(0);  // no processing fee at all
   });
 });
@@ -4839,7 +4839,7 @@ describe("edit-while-open: each role can edit own record on an open visit", () =
   let supplierId: string, materialTypeId: string;
 
   async function freshVisitInPricing() {
-    const { data: v } = await adminClient.from("visits").insert({
+    const { data: v } = await adminClient().from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: materialTypeId,
       entry_path: "pre_processed", state: "in_receiving", created_by: gate.userId,
     }).select("id").single();
@@ -4849,15 +4849,15 @@ describe("edit-while-open: each role can edit own record on an open visit", () =
   }
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient.from("sites").select("id").limit(1);
+    const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteId = sites![0].id;
     gate = await makeUser({ username: "ewo-gate", role: "gate",      siteId });
     recv = await makeUser({ username: "ewo-recv", role: "receiving", siteId });
     mgr  = await makeUser({ username: "ewo-mgr",  role: "manager",   siteId });
-    const { data: s } = await adminClient.from("suppliers")
+    const { data: s } = await adminClient().from("suppliers")
       .insert({ name: "EWO Supp", phone: "07022220001" }).select("id").single();
     supplierId = s!.id;
-    const { data: m } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
     materialTypeId = m!.id;
   });
 
@@ -4865,7 +4865,7 @@ describe("edit-while-open: each role can edit own record on an open visit", () =
     const { vid, aid } = await freshVisitInPricing();
     const { error } = await recv.client.from("analysis_records").update({ weight: 120 }).eq("id", aid);
     expect(error).toBeNull();
-    const { data: events } = await adminClient.from("transaction_events")
+    const { data: events } = await adminClient().from("transaction_events")
       .select("event_type, payload").eq("visit_id", vid).eq("event_type", "record_edited");
     expect(events!.length).toBeGreaterThan(0);
   });
@@ -4876,7 +4876,7 @@ describe("edit-while-open: each role can edit own record on an open visit", () =
       .insert({ visit_id: vid, unit_price: 1000, agreement_status: "pending", priced_by: mgr.userId })
       .select("id").single();
     await mgr.client.from("pricing").update({ unit_price: 1100 }).eq("id", p!.id);
-    const { data: events } = await adminClient.from("transaction_events")
+    const { data: events } = await adminClient().from("transaction_events")
       .select("payload").eq("visit_id", vid).eq("event_type", "record_edited").order("created_at", { ascending: false }).limit(1);
     const diff = (events![0].payload as { diff?: { unit_price?: { old: number; new: number } } }).diff;
     expect(diff?.unit_price).toEqual({ old: 1000, new: 1100 });
@@ -4897,16 +4897,16 @@ describe("edit-after-close: non-owner blocked, owner allowed", () => {
   let supplierId: string, materialTypeId: string;
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient.from("sites").select("id").limit(1);
+    const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteId = sites![0].id;
     gate  = await makeUser({ username: "eac-gate",  role: "gate",       siteId });
     recv  = await makeUser({ username: "eac-recv",  role: "receiving",  siteId });
     mgr   = await makeUser({ username: "eac-mgr",   role: "manager",    siteId });
     owner = await makeUser({ username: "eac-owner", role: "owner",      siteId: null });
-    const { data: s } = await adminClient.from("suppliers")
+    const { data: s } = await adminClient().from("suppliers")
       .insert({ name: "EAC Supp", phone: "07033330001" }).select("id").single();
     supplierId = s!.id;
-    const { data: m } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
     materialTypeId = m!.id;
   });
 
@@ -4953,14 +4953,14 @@ describe("owner-override events", () => {
   let supplierId: string, materialTypeId: string;
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient.from("sites").select("id").limit(1);
+    const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteId = sites![0].id;
     gate  = await makeUser({ username: "oo-gate",  role: "gate",  siteId });
     owner = await makeUser({ username: "oo-owner", role: "owner", siteId: null });
-    const { data: s } = await adminClient.from("suppliers")
+    const { data: s } = await adminClient().from("suppliers")
       .insert({ name: "OO Supp", phone: "07044440001" }).select("id").single();
     supplierId = s!.id;
-    const { data: m } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
     materialTypeId = m!.id;
   });
 
@@ -4974,7 +4974,7 @@ describe("owner-override events", () => {
     // Owner rolls back
     await owner.client.from("visits").update({ state: "at_gate_in" }).eq("id", v!.id);
 
-    const { data: events } = await adminClient.from("transaction_events")
+    const { data: events } = await adminClient().from("transaction_events")
       .select("event_type").eq("visit_id", v!.id).order("created_at");
     expect(events!.map(e => e.event_type)).toContain("owner_override");
   });
@@ -4993,15 +4993,15 @@ describe("state-machine invariants", () => {
   let supplierId: string, materialTypeId: string;
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient.from("sites").select("id").limit(1);
+    const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteId = sites![0].id;
     gate  = await makeUser({ username: "inv-gate",  role: "gate",    siteId });
     mgr   = await makeUser({ username: "inv-mgr",   role: "manager", siteId });
     owner = await makeUser({ username: "inv-owner", role: "owner",   siteId: null });
-    const { data: s } = await adminClient.from("suppliers")
+    const { data: s } = await adminClient().from("suppliers")
       .insert({ name: "INV Supp", phone: "07055550001" }).select("id").single();
     supplierId = s!.id;
-    const { data: m } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
     materialTypeId = m!.id;
   });
 
@@ -5066,16 +5066,16 @@ describe("transaction_events written by triggers", () => {
   let supplierId: string, materialTypeId: string;
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient.from("sites").select("id").limit(1);
+    const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteId = sites![0].id;
     gate  = await makeUser({ username: "ew-gate",  role: "gate",       siteId });
     recv  = await makeUser({ username: "ew-recv",  role: "receiving",  siteId });
     mgr   = await makeUser({ username: "ew-mgr",   role: "manager",    siteId });
     owner = await makeUser({ username: "ew-owner", role: "owner",      siteId: null });
-    const { data: s } = await adminClient.from("suppliers")
+    const { data: s } = await adminClient().from("suppliers")
       .insert({ name: "EW Supp", phone: "07066660001" }).select("id").single();
     supplierId = s!.id;
-    const { data: m } = await adminClient.from("material_types").select("id").limit(1).single();
+    const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
     materialTypeId = m!.id;
   });
 
@@ -5092,7 +5092,7 @@ describe("transaction_events written by triggers", () => {
       payment_terms: "immediate", priced_by: mgr.userId,
     });
 
-    const { data: events } = await adminClient.from("transaction_events")
+    const { data: events } = await adminClient().from("transaction_events")
       .select("event_type, payload").eq("visit_id", v!.id).order("created_at");
     const types = events!.map(e => e.event_type);
     // visit_created, state_changed(at_gate_in→in_receiving), record_created(analysis),
