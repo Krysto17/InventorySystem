@@ -231,7 +231,7 @@ PASS criteria: open visits are editable by the recording role; closed visits are
 
 **Goal:** Make the `in_accounting` state actually do something — Accountant manages payments, records partial settlements, tracks running balances per visit.
 
-**Status:** `DONE`. Migration 0015 (payments + processing_deducted), /accounting screen, PaymentsCard, server actions, RLS tests, and integration tests committed on `phase-2-visit-workflow`.
+**Status:** `DONE`. Migration 0015 (payments + processing_deducted), /accounting screen, PaymentsCard, server actions, RLS tests, and integration tests committed on `phase-3-financial-model`.
 
 **Spec:** `docs/superpowers/specs/2026-06-02-phase-3-financial-model-design.md`
 
