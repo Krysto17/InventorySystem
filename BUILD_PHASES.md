@@ -111,11 +111,11 @@ PASS criteria: all redirects work; no role can reach another role's home; owner 
 
 ---
 
-# Phase 2 — Inbound Visit Workflow 📋 PLAN COMPLETE, NOT STARTED
+# Phase 2 — Inbound Visit Workflow ✅ DONE
 
 **Goal:** Build the visit pipeline from gate intake through Manager pricing, plus the no-agreement Owner-authorized gate exit. Visits can reach `in_accounting` (Phase 3 waits there) or `exited` (terminal).
 
-**Status:** `PLAN COMPLETE`. Spec and 26-task plan committed on branch `phase-2-visit-workflow`. Task 1 (material_types migration) is implemented and committed (`f0b0f2c`) with all 5 RLS tests passing, but the rest is unstarted. Manager may choose to discard the Task 1 work and re-do, or build on top.
+**Status:** `DONE`. All 26 tasks implemented. Migrations 0007-0014, all role screens, shared visit detail page, and full test suite committed on `phase-2-visit-workflow`.
 
 **Artifacts:**
 - Spec: `docs/superpowers/specs/2026-05-29-phase-2-visit-workflow-design.md`
@@ -227,11 +227,13 @@ PASS criteria: open visits are editable by the recording role; closed visits are
 
 ---
 
-# Phase 3 — Financial Model 📐 NOT STARTED
+# Phase 3 — Financial Model ✅ DONE
 
 **Goal:** Make the `in_accounting` state actually do something — Accountant manages payments, records partial settlements, tracks running balances per visit.
 
-**Status:** `NOT STARTED`. Spec section §5 of the system-wide design covers the table shape; no implementation plan yet.
+**Status:** `DONE`. Migration 0015 (payments + processing_deducted), /accounting screen, PaymentsCard, server actions, RLS tests, and integration tests committed on `phase-2-visit-workflow`.
+
+**Spec:** `docs/superpowers/specs/2026-06-02-phase-3-financial-model-design.md`
 
 **Artifacts (when planning):**
 - Spec to create: `docs/superpowers/specs/YYYY-MM-DD-phase-3-financial-model-design.md`
