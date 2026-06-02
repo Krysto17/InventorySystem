@@ -3,6 +3,11 @@ import { createServerClient } from "@supabase/ssr";
 import { ROLE_HOME, type Role } from "@/lib/auth/roles";
 
 const PUBLIC_PATHS = ["/login", "/set-password"];
+const SHARED_AUTHENTICATED_PREFIXES = ["/visits/"];
+
+function isSharedAuthenticatedPath(path: string): boolean {
+  return SHARED_AUTHENTICATED_PREFIXES.some((p) => path.startsWith(p));
+}
 
 // Build a redirect response that preserves any cookies Supabase wrote to `res`
 // during getUser()/getSession() (token refresh, signOut, etc.). Without this,
@@ -55,8 +60,13 @@ export async function middleware(req: NextRequest) {
   }
 
   const home = ROLE_HOME[profile.role as Role];
-  // Owner may visit any route; other roles are confined to their own home subtree.
-  if (profile.role !== "owner" && !path.startsWith(home) && !PUBLIC_PATHS.includes(path)) {
+  // Owner may visit any route; other roles are confined to their home subtree or shared paths.
+  if (
+    profile.role !== "owner"
+    && !path.startsWith(home)
+    && !PUBLIC_PATHS.includes(path)
+    && !isSharedAuthenticatedPath(path)
+  ) {
     return redirectWithSession(req, res, home);
   }
   return res;
