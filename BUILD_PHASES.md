@@ -435,11 +435,11 @@ REJECTION (optional Playwright):
 
 ---
 
-# Phase 5 — Owner Cross-Site Dashboard 📐 NOT STARTED
+# Phase 5 — Owner Cross-Site Dashboard ✅ DONE
 
 **Goal:** Single dashboard at `/owner` aggregating everything across the 3 sites. Filters by site, date range, material type. Drill-down to individual visits.
 
-**Status:** `NOT STARTED`.
+**Status:** `DONE`. Design system primitives, full owner dashboard with all 9 tiles + filters, cross-site search, and all role screen retrofits committed on `phase-5-dashboard`.
 
 **Artifacts (when planning):**
 - Spec to create: `docs/superpowers/specs/YYYY-MM-DD-phase-5-owner-dashboard-design.md`
