@@ -5,6 +5,7 @@ import { PricingCard } from "./PricingCard";
 import { ExitAuthorizationCard } from "./ExitAuthorizationCard";
 import { AuditTrail } from "./AuditTrail";
 import { PaymentsCard } from "./PaymentsCard";
+import { StockIntakeCard } from "./StockIntakeCard";
 import { STATE_LABELS, type VisitState } from "@/lib/visits/state-machine";
 import { formatNaira, formatTimestamp, formatWeight } from "@/lib/visits/format";
 
@@ -74,10 +75,11 @@ export type VisitTimelineProps = {
       | "owner";
   };
   machines: Machine[];
+  stockMovement: Parameters<typeof StockIntakeCard>[0]["stockMovement"];
 };
 
 export function VisitTimeline(props: VisitTimelineProps) {
-  const { visit, processing, analysis, pricing, authorization, payments, paymentBalance, events, viewer, machines } = props;
+  const { visit, processing, analysis, pricing, authorization, payments, paymentBalance, events, viewer, machines, stockMovement } = props;
   const isOwner = viewer.role === "owner";
 
   return (
@@ -242,6 +244,19 @@ export function VisitTimeline(props: VisitTimelineProps) {
           payments={payments}
           balance={paymentBalance}
           canWrite={viewer.role === "accounting" || isOwner}
+        />
+      )}
+
+      {(visit.state === "awaiting_stock_intake" ||
+        visit.state === "stocked" ||
+        stockMovement) && (
+        <StockIntakeCard
+          visitId={visit.id}
+          visitState={visit.state}
+          analysisWeight={analysis?.weight ?? null}
+          analysisGrade={analysis?.grade ?? null}
+          canWrite={viewer.role === "inventory" || isOwner}
+          stockMovement={stockMovement}
         />
       )}
 

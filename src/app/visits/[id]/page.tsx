@@ -91,6 +91,16 @@ export default async function VisitDetailPage({
     .eq("visit_id", id)
     .order("paid_at", { ascending: true });
 
+  const { data: stockMovementRaw } = await supabase
+    .from("stock_movements")
+    .select(`
+      id, weight, grade, created_at,
+      recorded_by_profile:profiles!stock_movements_recorded_by_fkey(full_name)
+    `)
+    .eq("ref_visit_id", id)
+    .eq("reason", "purchase_intake")
+    .maybeSingle();
+
   // Flatten Supabase array-relation shapes (joins return arrays even for unique relations)
   const get1 = <T,>(v: T | T[] | null): T | null =>
     Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
@@ -253,6 +263,21 @@ export default async function VisitDetailPage({
     processingDeducted: !!(visit as { processing_deducted?: boolean }).processing_deducted,
   };
 
+  const stockMovementNorm = stockMovementRaw
+    ? {
+        id: stockMovementRaw.id as string,
+        weight: Number(stockMovementRaw.weight),
+        grade: stockMovementRaw.grade as string | null,
+        created_at: stockMovementRaw.created_at as string,
+        recorded_by_name:
+          (
+            get1(
+              (stockMovementRaw as { recorded_by_profile: unknown }).recorded_by_profile,
+            ) as { full_name?: string } | null
+          )?.full_name ?? null,
+      }
+    : null;
+
   return (
     <VisitTimeline
       visit={visitNorm}
@@ -272,6 +297,7 @@ export default async function VisitDetailPage({
           rate: number;
         }[]
       }
+      stockMovement={stockMovementNorm}
     />
   );
 }

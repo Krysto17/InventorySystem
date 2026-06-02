@@ -316,11 +316,11 @@ NO-AGREEMENT carry-over (Phase 2 unhappy):
 
 ---
 
-# Phase 4 — Inventory Ledger + Bulk Sales 📐 NOT STARTED
+# Phase 4 — Inventory Ledger + Bulk Sales ✅ DONE
 
 **Goal:** Inventory Manager takes purchased material into stock; Owner approves outbound bulk sales; consumables tracked separately.
 
-**Status:** `NOT STARTED`. Spec section §7 covers it; no implementation plan yet.
+**Status:** `DONE`. Migration 0016, all inventory screens, StockIntakeCard, owner bulk-sale board, RLS tests, and integration tests committed on `phase-4-inventory`.
 
 **Artifacts (when planning):**
 - Spec to create: `docs/superpowers/specs/YYYY-MM-DD-phase-4-inventory-design.md`
