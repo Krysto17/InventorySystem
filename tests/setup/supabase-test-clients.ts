@@ -25,11 +25,13 @@ export function adminClient(): SupabaseClient {
 }
 
 // Create a confirmed auth user + profile and return a client signed in as them.
+export type TestUser = { client: SupabaseClient; id: string; userId: string };
+
 export async function makeUser(opts: {
   username: string;
   role: TestRole;
   siteId: string | null;
-}): Promise<{ client: SupabaseClient; id: string }> {
+}): Promise<TestUser> {
   const admin = adminClient();
   const domain = process.env.SYNTHETIC_EMAIL_DOMAIN ?? "magneticjoezion.local";
   const email = `${opts.username}@${domain}`;
@@ -56,7 +58,7 @@ export async function makeUser(opts: {
   });
   const { error: sErr } = await client.auth.signInWithPassword({ email, password });
   if (sErr) throw sErr;
-  return { client, id };
+  return { client, id, userId: id };
 }
 
 export async function firstSiteId(): Promise<string> {
