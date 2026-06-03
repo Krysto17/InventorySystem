@@ -159,11 +159,23 @@ export default async function BulkSalesPage() {
                         Submitted by {recName} · {formatTimestamp(s.sold_at as string)}
                       </div>
                     </div>
-                    <span
-                      className={`text-xs px-2 py-1 rounded ${statusBadge(s.approval_status as string)}`}
-                    >
-                      {s.approval_status as string}
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span
+                        className={`text-xs px-2 py-1 rounded ${statusBadge(s.approval_status as string)}`}
+                      >
+                        {s.approval_status as string}
+                      </span>
+                      {s.approval_status === "approved" && (
+                        <a
+                          href={`/api/pdf/bulk-sale/${s.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-gray-500 hover:underline"
+                        >
+                          ↓ Receipt PDF
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </li>
               );

@@ -514,11 +514,11 @@ PRE: Phases 1-4 done. At least 10 visits seeded across 2-3 sites with various st
 
 ---
 
-# Phase 6 — Branded PDF Export 📐 NOT STARTED
+# Phase 6 — Branded PDF Export ✅ DONE
 
 **Goal:** Every subprocess record can be exported as a branded PDF (MAGNETIC JOEZION NIG. LTD header, logo, formatted data) from the relevant detail page.
 
-**Status:** `NOT STARTED`.
+**Status:** `DONE`. 7 PDF templates, `/api/pdf/[type]/[id]` route with auth + access control, PdfDownloadBar on visit detail, receipt links on bulk-sales page. All committed on `phase-6-pdf-export`.
 
 **Artifacts (when planning):**
 - Spec to create: `docs/superpowers/specs/YYYY-MM-DD-phase-6-pdf-export-design.md`

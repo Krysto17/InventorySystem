@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { VisitTimeline } from "@/components/visits/VisitTimeline";
+import { PdfDownloadBar } from "@/components/visits/PdfDownloadBar";
 import type { VisitState } from "@/lib/visits/state-machine";
 
 export default async function VisitDetailPage({
@@ -279,6 +280,16 @@ export default async function VisitDetailPage({
     : null;
 
   return (
+    <div className="space-y-4">
+      <PdfDownloadBar
+        visitId={visitNorm.id}
+        visitState={visitNorm.state}
+        viewerRole={me.role as VisitTimelineProps["viewer"]["role"]}
+        hasProcessing={processingNorm !== null}
+        hasAnalysis={analysisNorm !== null}
+        hasPricing={pricingNorm !== null && pricingNorm.agreement_status !== "pending"}
+        hasPayments={paymentsNorm.length > 0}
+      />
     <VisitTimeline
       visit={visitNorm}
       processing={processingNorm}
@@ -299,6 +310,7 @@ export default async function VisitDetailPage({
       }
       stockMovement={stockMovementNorm}
     />
+    </div>
   );
 }
 
