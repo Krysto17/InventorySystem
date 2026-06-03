@@ -229,7 +229,8 @@ export default async function OwnerDashboard({
     const sup = (Array.isArray(v.supplier) ? v.supplier[0] : v.supplier) as { name?: string } | null;
     const site = (Array.isArray(v.site) ? v.site[0] : v.site) as { name?: string } | null;
     const pr = (Array.isArray(v.pricing) ? v.pricing[0] : v.pricing) as { purchase_amount?: number } | null;
-    const prRecs = (v as { processing_records: unknown[] }).processing_records ?? [];
+    const prRecsRaw = (v as { processing_records: unknown }).processing_records;
+    const prRecs: unknown[] = Array.isArray(prRecsRaw) ? prRecsRaw : prRecsRaw ? [prRecsRaw] : [];
     const processingOwed = prRecs.reduce((s: number, rec: unknown) => {
       const r = rec as { usage?: { line_cost?: number }[] };
       return s + (r.usage ?? []).reduce((ss: number, u: { line_cost?: number }) => ss + Number(u.line_cost ?? 0), 0);
