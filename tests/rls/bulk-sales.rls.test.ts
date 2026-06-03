@@ -107,11 +107,18 @@ describe("bulk_sales RLS", () => {
 
   it("non-owner cannot approve a bulk sale", async () => {
     const id = await insertPendingSale(siteAId, invA.userId);
-    const { error } = await invA.client
+    // Supabase RLS UPDATE denials return no error — they silently update 0 rows.
+    await invA.client
       .from("bulk_sales")
       .update({ approval_status: "approved", approved_by: invA.userId })
       .eq("id", id);
-    expect(error).not.toBeNull();
+    // Confirm the row was NOT changed
+    const { data } = await adminClient()
+      .from("bulk_sales")
+      .select("approval_status")
+      .eq("id", id)
+      .single();
+    expect(data?.approval_status).toBe("pending");
   });
 
   it("owner can approve a pending bulk sale and stock decrements", async () => {

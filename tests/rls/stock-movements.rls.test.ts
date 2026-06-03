@@ -28,10 +28,10 @@ describe("stock_movements RLS", () => {
     const { data: sites } = await adminClient().from("sites").select("id").limit(2);
     siteAId = sites![0].id as string;
     siteBId = sites![1].id as string;
-    invA  = await makeUser({ username: "sm-inv-a",  role: "inventory", siteId: siteAId });
-    invB  = await makeUser({ username: "sm-inv-b",  role: "inventory", siteId: siteBId });
-    gateA = await makeUser({ username: "sm-gate-a", role: "gate",      siteId: siteAId });
-    owner = await makeUser({ username: "sm-owner",  role: "owner",     siteId: null });
+    invA  = await makeUser({ username: "stk-inv-a",  role: "inventory", siteId: siteAId });
+    invB  = await makeUser({ username: "stk-inv-b",  role: "inventory", siteId: siteBId });
+    gateA = await makeUser({ username: "stk-gate-a", role: "gate",      siteId: siteAId });
+    owner = await makeUser({ username: "stk-owner",  role: "owner",     siteId: null });
     const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
     materialTypeId = m!.id as string;
   });
