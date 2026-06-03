@@ -503,7 +503,7 @@ PRE: Phases 1-4 done. At least 10 visits seeded across 2-3 sites with various st
 6. Click "Outstanding balances" → list of visits with positive balance, sorted by amount.
 7. Click a visit → /visits/[id] opens, full timeline visible.
 8. Type a supplier name in cross-site search → results from any site.
-9. Log out, log in as gate1 → confirm /owner returns 404 or redirects to /gate.
+9. Log out, log in as proc1 → confirm /owner returns 404 or redirects to /processing.
 ```
 
 **Manager checkpoints in Phase 5:**
@@ -582,11 +582,262 @@ PRE: Phases 1-5 done. A fully-completed visit (gate intake → stocked) exists w
 
 ---
 
-# Phase 7 — Merge to Main 🔀 NOT STARTED
+# Phase 7 — Gate Role Removal 🚫 NOT STARTED
+
+**Goal:** Remove the `gate` role and all gate-specific processes from the system. Visits enter the pipeline directly at processing; no gate intake stage exists.
+
+**Status:** `NOT STARTED`. **Owner decision confirmed:** remove the gate stage completely. The `processing` role will inherit visit creation (supplier search + vehicle plate + material type captured at the top of the processing intake form).
+
+**Artifacts (when planning):**
+- Spec to create: `docs/superpowers/specs/YYYY-MM-DD-phase-7-gate-removal-design.md`
+- Plan to create: `docs/superpowers/plans/YYYY-MM-DD-phase-7-gate-removal.md`
+- Suggested branch: `phase-7-gate-removal` — **branch from `phase-6-pdf-export`**
+
+---
+
+**What Phase 7 removes / changes:**
+
+*Database:*
+- Remove `gate` from the `app_role` enum (migration: drop dependent objects, recreate enum without `gate`, restore objects).
+- Drop `gate_exit_authorizations` table and all its RLS policies, triggers, and indexes.
+- Remove all RLS policies referencing `'gate'` role on any table.
+- Remove `awaiting_gate_exit` from the visit state enum and the state-machine validator trigger. Update the no-agreement path: `pricing (no agreement) → exited` directly (no intermediate authorization step).
+- Remove `gate_exit_authorized` event type from `transaction_events` check constraint.
+- Remove `at_gate_in` visit state from enum and state machine.
+
+*Server-side logic:*
+- Remove `gate` from `src/lib/auth/roles.ts` (`ROLES` array and `ROLE_HOME` map).
+- Remove `gate` home redirect from `src/middleware.ts`.
+- Remove gate-intake state from the TypeScript state-machine mirror (`src/lib/visits/state-machine.ts`): remove `at_gate_in`, `awaiting_gate_exit`; update `TERMINAL_STATES`.
+- Add visit-creation capability to `processing` role: insert RLS policy allowing `processing` role to INSERT visits on their own site.
+
+*UI screens:*
+- Delete `src/app/(gate)/` directory entirely (`/gate`, `/gate/intake`, and all sub-routes).
+- Remove `GateIntakeCard` from the visit timeline (`VisitTimeline.tsx`) — the timeline now starts at processing.
+- Remove `ExitAuthorizationCard` from the visit timeline (no owner authorization step).
+- Remove "Awaiting release" section from `/gate` home (route gone).
+- Remove "Awaiting gate sign-off" section from `/owner` dashboard (state no longer exists).
+- Remove "Gate intake" PDF link from `PdfDownloadBar`.
+- Delete `src/lib/pdf/templates/gate-intake.tsx` and remove it from the route handler.
+- On `/visits/[id]`, update the shared detail page to not fetch `gate_exit_authorizations`.
+- Add visit-creation form to `/processing` page: supplier search + vehicle plate + material type at the top, before the processing card.
+
+*Tests:*
+- Delete `tests/rls/gate-exit-authorizations.rls.test.ts`.
+- Delete all test cases referencing `gate` role, `at_gate_in` state, `awaiting_gate_exit` state, `gate_exit_authorized` event.
+- Update `tests/integration/no-agreement-exit.test.ts` — path is now `pricing (no_agreed) → exited` directly; remove owner-authorization and gate-release steps.
+- Update `tests/state-machine/transitions.test.ts` — remove gate states from allowed-transitions matrix.
+- Update `tests/state-machine/invariants.test.ts` — remove gate-related invariant tests.
+- Update `tests/lib/state-machine.test.ts` — TS mirror must match updated DB allowed set.
+- Update `tests/integration/gate-intake-action.test.ts` — rename/rewrite as `processing-intake-action.test.ts`.
+- Update `tests/integration/happy-path-*.test.ts` — pipeline starts at processing, not gate.
+
+*PDF export (Phase 6 dependency):*
+- Remove the **Gate intake slip** PDF template — there is no gate intake record.
+- Remove the gate intake section from the **Full visit dossier** (`full-dossier.tsx`).
+- Update the dossier page structure (section numbering shifts).
+
+*Owner dashboard (Phase 5):*
+- Remove "Awaiting gate sign-off" tile/queue from `/owner` (state no longer exists).
+
+---
+
+**Planning step (confirm before building):**
+
+| Decision | Status |
+|---|---|
+| Who creates visits? | ✅ **Confirmed: processing role** — supplier search + vehicle plate captured at processing intake |
+| Supplier lookup | Moves to `/processing` page top-of-form search (same fuzzy search as old gate intake) |
+| Vehicle plate | Still captured per-visit at processing intake (snapshot, not a FK) |
+| No-agreement exit | Confirmed: `pricing (no_agreed) → exited` directly, no authorization step |
+| Gate employee accounts | All provisioned `gate` accounts become invalid after migration; owner must delete or re-provision them |
+
+---
+
+**Testing strategy:**
+
+| Suite | What to verify after gate removal |
+|---|---|
+| RLS | No policy references `gate` role; `gate_exit_authorizations` table is gone |
+| State machine | `at_gate_in` and `awaiting_gate_exit` absent from allowed-transitions; `pricing → exited` direct passes |
+| Integration | Happy path starts at processing (supplier + vehicle captured there); no-agreement ends at `exited` without authorization |
+| Audit | No `gate_exit_authorized` events written anywhere |
+| UI | `/gate` returns 404; no "Authorize exit" button on visit detail; no gate intake PDF link |
+
+---
+
+**Phase 7 Playwright walkthrough:**
+
+```
+PRE: Phases 1–6 done and passing. Run npx supabase db reset after applying Phase 7 migrations.
+
+GATE ROUTE GONE:
+1. Visit http://localhost:3000/gate → 404 / redirect to /login.
+2. Log in as owner1, try /gate → same result. Route truly gone.
+
+VISIT CREATION (new flow — processing role):
+3. Log in as proc1 → /processing.
+4. A "New visit intake" form appears at the top: supplier search, vehicle plate, material type.
+5. Search for a supplier by phone (no match) → fill name + phone + vehicle plate + material type → Submit.
+6. Visit created in state "in_processing". Processing card appears immediately.
+7. Fill in machines + measurements → submit → visit transitions to "in_receiving".
+
+NO-AGREEMENT PATH:
+8. Walk visit through receiving → pricing. Manager marks "No agreement".
+9. Visit state transitions directly to "exited". No "awaiting_gate_exit" state appears.
+10. Owner dashboard has no "Awaiting gate sign-off" queue.
+
+PDF EXPORT:
+11. On a completed visit, download the Full visit dossier. Confirm no "Gate intake slip" section.
+
+PASS criteria: /gate 404; pipeline starts at processing; no-agreement → exited directly; owner dashboard has no gate queue; PDF dossier has no gate section.
+```
+
+---
+
+**Manager checkpoints in Phase 7:**
+
+1. **Enum migration is irreversible once on cloud.** Test on a fresh local `db reset` before pushing to cloud.
+2. **Existing gate accounts break on login.** Any provisioned `gate` employee accounts in the cloud DB will fail after migration. Delete or re-provision them before deploying.
+3. **PDF dependency.** Phase 6 shipped a gate-intake PDF template. Phase 7 must delete it in the same branch.
+4. **State-machine TS mirror.** Update both DB migration and `src/lib/visits/state-machine.ts` in the same commit to keep tests green.
+5. **Supplier search moves to processing.** The processing intake form needs the full SupplierSearch component from the old `/gate/intake` — reuse, don't rewrite.
+
+---
+
+# Phase 8 — Inventory Management UI Dashboard 🎨 NOT STARTED
+
+**Goal:** Build a gorgeous, highly intuitive, modern Inventory Management Dashboard as the primary operator interface — replacing raw Tailwind screens with a production-grade SaaS-quality UI.
+
+**Status:** `NOT STARTED`. Requires Phase 7 to be done first (gate role must be removed before the UI skin goes on top of the final role set).
+
+**Artifacts (when planning):**
+- Spec to create: `docs/superpowers/specs/YYYY-MM-DD-phase-8-ui-dashboard-design.md`
+- Plan to create: `docs/superpowers/plans/YYYY-MM-DD-phase-8-ui-dashboard.md`
+- Suggested branch: `phase-8-ui-dashboard` — **branch from `phase-7-gate-removal`**
+
+---
+
+**Design brief:**
+
+> Build a gorgeous, highly intuitive, and modern Inventory Management Dashboard using Next.js (App Router), React, and Tailwind CSS v4.
+>
+> **Design Aesthetic:** Clean, minimalist, modern SaaS (Linear / Stripe). Default light mode with rich dark mode toggle. Zinc/slate base (`bg-zinc-50` / `dark:bg-zinc-950`) with emerald or indigo accent for primary actions. Clean sans-serif typography, subtle borders, micro-interactions on hover, smooth transitions. Lucide React icons.
+>
+> **Layout:** Sticky responsive sidebar + main content area.
+> - Sidebar: Logo/Branding, role-aware nav links, User Profile at the bottom.
+> - Header: Global search bar (Cmd+K), notifications bell with badge, Dark/Light toggle.
+>
+> **Main Dashboard Features:**
+> - KPI Metrics Row: Total Items on hand and Total Stock Value (₦). Trend percentages (+12% this week).
+> - Inventory Table: Beautifully formatted table — Material, Grade, Site, Stock (kg), Est. Value. Filter by Material + Site dropdowns, Sort dropdown, "+ New Visit" primary button (creates a new supplier visit / processing intake). Alternating row hovers, clean pagination.
+> - Activity Pane: "Recent Stock Activities" feed showing actor, weight, item name, and direction for recent `stock_movements` rows.
+
+**Design tokens (add to `globals.css`):**
+
+```css
+@theme {
+  --color-brand-primary: oklch(55% 0.18 160);   /* emerald accent */
+  --color-brand-subtle:  oklch(96% 0.04 160);
+  --color-surface:       oklch(99% 0 0);
+  --color-border:        oklch(90% 0 0 / 80%);
+  --radius-card:         0.75rem;
+}
+```
+
+---
+
+**What Phase 8 builds:**
+
+New shared components (`src/components/ui/` extensions):
+
+| Component | Purpose |
+|---|---|
+| `Sidebar` | Sticky nav with role-aware links, branding, user profile, mobile collapse |
+| `Header` | Global Cmd+K search, notification bell (unread count from awaiting-owner queue), dark/light toggle |
+| `KpiCard` | Metric tile: label, value, trend pill (Total Items, Total Stock Value) |
+| `InventoryTable` | Data table: Material, Grade, Site, Stock (kg), Est. Value. Filter + sort + pagination. "+ New Visit" button |
+| `ActivityFeed` | Chronological `stock_movements` feed: actor, weight, item, in/out direction |
+| `DarkModeToggle` | Theme toggle via `next-themes`, persisted to `localStorage` |
+
+Layout shell update: wrap all authenticated routes in `Sidebar` + `Header`.
+
+Responsive breakpoints:
+- `< 768px`: sidebar collapses to hamburger sheet.
+- `768px–1024px`: sidebar icons + labels, table collapses less-critical columns.
+- `> 1024px`: full layout.
+
+---
+
+**Planning step (confirm before building):**
+
+| Decision | Question |
+|---|---|
+| Notification content | Bell badge count — awaiting-owner queue only (gate exits + pending bulk sales), or other events? |
+| Cmd+K search scope | Supplier name, vehicle plate, visit UUID across all sites (owner) or scoped to role's data? |
+| Mobile priority | Which roles use the app on mobile? Gate removed; processing/receiving users may be on tablet at site |
+| "+ New Visit" placement | Appears on the inventory table toolbar for processing role (and owner). Other roles see it too? |
+
+---
+
+**Testing strategy:**
+
+| Suite | What to verify |
+|---|---|
+| `tests/ui/sidebar.test.tsx` | Role-aware links render correctly for each role; mobile collapse works |
+| `tests/ui/kpi-cards.test.tsx` | Both cards render correct label/value/trend |
+| `tests/ui/inventory-table.test.tsx` | Filter narrows rows; sort changes order; pagination works; "+ New Visit" visible to processing + owner |
+| `tests/ui/activity-feed.test.tsx` | Feed renders stock_movements rows with correct actor, weight, item, direction |
+| `tests/ui/dark-mode.test.tsx` | Toggle switches `html` class to `dark`; persists in localStorage |
+
+---
+
+**Phase 8 Playwright walkthrough:**
+
+```
+PRE: Phases 1–7 done. npm run dev.
+
+LIGHT MODE (default):
+1. Log in as owner1 → /owner. Dashboard loads with zinc background, emerald accent.
+2. Verify 2 KPI cards: Total Items and Total Value (₦). Both show trend percentages.
+3. Scroll to Inventory Table — Material, Grade, Site, Stock (kg), Est. Value columns visible.
+4. Click "+ New Visit" → opens processing intake form (supplier search + vehicle plate + material).
+5. Filter by material — rows narrow correctly.
+6. Check Activity Feed — shows in/out stock movement events with actor, weight, item name.
+
+DARK MODE:
+7. Click dark/light toggle in header → background switches to zinc-950.
+8. Reload → dark mode persists (localStorage).
+9. Toggle again → light mode restored.
+
+MOBILE (resize to 375px):
+10. Sidebar collapses to hamburger.
+11. Tap hamburger → sidebar slides in as sheet.
+12. Tap nav link → sidebar closes, correct page loads.
+
+ROLE ISOLATION:
+13. Log out, log in as proc1 → /processing. Sidebar shows Processing-relevant links only.
+14. Try /owner directly → redirected to /processing.
+
+PASS criteria: 2 KPI cards render; inventory table has correct columns; "+ New Visit" opens processing intake; activity feed shows stock movements; dark mode persists; mobile sidebar works; role nav hides unauthorized links.
+```
+
+---
+
+**Manager checkpoints in Phase 8:**
+
+1. **Last phase before merge + deploy.** UI must be polished enough for real users. Show the owner the design before writing production code.
+2. **Don't ship half-finished components.** Use a "Coming soon" stub rather than a broken form.
+3. **Performance.** Inventory table may load many rows — implement cursor-based pagination; never `SELECT *` without `LIMIT`.
+4. **Design system consistency.** After Phase 8, all screens from all prior phases should use the same `src/components/ui/` primitives.
+
+---
+
+# Phase 9 — Merge to Main 🔀 NOT STARTED
 
 **Goal:** All phase branches merged into `main` in correct order. `main` becomes the single source of truth for the deployable codebase.
 
-**Status:** `NOT STARTED`. `main` currently only has the initial design spec + Phase 1 plan docs. Phase 1's source code lives on `phase-1-foundation`; Phase 2's spec + plan + Task 1 live on `phase-2-visit-workflow`.
+**Status:** `NOT STARTED`. `main` currently only has the initial design spec + Phase 1 plan docs. Phase 1's source code lives on `phase-1-foundation`; Phases 2–8 live on their respective branches.
 
 **Strategy:**
 
@@ -603,7 +854,11 @@ main ─┬── (current: just docs)
       │     ↓
       ├── phase-5-dashboard
       │     ↓
-      └── phase-6-pdf-export
+      ├── phase-6-pdf-export
+      │     ↓
+      ├── phase-7-gate-removal
+      │     ↓
+      └── phase-8-ui-dashboard
 ```
 
 **Each merge step:**
@@ -633,7 +888,7 @@ npm run build              # production build with type-check
 
 If any test fails, do not merge the next phase until fixed. Roll back if needed (`git revert <merge-sha>`).
 
-**Phase 7 Playwright walkthrough:**
+**Phase 9 Playwright walkthrough:**
 
 ```
 After all merges, on main:
@@ -646,18 +901,18 @@ After all merges, on main:
 6. npm run dev
 7. Re-run every phase's Playwright walkthrough end-to-end against the merged main.
 
-PASS criteria: every phase's documented walkthrough still works. If a Phase 2 walkthrough breaks after Phase 5's design-system retrofit, that's a regression — fix on main with a follow-up commit.
+PASS criteria: every phase's documented walkthrough still works. If a Phase 2 walkthrough breaks after Phase 8's design-system retrofit, that's a regression — fix on main with a follow-up commit.
 ```
 
-**Manager checkpoints in Phase 7:**
+**Manager checkpoints in Phase 9:**
 
-1. **Don't merge in parallel.** Phase 3 depends on Phase 2's schema; Phase 4 depends on Phase 3's tables; Phase 5 depends on Phase 4's data shape; Phase 6 depends on Phase 5's design system. Merge sequentially.
+1. **Don't merge in parallel.** Each phase depends on the previous: Phase 3 → Phase 2's schema; Phase 4 → Phase 3's payments ledger; Phase 5 → Phase 4's stock data; Phase 6 → Phase 5's design system; Phase 7 → Phase 6's stable PDF templates (gate PDF must exist before it can be removed); Phase 8 → Phase 7's final role set. Merge sequentially.
 2. **Keep tags.** Every merge tags `main` with the phase name. If a regression appears later, you can bisect by tags.
 3. **Migrations are immutable after merge.** Once `0006_material_types.sql` is on main, do not edit it. Add `0007a_*.sql` to fix anything.
 
 ---
 
-# Phase 8 — Deploy to Vercel 🚀 NOT STARTED
+# Phase 10 — Deploy to Vercel 🚀 NOT STARTED
 
 **Goal:** `main` is live on a Vercel production URL backed by the cloud Supabase project. End users (the family) can access it from anywhere with a browser.
 
@@ -718,24 +973,24 @@ PASS criteria: every phase's documented walkthrough still works. If a Phase 2 wa
 - **Performance baseline:** Run Lighthouse against the production URL. Capture Time-to-Interactive < 3s as a baseline. Phase 5 dashboard may push this; budget accordingly.
 - **Cron / scheduled tasks:** None yet. If Phase 5 adds materialized view refresh, configure Vercel Cron or Supabase scheduled functions and document them here.
 
-**Phase 8 Playwright walkthrough (production):**
+**Phase 10 Playwright walkthrough (production):**
 
 ```
 1. Open the Vercel production URL in an incognito browser.
 2. Redirected to /login.
 3. Log in as owner1 with the bootstrap password.
 4. Forced to /set-password → set a new password.
-5. Land on /owner.
-6. Provision a test gate user.
-7. Log out, log in as the test gate user.
-8. Confirm the gate intake form loads, suppliers can be added.
-9. Run the Phase 2 happy-path walkthrough end-to-end on production.
-10. (Cleanup) Log in as owner, delete the test visit + test gate user.
+5. Land on /owner (full UI dashboard from Phase 8).
+6. Provision a test processing user.
+7. Log out, log in as the test processing user.
+8. Confirm the processing intake form loads; create a new visit with supplier + material.
+9. Run the Phase 7 happy-path walkthrough end-to-end on production.
+10. (Cleanup) Log in as owner, delete the test visit + test processing user.
 
 PASS criteria: every action completes within a reasonable time; no console errors; cookies / sessions persist across redirects; RLS denies cross-site access exactly as it did locally.
 ```
 
-**Manager checkpoints in Phase 8:**
+**Manager checkpoints in Phase 10:**
 
 1. **Service-role key safety.** It must NEVER end up in a `NEXT_PUBLIC_*` env var. If it does, rotate it immediately via Supabase dashboard.
 2. **Backup strategy.** Supabase free tier doesn't include automated backups for the cloud DB beyond 7 days. If this goes into real production, upgrade the plan or set up a nightly `pg_dump` to cloud storage.
@@ -754,13 +1009,21 @@ Each phase **branches from the previous phase's branch**, not from `main`. Phase
 ```
 main (trunk; only has docs until first merge)
  │
- ├── phase-1-foundation ───────────► PR merges to main first
+ ├── phase-1-foundation ─────────────────────► PR merges to main first
  │      │
- │      └── phase-2-visit-workflow ───► rebase onto main, then PR → main
+ │      └── phase-2-visit-workflow ───────────► rebase onto main, then PR → main
  │             │
  │             └── phase-3-financial-model ───► rebase onto main, then PR → main
  │                    │
- │                    └── phase-4-inventory ───► ...
+ │                    └── phase-4-inventory
+ │                           │
+ │                           └── phase-5-dashboard
+ │                                  │
+ │                                  └── phase-6-pdf-export
+ │                                         │
+ │                                         └── phase-7-gate-removal
+ │                                                │
+ │                                                └── phase-8-ui-dashboard ───► ...
 ```
 
 ### Starting a new phase — copy-paste these commands
@@ -787,7 +1050,7 @@ If unsure, ask Claude: **"Start a new branch for Phase N off the previous phase,
 
 ### How phases get merged into main (at the end)
 
-When all phases are built and tested, you (or Claude) run the merges in order: Phase 1 → main first, then Phase 2 → main, etc. Each merge uses a **Pull Request** on GitHub — that's a web page on github.com that shows the diff before you accept it. Detailed steps are in **Phase 7 — Merge to Main** below. You don't need to do this until every phase is built.
+When all phases are built and tested, you (or Claude) run the merges in order: Phase 1 → main first, then Phase 2 → main, etc. Each merge uses a **Pull Request** on GitHub — that's a web page on github.com that shows the diff before you accept it. Detailed steps are in **Phase 9 — Merge to Main** below. You don't need to do this until every phase is built.
 
 **PR convention to keep diffs readable:** when opening a PR for phase N+1, set the PR "base" branch to phase N's branch (not main). GitHub will show only the new phase's changes. After phase N merges into main, ask Claude to "rebase phase N+1 onto main" — that's a one-command cleanup the agent does, not you.
 
@@ -902,7 +1165,7 @@ What the app does NOT track:
 
 ### Suppliers master list grows organically
 
-There **is** a `suppliers` master table. At the gate, the guard searches the existing list first (by phone or name) — if the supplier is already registered, the visit links to that `supplier_id`. If not found, the guard fills in the details inline and a new `suppliers` row is created on visit save. The list grows; there is no separate "register supplier" workflow.
+There **is** a `suppliers` master table. At visit creation (currently the gate intake form; after Phase 7 this moves to the processing intake form), the user searches the existing list first (by phone or name) — if the supplier is already registered, the visit links to that `supplier_id`. If not found, the user fills in the details inline and a new `suppliers` row is created on visit save. The list grows; there is no separate "register supplier" workflow.
 
 **Suppliers are global across all 3 sites** — no `site_id` on the `suppliers` table. A supplier registered at Site A is searchable from Site B's gate. Per-site filtering of visits happens on `visits.site_id`, not on the suppliers table.
 
