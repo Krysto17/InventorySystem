@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "@/components/shell/ThemeProvider";
+import { AppShell } from "@/components/shell/AppShell";
+import { getProfile } from "@/lib/auth/get-profile";
+import { createClient } from "@/lib/supabase/server";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,23 +21,43 @@ export const metadata: Metadata = {
   description: "Magnetic Joezion Nig. Ltd — material tracking and inventory system",
 };
 
-export default function RootLayout({
+// Owner-only badge count: pending bulk sales awaiting approval.
+async function ownerNotifications(): Promise<number> {
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("bulk_sales")
+    .select("id", { count: "exact", head: true })
+    .eq("approval_status", "pending");
+  return count ?? 0;
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const profile = await getProfile();
+  const notifications = profile?.role === "owner" ? await ownerNotifications() : 0;
+
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-gray-50">
-        <div className="bg-black text-white text-xs px-4 py-1.5 flex items-center gap-2 shrink-0">
-          <span className="font-semibold tracking-wide">MAGNETIC JOEZION NIG. LTD</span>
-          <span className="text-gray-400">·</span>
-          <span className="text-gray-300">Inventory &amp; Material Tracking</span>
-        </div>
-        <div className="flex-1 flex flex-col">{children}</div>
+      <body className="min-h-full">
+        <ThemeProvider>
+          <AppShell
+            profile={
+              profile
+                ? { role: profile.role, fullName: profile.full_name, username: profile.username }
+                : null
+            }
+            notifications={notifications}
+          >
+            {children}
+          </AppShell>
+        </ThemeProvider>
       </body>
     </html>
   );

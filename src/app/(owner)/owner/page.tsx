@@ -1,26 +1,27 @@
 import Link from "next/link";
+import { Boxes, Wallet, ScrollText, Percent } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { FilterBar } from "@/components/dashboard/FilterBar";
+import { KpiCard } from "@/components/dashboard/KpiCard";
+import { InventoryTable, type StockRow } from "@/components/dashboard/InventoryTable";
+import { ActivityFeed, type ActivityItem } from "@/components/dashboard/ActivityFeed";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { StatCard } from "@/components/ui/stat-card";
 import { Badge, stateVariant } from "@/components/ui/badge";
 import { formatNaira, formatWeight, formatTimestamp } from "@/lib/visits/format";
 import { STATE_LABELS } from "@/lib/visits/state-machine";
 import { approveBulkSale, rejectBulkSale } from "@/app/(inventory)/inventory/bulk-sales/actions";
-
-// ─── Filter helpers ──────────────────────────────────────────────────────────
 
 function defaultFrom() {
   const d = new Date();
   d.setDate(d.getDate() - 30);
   return d.toISOString().split("T")[0];
 }
-
 function defaultTo() {
   return new Date().toISOString().split("T")[0];
 }
 
-// ─── Page ────────────────────────────────────────────────────────────────────
+const g1 = <T,>(v: unknown): T | null =>
+  Array.isArray(v) ? ((v[0] ?? null) as T | null) : ((v ?? null) as T | null);
 
 export default async function OwnerDashboard({
   searchParams,
@@ -36,20 +37,19 @@ export default async function OwnerDashboard({
 
   const supabase = await createClient();
 
-  // ── Parallel data fetch ──────────────────────────────────────────────────
   const [
     { data: sites },
     { data: allVisits },
     { data: pricingRows },
-    { data: payments },
     { data: stockMovements },
     { data: machineUsage },
     { data: consumables },
     { data: pendingBulkSales },
+    { data: salePrices },
+    { data: recentMovements },
   ] = await Promise.all([
     supabase.from("sites").select("id, name").order("name"),
 
-    // Visits for funnel + rejection (created in period, optionally filtered by site)
     (() => {
       let q = supabase
         .from("visits")
@@ -60,26 +60,10 @@ export default async function OwnerDashboard({
       return q;
     })(),
 
-    // Pricing rows for rejection rate
-    (() => {
-      let q = supabase
-        .from("pricing")
-        .select("agreement_status, visit_id, visit:visits(site_id, created_at)");
-      if (siteFilter) q = q.eq("visits.site_id", siteFilter as never);
-      return q;
-    })(),
+    supabase
+      .from("pricing")
+      .select("agreement_status, visit_id, visit:visits(site_id, created_at)"),
 
-    // Payments in period
-    (() => {
-      let q = supabase
-        .from("payments")
-        .select("direction, amount, paid_at, visit:visits(site_id)")
-        .gte("paid_at", dateFromISO)
-        .lte("paid_at", dateToISO);
-      return q;
-    })(),
-
-    // Stock movements (all time — running ledger, not period-filtered)
     (() => {
       let q = supabase
         .from("stock_movements")
@@ -88,20 +72,16 @@ export default async function OwnerDashboard({
       return q;
     })(),
 
-    // Machine utilization in period
-    (() => {
-      return supabase
-        .from("processing_machine_usage")
-        .select(`
-          measurement, line_cost,
-          machine:machines(name, charge_basis, site_id),
-          processing_record:processing_records(completed_at, visit:visits(site_id))
-        `)
-        .gte("processing_records.completed_at", dateFromISO)
-        .lte("processing_records.completed_at", dateToISO);
-    })(),
+    supabase
+      .from("processing_machine_usage")
+      .select(`
+        measurement, line_cost,
+        machine:machines(name, charge_basis, site_id),
+        processing_record:processing_records(completed_at, visit:visits(site_id))
+      `)
+      .gte("processing_records.completed_at", dateFromISO)
+      .lte("processing_records.completed_at", dateToISO),
 
-    // Consumables (live on_hand, filtered by site)
     (() => {
       let q = supabase
         .from("consumables")
@@ -111,7 +91,6 @@ export default async function OwnerDashboard({
       return q;
     })(),
 
-    // Pending bulk sales (cross-site)
     supabase
       .from("bulk_sales")
       .select(`
@@ -122,9 +101,29 @@ export default async function OwnerDashboard({
       `)
       .eq("approval_status", "pending")
       .order("created_at", { ascending: true }),
+
+    // Approved sale prices → average unit price per material (for stock valuation)
+    supabase
+      .from("bulk_sales")
+      .select("material_type_id, unit_price")
+      .eq("approval_status", "approved"),
+
+    // Recent stock activity feed
+    (() => {
+      let q = supabase
+        .from("stock_movements")
+        .select(`
+          id, weight, grade, direction, reason, created_at, site_id,
+          material_type:material_types(name),
+          recorded_by_profile:profiles!stock_movements_recorded_by_fkey(full_name)
+        `)
+        .order("created_at", { ascending: false })
+        .limit(12);
+      if (siteFilter) q = q.eq("site_id", siteFilter);
+      return q;
+    })(),
   ]);
 
-  // ── Outstanding balances (visits in accounting/intake states) ────────────
   const { data: accountingVisits } = await (() => {
     let q = supabase
       .from("visits")
@@ -141,92 +140,104 @@ export default async function OwnerDashboard({
     return q;
   })();
 
-  // ── Aggregate: visit funnel (counts per state) ───────────────────────────
+  // ── Visit funnel + rejection ──────────────────────────────────────────────
   const stateCounts: Record<string, number> = {};
-  for (const v of allVisits ?? []) {
-    stateCounts[v.state] = (stateCounts[v.state] ?? 0) + 1;
-  }
+  for (const v of allVisits ?? []) stateCounts[v.state] = (stateCounts[v.state] ?? 0) + 1;
   const totalVisits = (allVisits ?? []).length;
 
-  // ── Aggregate: cash flow per direction ───────────────────────────────────
-  let totalIn = 0, totalOut = 0;
-  for (const p of payments ?? []) {
-    const v = p.visit as unknown as { site_id?: string } | { site_id?: string }[] | null;
-    const visitSiteId = Array.isArray(v) ? v[0]?.site_id : (v as { site_id?: string } | null)?.site_id;
-    if (siteFilter && visitSiteId !== siteFilter) continue;
-    if (p.direction === "processing_fee_in") totalIn += Number(p.amount);
-    else totalOut += Number(p.amount);
-  }
-
-  // ── Aggregate: rejection rate ─────────────────────────────────────────────
   let agreedCount = 0, rejectedCount = 0;
   for (const pr of pricingRows ?? []) {
-    const v = (pr as { visit: unknown }).visit;
-    const visitSiteId = (Array.isArray(v) ? v[0] : v) as { site_id?: string; created_at?: string } | null;
-    if (siteFilter && visitSiteId?.site_id !== siteFilter) continue;
+    const visit = g1<{ site_id?: string }>((pr as { visit: unknown }).visit);
+    if (siteFilter && visit?.site_id !== siteFilter) continue;
     if (pr.agreement_status === "agreed") agreedCount++;
     else if (pr.agreement_status === "not_agreed") rejectedCount++;
   }
   const totalDecided = agreedCount + rejectedCount;
-  const rejectionRate = totalDecided > 0 ? ((rejectedCount / totalDecided) * 100).toFixed(1) : "—";
+  const rejectionRate = totalDecided > 0 ? (rejectedCount / totalDecided) * 100 : null;
 
-  // ── Aggregate: stock balance per (site, material, grade) ─────────────────
-  type StockKey = string;
-  const stockMap = new Map<StockKey, { material_name: string; site_name: string; grade: string | null; balance: number }>();
+  // ── Price map: avg approved unit_price per material_type_id ────────────────
+  const priceAgg = new Map<string, { sum: number; n: number }>();
+  for (const s of salePrices ?? []) {
+    const id = s.material_type_id as string;
+    const cur = priceAgg.get(id) ?? { sum: 0, n: 0 };
+    cur.sum += Number(s.unit_price); cur.n += 1;
+    priceAgg.set(id, cur);
+  }
+  const avgPrice = (materialTypeId: string) => {
+    const a = priceAgg.get(materialTypeId);
+    return a && a.n > 0 ? a.sum / a.n : 0;
+  };
+
+  // ── Stock balance per (site, material, grade) ─────────────────────────────
+  const stockMap = new Map<string, { material: string; site: string; grade: string | null; weight: number; materialTypeId: string }>();
   for (const m of stockMovements ?? []) {
-    const mt = (m as { material_type: unknown }).material_type;
-    const site = (m as { site: unknown }).site;
-    const materialName = (Array.isArray(mt) ? mt[0]?.name : (mt as { name?: string } | null)?.name) ?? "—";
-    const siteName = (Array.isArray(site) ? site[0]?.name : (site as { name?: string } | null)?.name) ?? "—";
-    const key: StockKey = `${m.site_id}::${m.material_type_id}::${m.grade ?? ""}`;
+    const materialName = g1<{ name: string }>((m as { material_type: unknown }).material_type)?.name ?? "—";
+    const siteName = g1<{ name: string }>((m as { site: unknown }).site)?.name ?? "—";
+    const key = `${m.site_id}::${m.material_type_id}::${m.grade ?? ""}`;
     const delta = (m.direction === "in" ? 1 : -1) * Number(m.weight);
     const existing = stockMap.get(key);
-    if (existing) { existing.balance += delta; }
-    else stockMap.set(key, { material_name: materialName, site_name: siteName, grade: m.grade as string | null, balance: delta });
+    if (existing) existing.weight += delta;
+    else stockMap.set(key, { material: materialName, site: siteName, grade: m.grade as string | null, weight: delta, materialTypeId: m.material_type_id as string });
   }
-  const stockRows = Array.from(stockMap.values()).filter((r) => r.balance > 0);
-  const totalStockKg = stockRows.reduce((s, r) => s + r.balance, 0);
+  const stockRows: StockRow[] = Array.from(stockMap.values())
+    .filter((r) => r.weight > 0)
+    .map((r) => ({
+      material: r.material,
+      site: r.site,
+      grade: r.grade,
+      weight: r.weight,
+      value: r.weight * avgPrice(r.materialTypeId),
+    }));
+  const totalStockKg = stockRows.reduce((s, r) => s + r.weight, 0);
+  const totalStockValue = stockRows.reduce((s, r) => s + r.value, 0);
 
-  // ── Aggregate: machine utilization ───────────────────────────────────────
-  type MachineKey = string;
-  const machineMap = new Map<MachineKey, { name: string; totalMeasurement: number; totalFee: number; count: number; charge_basis: string }>();
+  // ── Activity feed ─────────────────────────────────────────────────────────
+  const activity: ActivityItem[] = (recentMovements ?? []).map((m) => ({
+    id: m.id as string,
+    actor: g1<{ full_name: string }>((m as { recorded_by_profile: unknown }).recorded_by_profile)?.full_name ?? null,
+    item: g1<{ name: string }>((m as { material_type: unknown }).material_type)?.name ?? "—",
+    grade: m.grade as string | null,
+    weight: Number(m.weight),
+    direction: m.direction as "in" | "out",
+    reason: m.reason as string,
+    at: m.created_at as string,
+  }));
+
+  // ── Machine utilization ───────────────────────────────────────────────────
+  const machineMap = new Map<string, { name: string; totalMeasurement: number; totalFee: number; charge_basis: string }>();
   for (const u of machineUsage ?? []) {
-    const prRaw = (u as { processing_record: unknown }).processing_record;
-    const pr = Array.isArray(prRaw) ? prRaw[0] : prRaw as { visit?: unknown; completed_at?: string } | null;
+    const pr = g1<{ visit?: unknown }>((u as { processing_record: unknown }).processing_record);
     if (!pr) continue;
-    const visitRaw = pr.visit;
-    const visit = (Array.isArray(visitRaw) ? visitRaw[0] : visitRaw) as { site_id?: string } | null;
+    const visit = g1<{ site_id?: string }>(pr.visit);
     if (siteFilter && visit?.site_id !== siteFilter) continue;
-    const mRaw = (u as { machine: unknown }).machine;
-    const machine = (Array.isArray(mRaw) ? mRaw[0] : mRaw) as { name?: string; charge_basis?: string } | null;
+    const machine = g1<{ name?: string; charge_basis?: string }>((u as { machine: unknown }).machine);
     const name = machine?.name ?? "—";
     const existing = machineMap.get(name);
     if (existing) {
       existing.totalMeasurement += Number(u.measurement);
       existing.totalFee += Number(u.line_cost);
-      existing.count++;
     } else {
-      machineMap.set(name, { name, totalMeasurement: Number(u.measurement), totalFee: Number(u.line_cost), count: 1, charge_basis: machine?.charge_basis ?? "" });
+      machineMap.set(name, { name, totalMeasurement: Number(u.measurement), totalFee: Number(u.line_cost), charge_basis: machine?.charge_basis ?? "" });
     }
   }
   const machineRows = Array.from(machineMap.values()).sort((a, b) => b.totalFee - a.totalFee);
 
-  // ── Aggregate: outstanding balances (top 5) ───────────────────────────────
-  type BalanceRow = { id: string; supplier: string; site: string; processingOwed: number; purchaseOwed: number; processingPaid: number; purchasePaid: number; state: string };
+  // ── Outstanding balances (top 5) ──────────────────────────────────────────
+  type BalanceRow = { id: string; supplier: string; site: string; processingOwed: number; purchaseOwed: number; processingPaid: number; purchasePaid: number };
   const balanceRows: BalanceRow[] = [];
   for (const v of accountingVisits ?? []) {
-    const sup = (Array.isArray(v.supplier) ? v.supplier[0] : v.supplier) as { name?: string } | null;
-    const site = (Array.isArray(v.site) ? v.site[0] : v.site) as { name?: string } | null;
-    const pr = (Array.isArray(v.pricing) ? v.pricing[0] : v.pricing) as { purchase_amount?: number } | null;
+    const sup = g1<{ name?: string }>(v.supplier);
+    const site = g1<{ name?: string }>(v.site);
+    const pr = g1<{ purchase_amount?: number }>(v.pricing);
     const prRecsRaw = (v as { processing_records: unknown }).processing_records;
     const prRecs: unknown[] = Array.isArray(prRecsRaw) ? prRecsRaw : prRecsRaw ? [prRecsRaw] : [];
     const processingOwed = prRecs.reduce((s: number, rec: unknown) => {
       const r = rec as { usage?: { line_cost?: number }[] };
       return s + (r.usage ?? []).reduce((ss: number, u: { line_cost?: number }) => ss + Number(u.line_cost ?? 0), 0);
     }, 0);
-    const payments = (v as { payments: { direction: string; amount: number }[] }).payments ?? [];
-    const processingPaid = payments.filter((p) => p.direction === "processing_fee_in").reduce((s, p) => s + Number(p.amount), 0);
-    const purchasePaid = payments.filter((p) => p.direction === "purchase_amount_out").reduce((s, p) => s + Number(p.amount), 0);
+    const pmts = (v as { payments: { direction: string; amount: number }[] }).payments ?? [];
+    const processingPaid = pmts.filter((p) => p.direction === "processing_fee_in").reduce((s, p) => s + Number(p.amount), 0);
+    const purchasePaid = pmts.filter((p) => p.direction === "purchase_amount_out").reduce((s, p) => s + Number(p.amount), 0);
     balanceRows.push({
       id: v.id as string,
       supplier: sup?.name ?? "—",
@@ -235,7 +246,6 @@ export default async function OwnerDashboard({
       purchaseOwed: Number(pr?.purchase_amount ?? 0),
       processingPaid,
       purchasePaid,
-      state: v.state as string,
     });
   }
   balanceRows.sort((a, b) => (b.purchaseOwed - b.purchasePaid) - (a.purchaseOwed - a.purchasePaid));
@@ -243,55 +253,51 @@ export default async function OwnerDashboard({
   const sitesTyped = (sites ?? []) as { id: string; name: string }[];
 
   return (
-    <main className="p-6 max-w-7xl mx-auto space-y-8">
-
-      {/* Header + nav */}
+    <div className="mx-auto max-w-7xl space-y-6 p-6">
+      {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Owner Dashboard</h1>
-          <p className="text-sm text-gray-500">Cross-site overview · {dateFrom} – {dateTo}</p>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">Owner Dashboard</h1>
+          <p className="text-sm text-zinc-500">Cross-site overview · {dateFrom} – {dateTo}</p>
         </div>
-        <nav className="flex flex-wrap gap-2 text-sm">
-          <Link href="/owner/employees"     className="px-3 py-1.5 border rounded hover:bg-gray-100">Employees</Link>
-          <Link href="/owner/material-types" className="px-3 py-1.5 border rounded hover:bg-gray-100">Material types</Link>
-          <Link href="/owner/machines"       className="px-3 py-1.5 border rounded hover:bg-gray-100">Machines</Link>
-          <Link href="/owner/visits"         className="px-3 py-1.5 border rounded hover:bg-gray-100">All visits</Link>
-          <Link href="/owner/search"         className="px-3 py-1.5 border rounded hover:bg-gray-100">Search</Link>
-        </nav>
-      </div>
-
-      {/* Filters */}
-      <FilterBar
-        sites={sitesTyped}
-        currentSiteId={siteFilter}
-        currentFrom={dateFrom}
-        currentTo={dateTo}
-      />
-
-      {/* ── Row 1: Key metrics ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard label="Visits (period)" value={totalVisits} />
-        <StatCard label="Processing fees collected" value={formatNaira(totalIn)} accent="green" />
-        <StatCard label="Purchase amount paid out" value={formatNaira(totalOut)} accent="red" />
-        <StatCard
-          label="Rejection rate"
-          value={rejectionRate === "—" ? "—" : `${rejectionRate}%`}
-          sub={`${rejectedCount} / ${totalDecided} decided`}
-          accent={Number(rejectionRate) > 20 ? "red" : "green"}
+        <FilterBar
+          sites={sitesTyped}
+          currentSiteId={siteFilter}
+          currentFrom={dateFrom}
+          currentTo={dateTo}
         />
       </div>
 
-      {/* ── Row 2: Visit funnel + Outstanding balances ─────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* KPI row */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <KpiCard label="Total stock" value={formatWeight(totalStockKg)} icon={<Boxes size={18} />} sub={`${stockRows.length} buckets`} />
+        <KpiCard label="Est. stock value" value={formatNaira(totalStockValue)} icon={<Wallet size={18} />} sub="from approved sale prices" />
+        <KpiCard label="Visits (period)" value={totalVisits} icon={<ScrollText size={18} />} />
+        <KpiCard
+          label="Rejection rate"
+          value={rejectionRate == null ? "—" : `${rejectionRate.toFixed(1)}%`}
+          icon={<Percent size={18} />}
+          sub={`${rejectedCount}/${totalDecided} decided`}
+        />
+      </div>
 
-        {/* Visit funnel */}
+      {/* Inventory table + activity feed */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <InventoryTable rows={stockRows} canCreateVisit={false} />
+        </div>
+        <ActivityFeed items={activity} />
+      </div>
+
+      {/* Visit pipeline + Outstanding balances */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <h2 className="font-semibold text-sm">Visit pipeline</h2>
+            <h2 className="text-sm font-semibold">Visit pipeline</h2>
           </CardHeader>
           <CardContent className="space-y-1.5">
             {Object.entries(stateCounts).length === 0 ? (
-              <p className="text-sm text-gray-500">No visits in this period.</p>
+              <p className="text-sm text-zinc-500">No visits in this period.</p>
             ) : (
               Object.entries(stateCounts)
                 .sort((a, b) => b[1] - a[1])
@@ -307,16 +313,13 @@ export default async function OwnerDashboard({
           </CardContent>
         </Card>
 
-        {/* Outstanding balances */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-sm">Outstanding balances (top 5)</h2>
-            </div>
+            <h2 className="text-sm font-semibold">Outstanding balances (top 5)</h2>
           </CardHeader>
           <CardContent>
             {balanceRows.length === 0 ? (
-              <p className="text-sm text-gray-500">No outstanding balances.</p>
+              <p className="text-sm text-zinc-500">No outstanding balances.</p>
             ) : (
               <ul className="space-y-2 text-sm">
                 {balanceRows.slice(0, 5).map((r) => {
@@ -325,18 +328,12 @@ export default async function OwnerDashboard({
                   return (
                     <li key={r.id} className="flex items-start justify-between gap-2">
                       <div>
-                        <Link href={`/visits/${r.id}`} className="font-medium hover:underline">
-                          {r.supplier}
-                        </Link>
-                        <div className="text-xs text-gray-500">{r.site}</div>
+                        <Link href={`/visits/${r.id}`} className="font-medium hover:underline">{r.supplier}</Link>
+                        <div className="text-xs text-zinc-500">{r.site}</div>
                       </div>
-                      <div className="text-right text-xs space-y-0.5">
-                        {purchaseBalance > 0 && (
-                          <div className="text-red-700">Owe: {formatNaira(purchaseBalance)}</div>
-                        )}
-                        {procBalance > 0 && (
-                          <div className="text-blue-700">Fee due: {formatNaira(procBalance)}</div>
-                        )}
+                      <div className="space-y-0.5 text-right text-xs">
+                        {purchaseBalance > 0 && <div className="text-red-600 dark:text-red-400">Owe: {formatNaira(purchaseBalance)}</div>}
+                        {procBalance > 0 && <div className="text-blue-600 dark:text-blue-400">Fee due: {formatNaira(procBalance)}</div>}
                       </div>
                     </li>
                   );
@@ -347,69 +344,29 @@ export default async function OwnerDashboard({
         </Card>
       </div>
 
-      {/* ── Row 3: Stock + Machine utilization ─────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-        {/* Live stock */}
+      {/* Machine utilization + Consumables */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <div className="flex justify-between items-center">
-              <h2 className="font-semibold text-sm">Live stock</h2>
-              <span className="text-xs text-gray-500">Total: {formatWeight(totalStockKg)}</span>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {stockRows.length === 0 ? (
-              <p className="text-sm text-gray-500">No stock on hand.</p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-xs text-gray-500 border-b">
-                    <th className="text-left py-1">Site</th>
-                    <th className="text-left py-1">Material</th>
-                    <th className="text-left py-1">Grade</th>
-                    <th className="text-right py-1">On hand</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {stockRows.map((r, i) => (
-                    <tr key={i}>
-                      <td className="py-1 text-xs text-gray-500">{r.site_name}</td>
-                      <td className="py-1">{r.material_name}</td>
-                      <td className="py-1 text-gray-600">{r.grade ?? "—"}</td>
-                      <td className="py-1 text-right font-medium">{formatWeight(r.balance)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Machine utilization */}
-        <Card>
-          <CardHeader>
-            <h2 className="font-semibold text-sm">Machine utilization (period)</h2>
+            <h2 className="text-sm font-semibold">Machine utilization (period)</h2>
           </CardHeader>
           <CardContent>
             {machineRows.length === 0 ? (
-              <p className="text-sm text-gray-500">No processing data in this period.</p>
+              <p className="text-sm text-zinc-500">No processing data in this period.</p>
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-xs text-gray-500 border-b">
-                    <th className="text-left py-1">Machine</th>
-                    <th className="text-right py-1">Processed</th>
-                    <th className="text-right py-1">Fee generated</th>
+                  <tr className="border-b border-zinc-200 text-xs text-zinc-500 dark:border-zinc-800">
+                    <th className="py-1 text-left">Machine</th>
+                    <th className="py-1 text-right">Processed</th>
+                    <th className="py-1 text-right">Fee generated</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
                   {machineRows.map((r) => (
                     <tr key={r.name}>
                       <td className="py-1">{r.name}</td>
-                      <td className="py-1 text-right text-gray-600">
-                        {r.totalMeasurement.toFixed(2)} {r.charge_basis}
-                      </td>
+                      <td className="py-1 text-right text-zinc-500">{r.totalMeasurement.toFixed(2)} {r.charge_basis}</td>
                       <td className="py-1 text-right font-medium">{formatNaira(r.totalFee)}</td>
                     </tr>
                   ))}
@@ -418,79 +375,73 @@ export default async function OwnerDashboard({
             )}
           </CardContent>
         </Card>
-      </div>
 
-      {/* ── Row 4: Consumables ─────────────────────────────────────────── */}
-      {(consumables?.length ?? 0) > 0 && (
         <Card>
           <CardHeader>
-            <h2 className="font-semibold text-sm">Consumables on hand</h2>
+            <h2 className="text-sm font-semibold">Consumables on hand</h2>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {(consumables ?? []).map((c) => {
-                const site = (Array.isArray(c.site) ? c.site[0] : c.site) as { name?: string } | null;
-                return (
-                  <div key={`${c.site_id}-${c.name}`} className="text-sm border rounded p-2">
-                    <div className="font-medium">{c.name as string}</div>
-                    <div className="text-xs text-gray-500">{site?.name ?? "—"}</div>
-                    <div className="text-lg font-bold mt-1">
-                      {Number(c.on_hand).toFixed(2)}{" "}
-                      <span className="text-xs font-normal text-gray-500">
-                        {(c.unit as string | null) ?? "units"}
-                      </span>
+            {(consumables?.length ?? 0) === 0 ? (
+              <p className="text-sm text-zinc-500">No consumables tracked.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {(consumables ?? []).map((c) => {
+                  const site = g1<{ name?: string }>(c.site);
+                  return (
+                    <div key={`${c.site_id}-${c.name}`} className="rounded-lg border border-zinc-200 p-2 text-sm dark:border-zinc-800">
+                      <div className="font-medium">{c.name as string}</div>
+                      <div className="text-xs text-zinc-500">{site?.name ?? "—"}</div>
+                      <div className="mt-1 text-lg font-bold">
+                        {Number(c.on_hand).toFixed(2)}{" "}
+                        <span className="text-xs font-normal text-zinc-500">{(c.unit as string | null) ?? "units"}</span>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
-      )}
+      </div>
 
-      {/* ── Awaiting-owner queue: bulk sales ──────────────────────────── */}
+      {/* Pending bulk sales */}
       <Card>
         <CardHeader>
-          <h2 className="font-semibold text-sm">
-            Pending bulk sales ({pendingBulkSales?.length ?? 0})
-          </h2>
+          <h2 className="text-sm font-semibold">Pending bulk sales ({pendingBulkSales?.length ?? 0})</h2>
         </CardHeader>
         <CardContent>
           {!pendingBulkSales || pendingBulkSales.length === 0 ? (
-            <p className="text-sm text-gray-500">No pending bulk sales.</p>
+            <p className="text-sm text-zinc-500">No pending bulk sales.</p>
           ) : (
-            <ul className="divide-y">
+            <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
               {pendingBulkSales.map((s) => {
-                const mat  = (Array.isArray(s.material_type) ? s.material_type[0] : s.material_type) as { name?: string } | null;
-                const site = (Array.isArray(s.site) ? s.site[0] : s.site) as { name?: string } | null;
-                const rec  = (s as { recorded_by_profile: unknown }).recorded_by_profile;
-                const recName = (Array.isArray(rec) ? (rec[0] as { full_name?: string })?.full_name : (rec as { full_name?: string } | null)?.full_name) ?? "—";
+                const mat = g1<{ name?: string }>(s.material_type);
+                const site = g1<{ name?: string }>(s.site);
+                const recName = g1<{ full_name?: string }>((s as { recorded_by_profile: unknown }).recorded_by_profile)?.full_name ?? "—";
                 return (
                   <li key={s.id as string} className="py-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="text-sm">
                         <div className="font-medium">
                           {s.buyer_name as string}
-                          {s.buyer_phone ? <span className="text-gray-500 font-normal"> · {s.buyer_phone as string}</span> : null}
+                          {s.buyer_phone ? <span className="font-normal text-zinc-500"> · {s.buyer_phone as string}</span> : null}
                         </div>
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-zinc-500">
                           {site?.name ?? "—"} · {mat?.name ?? "—"}
                           {s.grade ? ` · ${s.grade}` : ""} · {formatWeight(Number(s.weight))} ×{" "}
                           {formatNaira(Number(s.unit_price))} = <strong>{formatNaira(Number(s.total))}</strong>
                         </div>
-                        <div className="text-xs text-gray-400 mt-0.5">
-                          by {recName} · {formatTimestamp(s.sold_at as string)}
-                        </div>
+                        <div className="mt-0.5 text-xs text-zinc-400">by {recName} · {formatTimestamp(s.sold_at as string)}</div>
                       </div>
-                      <div className="flex gap-2 shrink-0">
+                      <div className="flex shrink-0 gap-2">
                         <form action={approveBulkSale}>
                           <input type="hidden" name="id" value={s.id as string} />
-                          <button type="submit" className="px-3 py-1 bg-green-700 text-white text-xs rounded">Approve</button>
+                          <button type="submit" className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700">Approve</button>
                         </form>
                         <form action={rejectBulkSale} className="flex gap-1">
                           <input type="hidden" name="id" value={s.id as string} />
-                          <input type="text" name="rejection_note" placeholder="Reason" className="border rounded px-2 py-1 text-xs w-24" />
-                          <button type="submit" className="px-3 py-1 bg-red-700 text-white text-xs rounded">Reject</button>
+                          <input type="text" name="rejection_note" placeholder="Reason" className="w-24 rounded-lg border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800" />
+                          <button type="submit" className="rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700">Reject</button>
                         </form>
                       </div>
                     </div>
@@ -501,7 +452,6 @@ export default async function OwnerDashboard({
           )}
         </CardContent>
       </Card>
-
-    </main>
+    </div>
   );
 }
