@@ -60,15 +60,6 @@ export default async function VisitDetailPage({
     .eq("visit_id", id)
     .maybeSingle();
 
-  const { data: auth } = await supabase
-    .from("gate_exit_authorizations")
-    .select(`
-      authorized_at, note,
-      authorized_by_profile:profiles!gate_exit_authorizations_authorized_by_fkey(full_name)
-    `)
-    .eq("visit_id", id)
-    .maybeSingle();
-
   const { data: events } = await supabase
     .from("transaction_events")
     .select(`
@@ -206,18 +197,6 @@ export default async function VisitDetailPage({
       }
     : null;
 
-  const authorizationNorm = auth
-    ? {
-        authorized_at: auth.authorized_at as string,
-        note: auth.note as string | null,
-        authorized_by_name:
-          (
-            get1(
-              (auth as { authorized_by_profile: unknown }).authorized_by_profile,
-            ) as { full_name?: string } | null
-          )?.full_name ?? null,
-      }
-    : null;
 
   const eventsNorm = (events ?? []).map((e) => ({
     id: e.id as string,
@@ -295,7 +274,6 @@ export default async function VisitDetailPage({
       processing={processingNorm}
       analysis={analysisNorm}
       pricing={pricingNorm}
-      authorization={authorizationNorm}
       payments={paymentsNorm}
       paymentBalance={paymentBalance}
       events={eventsNorm}

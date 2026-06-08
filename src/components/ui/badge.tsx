@@ -27,7 +27,6 @@ export function stateVariant(state: string): Variant {
   if (state === "stocked" || state === "exited") return "default";
   if (state === "in_accounting" || state === "awaiting_stock_intake") return "blue";
   if (state === "pricing") return "purple";
-  if (state === "awaiting_gate_exit") return "red";
-  if (state === "at_gate_in") return "yellow";
+  if (state === "in_processing") return "yellow";
   return "default";
 }

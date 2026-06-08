@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useActionState } from "react";
-import { submitGateIntake, type IntakeState } from "../actions";
+import { createVisit, type IntakeState } from "../actions";
 import { SupplierSearch } from "./SupplierSearch";
 
 type MaterialType = { id: string; name: string };
@@ -10,7 +10,7 @@ type Supplier = { id: string; name: string; phone: string | null };
 const initialState: IntakeState = {};
 
 export function IntakeForm({ materialTypes }: { materialTypes: MaterialType[] }) {
-  const [state, formAction, pending] = useActionState(submitGateIntake, initialState);
+  const [state, formAction, pending] = useActionState(createVisit, initialState);
   const [picked, setPicked] = useState<Supplier | null>(null);
   const [addingNew, setAddingNew] = useState(false);
 
@@ -90,6 +90,9 @@ export function IntakeForm({ materialTypes }: { materialTypes: MaterialType[] })
             <input type="radio" name="entry_path" value="pre_processed" required /> Pre-processed
           </label>
         </fieldset>
+        <p className="text-xs text-gray-500">
+          Unprocessed visits start at processing; pre-processed visits go straight to receiving.
+        </p>
       </section>
 
       {state.error && <p className="text-red-600 text-sm">{state.error}</p>}
@@ -99,7 +102,7 @@ export function IntakeForm({ materialTypes }: { materialTypes: MaterialType[] })
         disabled={pending}
         className="px-4 py-2 bg-black text-white rounded"
       >
-        {pending ? "Saving..." : "Save intake"}
+        {pending ? "Saving..." : "Create visit"}
       </button>
     </form>
   );

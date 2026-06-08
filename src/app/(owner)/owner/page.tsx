@@ -45,7 +45,6 @@ export default async function OwnerDashboard({
     { data: stockMovements },
     { data: machineUsage },
     { data: consumables },
-    { data: awaitingExit },
     { data: pendingBulkSales },
   ] = await Promise.all([
     supabase.from("sites").select("id, name").order("name"),
@@ -111,16 +110,6 @@ export default async function OwnerDashboard({
       if (siteFilter) q = q.eq("site_id", siteFilter);
       return q;
     })(),
-
-    // Awaiting gate exit (cross-site — no site filter, owner sees all)
-    supabase
-      .from("visits")
-      .select(`id, created_at, vehicle_plate,
-               site:sites(name),
-               supplier:suppliers(name),
-               declared_material_type:material_types(name)`)
-      .eq("state", "awaiting_gate_exit")
-      .order("created_at", { ascending: true }),
 
     // Pending bulk sales (cross-site)
     supabase
@@ -458,41 +447,6 @@ export default async function OwnerDashboard({
           </CardContent>
         </Card>
       )}
-
-      {/* ── Awaiting-owner queue: gate exits ──────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <h2 className="font-semibold text-sm">
-            Awaiting gate sign-off ({awaitingExit?.length ?? 0})
-          </h2>
-        </CardHeader>
-        <CardContent>
-          {!awaitingExit || awaitingExit.length === 0 ? (
-            <p className="text-sm text-gray-500">Nothing awaiting authorization.</p>
-          ) : (
-            <ul className="divide-y">
-              {awaitingExit.map((v) => {
-                const sup  = (Array.isArray(v.supplier)  ? v.supplier[0]  : v.supplier)  as { name?: string } | null;
-                const mat  = (Array.isArray(v.declared_material_type) ? v.declared_material_type[0] : v.declared_material_type) as { name?: string } | null;
-                const site = (Array.isArray(v.site) ? v.site[0] : v.site) as { name?: string } | null;
-                return (
-                  <li key={v.id}>
-                    <Link href={`/visits/${v.id}`} className="flex justify-between py-2 hover:bg-gray-50 px-1 rounded text-sm">
-                      <div>
-                        <div className="font-medium">{sup?.name ?? "—"}</div>
-                        <div className="text-xs text-gray-500">
-                          {site?.name ?? "—"} · {mat?.name ?? "—"} · {v.vehicle_plate ?? "no plate"}
-                        </div>
-                      </div>
-                      <div className="text-xs text-gray-500">{formatTimestamp(v.created_at)}</div>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
 
       {/* ── Awaiting-owner queue: bulk sales ──────────────────────────── */}
       <Card>

@@ -6,7 +6,7 @@ describe("transaction_events RLS", () => {
 
   beforeAll(async () => {
     const siteId = await firstSiteId();
-    gate = await makeUser({ username: "te-gate", role: "gate", siteId });
+    gate = await makeUser({ username: "te-gate", role: "receiving", siteId });
     owner = await makeUser({ username: "te-owner", role: "owner", siteId: null });
   });
 

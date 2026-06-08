@@ -28,7 +28,7 @@ export function FullDossierPdf({ data, docId }: { data: PdfVisitData; docId: str
 
   return (
     <Document title={`Visit Dossier — ${data.id.slice(0, 8)}`}>
-      {/* ── Page 1: Gate + Processing + Analysis ─────────────────────────── */}
+      {/* ── Page 1: Visit Details + Processing + Analysis ─────────────────── */}
       <Page size="A4" style={shared.page}>
         <BrandHeader siteName={data.site_name} docType="Full Visit Dossier" />
         <Text style={shared.docTitle}>Visit Dossier</Text>
@@ -37,16 +37,16 @@ export function FullDossierPdf({ data, docId }: { data: PdfVisitData; docId: str
         </Text>
 
         <View style={shared.body}>
-          {/* Gate intake */}
+          {/* Visit details */}
           <View style={shared.section}>
-            <SectionTitle>1. Gate Intake</SectionTitle>
+            <SectionTitle>1. Visit Details</SectionTitle>
             <Row label="Supplier"       value={data.supplier_name ?? "—"} />
             <Row label="Phone"          value={data.supplier_phone ?? "—"} />
             <Row label="Material"       value={data.material_type_name ?? "—"} />
             <Row label="Entry path"     value={data.entry_path} />
             <Row label="Vehicle plate"  value={data.vehicle_plate ?? "—"} />
             <Row label="Opened"         value={formatTs(data.created_at)} />
-            <Row label="Gate officer"   value={data.created_by_name ?? "—"} />
+            <Row label="Recorded by"    value={data.created_by_name ?? "—"} />
           </View>
 
           {/* Processing */}

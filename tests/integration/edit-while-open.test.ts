@@ -3,7 +3,7 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 
 describe("edit-while-open: each role can edit own record on an open visit", () => {
   let siteId: string;
-  let gate: TestUser, recv: TestUser, mgr: TestUser;
+  let proc: TestUser, recv: TestUser, mgr: TestUser;
   let supplierId: string, materialTypeId: string;
 
   async function freshVisitInPricing() {
@@ -15,7 +15,7 @@ describe("edit-while-open: each role can edit own record on an open visit", () =
         declared_material_type_id: materialTypeId,
         entry_path: "pre_processed",
         state: "in_receiving",
-        created_by: gate.userId,
+        created_by: proc.userId,
       })
       .select("id")
       .single();
@@ -30,7 +30,7 @@ describe("edit-while-open: each role can edit own record on an open visit", () =
   beforeAll(async () => {
     const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteId = sites![0].id as string;
-    gate = await makeUser({ username: "ewo-gate", role: "gate", siteId });
+    proc = await makeUser({ username: "ewo-proc", role: "processing", siteId });
     recv = await makeUser({ username: "ewo-recv", role: "receiving", siteId });
     mgr = await makeUser({ username: "ewo-mgr", role: "manager", siteId });
     const { data: s } = await adminClient()

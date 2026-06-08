@@ -16,7 +16,7 @@ if (!URL.includes("127.0.0.1") && !URL.includes("localhost")) {
 }
 
 export type TestRole =
-  | "gate" | "processing" | "receiving" | "manager" | "accounting" | "inventory" | "owner";
+  | "processing" | "receiving" | "manager" | "accounting" | "inventory" | "owner";
 
 export function adminClient(): SupabaseClient {
   return createClient(URL, SERVICE, {

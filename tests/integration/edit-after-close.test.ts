@@ -3,13 +3,13 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 
 describe("edit-after-close: non-owner blocked, owner allowed", () => {
   let siteId: string;
-  let gate: TestUser, recv: TestUser, mgr: TestUser, owner: TestUser;
+  let proc: TestUser, recv: TestUser, mgr: TestUser, owner: TestUser;
   let supplierId: string, materialTypeId: string;
 
   beforeAll(async () => {
     const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteId = sites![0].id as string;
-    gate = await makeUser({ username: "eac-gate", role: "gate", siteId });
+    proc = await makeUser({ username: "eac-proc", role: "processing", siteId });
     recv = await makeUser({ username: "eac-recv", role: "receiving", siteId });
     mgr = await makeUser({ username: "eac-mgr", role: "manager", siteId });
     owner = await makeUser({ username: "eac-owner", role: "owner", siteId: null });
@@ -24,34 +24,36 @@ describe("edit-after-close: non-owner blocked, owner allowed", () => {
   });
 
   it("after exited, receiving cannot edit analysis; owner can", async () => {
-    const { data: v } = await gate.client
+    const { data: v } = await proc.client
       .from("visits")
       .insert({
         site_id: siteId,
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
         entry_path: "pre_processed",
-        state: "at_gate_in",
-        created_by: gate.userId,
+        state: "in_receiving",
+        created_by: proc.userId,
       })
       .select("id")
       .single();
-    await gate.client.from("visits").update({ state: "in_receiving" }).eq("id", v!.id);
     const { data: a } = await recv.client
       .from("analysis_records")
       .insert({ visit_id: v!.id, weight: 50, recorded_by: recv.userId })
       .select("id")
       .single();
+    // Manager "no agreement" → visit transitions straight to exited.
     await mgr.client.from("pricing").insert({
       visit_id: v!.id,
       agreement_status: "not_agreed",
       priced_by: mgr.userId,
     });
-    await owner.client.from("gate_exit_authorizations").insert({
-      visit_id: v!.id,
-      authorized_by: owner.userId,
-    });
-    await gate.client.from("visits").update({ state: "exited" }).eq("id", v!.id);
+
+    const { data: closed } = await adminClient()
+      .from("visits")
+      .select("state")
+      .eq("id", v!.id)
+      .single();
+    expect(closed?.state).toBe("exited");
 
     // Receiving cannot edit closed visit's analysis (RLS silently rejects)
     await recv.client.from("analysis_records").update({ weight: 75 }).eq("id", a!.id);

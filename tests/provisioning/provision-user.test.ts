@@ -32,19 +32,19 @@ describe("provisionUser", () => {
   it("creates an auth user + profile + setup_code row and returns a temp password", async () => {
     const siteId = await firstSiteId();
     const result = await provisionUser(
-      { fullName: "Gate One", username: "gate_one", role: "gate", siteId },
+      { fullName: "Recv One", username: "recv_one", role: "receiving", siteId },
       ownerId,
     );
     expect(result.tempPassword).toHaveLength(12);
 
     const admin = adminClient();
     const { data: profile } = await admin.from("profiles")
-      .select("*").eq("username", "gate_one").single();
-    expect(profile?.role).toBe("gate");
+      .select("*").eq("username", "recv_one").single();
+    expect(profile?.role).toBe("receiving");
     expect(profile?.must_change_password).toBe(true);
 
     const { data: codes } = await admin.from("setup_codes")
-      .select("*").eq("username", "gate_one");
+      .select("*").eq("username", "recv_one");
     expect(codes).toHaveLength(1);
   });
 
@@ -52,7 +52,7 @@ describe("provisionUser", () => {
     const siteId = await firstSiteId();
     await expect(
       provisionUser(
-        { fullName: "Dupe", username: "gate_one", role: "gate", siteId },
+        { fullName: "Dupe", username: "recv_one", role: "receiving", siteId },
         ownerId,
       ),
     ).rejects.toThrow();
@@ -102,7 +102,7 @@ describe("provisionUser", () => {
       id: preId,
       full_name: "Collider",
       username: "collide_user",
-      role: "gate",
+      role: "receiving",
       site_id: siteId,
       must_change_password: false,
     });
@@ -110,7 +110,7 @@ describe("provisionUser", () => {
     // Now try to provision with the same username but a different synthetic email.
     await expect(
       provisionUser(
-        { fullName: "Will Roll Back", username: "collide_user", role: "gate", siteId },
+        { fullName: "Will Roll Back", username: "collide_user", role: "receiving", siteId },
         ownerId,
       ),
     ).rejects.toThrow();

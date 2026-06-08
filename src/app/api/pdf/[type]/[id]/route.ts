@@ -4,7 +4,6 @@ import React from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fetchVisitPdfData, fetchBulkSalePdfData } from "@/lib/pdf/fetch-data";
-import { GateIntakePdf }       from "@/lib/pdf/templates/gate-intake";
 import { ProcessingReportPdf } from "@/lib/pdf/templates/processing-report";
 import { AnalysisReportPdf }   from "@/lib/pdf/templates/analysis-report";
 import { PricingSheetPdf }     from "@/lib/pdf/templates/pricing-sheet";
@@ -25,7 +24,7 @@ function pdf<P extends object>(
   return React.createElement(Component, props) as unknown as React.ReactElement<DocumentProps>;
 }
 
-const VISIT_TYPES = ["gate", "processing", "analysis", "pricing", "payments", "dossier"] as const;
+const VISIT_TYPES = ["processing", "analysis", "pricing", "payments", "dossier"] as const;
 const BULK_TYPES  = ["bulk-sale"] as const;
 type VisitPdfType = (typeof VISIT_TYPES)[number];
 type BulkPdfType  = (typeof BULK_TYPES)[number];
@@ -98,9 +97,6 @@ export async function GET(
   let buffer: Buffer;
 
   switch (type as VisitPdfType) {
-    case "gate":
-      buffer = await renderToBuffer(pdf(GateIntakePdf, { data, docId }));
-      break;
     case "processing":
       buffer = await renderToBuffer(pdf(ProcessingReportPdf, { data, docId }));
       break;

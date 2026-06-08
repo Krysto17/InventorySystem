@@ -96,7 +96,7 @@ describe("pricing RLS + transition + purchase_amount", () => {
     expect(error).not.toBeNull();
   });
 
-  it("not_agreed transitions visit to awaiting_gate_exit", async () => {
+  it("not_agreed transitions visit directly to exited", async () => {
     const vid = await newPricingVisitWithAnalysis(50);
     await mgrA.client.from("pricing").insert({
       visit_id: vid,
@@ -108,7 +108,7 @@ describe("pricing RLS + transition + purchase_amount", () => {
       .select("state")
       .eq("id", vid)
       .single();
-    expect(v?.state).toBe("awaiting_gate_exit");
+    expect(v?.state).toBe("exited");
   });
 
   it("analysis weight edit recomputes purchase_amount", async () => {

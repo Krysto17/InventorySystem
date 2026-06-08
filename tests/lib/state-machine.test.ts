@@ -9,18 +9,17 @@ import {
 
 describe("state-machine TS mirror", () => {
   it("legal forward transitions match the DB allowed set", () => {
-    expect(isLegalForwardTransition("at_gate_in", "in_processing")).toBe(true);
-    expect(isLegalForwardTransition("at_gate_in", "in_receiving")).toBe(true);
     expect(isLegalForwardTransition("in_processing", "in_receiving")).toBe(true);
     expect(isLegalForwardTransition("in_receiving", "pricing")).toBe(true);
     expect(isLegalForwardTransition("pricing", "in_accounting")).toBe(true);
-    expect(isLegalForwardTransition("pricing", "awaiting_gate_exit")).toBe(true);
-    expect(isLegalForwardTransition("awaiting_gate_exit", "exited")).toBe(true);
+    expect(isLegalForwardTransition("pricing", "exited")).toBe(true);
+    expect(isLegalForwardTransition("in_accounting", "awaiting_stock_intake")).toBe(true);
+    expect(isLegalForwardTransition("awaiting_stock_intake", "stocked")).toBe(true);
   });
 
   it("rejects illegal jumps", () => {
-    expect(isLegalForwardTransition("at_gate_in", "pricing")).toBe(false);
     expect(isLegalForwardTransition("in_processing", "pricing")).toBe(false);
+    expect(isLegalForwardTransition("in_receiving", "in_accounting")).toBe(false);
   });
 
   it("identifies terminal states", () => {

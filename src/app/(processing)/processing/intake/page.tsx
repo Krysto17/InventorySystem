@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { IntakeForm } from "./IntakeForm";
 
-export default async function GateIntakePage() {
+export default async function ProcessingIntakePage() {
   const supabase = await createClient();
   const { data: materialTypes } = await supabase
     .from("material_types")

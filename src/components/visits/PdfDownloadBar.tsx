@@ -1,7 +1,7 @@
 // Server component — renders PDF download links based on visit state + viewer role.
 import type { VisitState } from "@/lib/visits/state-machine";
 
-type Role = "gate" | "processing" | "receiving" | "manager" | "accounting" | "inventory" | "owner";
+type Role = "processing" | "receiving" | "manager" | "accounting" | "inventory" | "owner";
 
 type Props = {
   visitId: string;
@@ -38,15 +38,11 @@ export function PdfDownloadBar({
   const base = `/api/pdf`;
   const v = visitId;
   const isOwner = viewerRole === "owner";
-  const terminal = visitState === "exited" || visitState === "stocked";
 
   return (
     <section className="border rounded p-3 bg-gray-50">
       <div className="text-xs uppercase text-gray-500 mb-2 tracking-wide">Download PDFs</div>
       <div className="flex flex-wrap gap-2">
-        {/* Gate intake — all roles */}
-        <PdfLink href={`${base}/gate/${v}`} label="Gate intake" />
-
         {/* Processing — processing role, manager, accounting, inventory, owner */}
         {hasProcessing && (viewerRole === "processing" || viewerRole === "manager" || viewerRole === "accounting" || viewerRole === "inventory" || isOwner) && (
           <PdfLink href={`${base}/processing/${v}`} label="Processing report" />

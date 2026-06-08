@@ -3,13 +3,13 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 
 describe("happy path: pre_processed → agreed → in_accounting (no processing stage)", () => {
   let siteId: string;
-  let gate: TestUser, recv: TestUser, mgr: TestUser;
+  let proc: TestUser, recv: TestUser, mgr: TestUser;
   let supplierId: string, materialTypeId: string;
 
   beforeAll(async () => {
     const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteId = sites![0].id as string;
-    gate = await makeUser({ username: "hpp-gate", role: "gate", siteId });
+    proc = await makeUser({ username: "hpp-proc", role: "processing", siteId });
     recv = await makeUser({ username: "hpp-recv", role: "receiving", siteId });
     mgr = await makeUser({ username: "hpp-mgr", role: "manager", siteId });
     const { data: s } = await adminClient()
@@ -23,19 +23,18 @@ describe("happy path: pre_processed → agreed → in_accounting (no processing 
   });
 
   it("skips processing entirely", async () => {
-    const { data: v } = await gate.client
+    const { data: v } = await proc.client
       .from("visits")
       .insert({
         site_id: siteId,
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
         entry_path: "pre_processed",
-        state: "at_gate_in",
-        created_by: gate.userId,
+        state: "in_receiving",
+        created_by: proc.userId,
       })
       .select("id")
       .single();
-    await gate.client.from("visits").update({ state: "in_receiving" }).eq("id", v!.id);
     await recv.client
       .from("analysis_records")
       .insert({ visit_id: v!.id, weight: 200, grade: "A", recorded_by: recv.userId });

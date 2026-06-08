@@ -113,7 +113,7 @@ describe("dashboard aggregation queries", () => {
   it("computes rejection rate from pricing rows", async () => {
     const vAgreed1 = await newVisit(siteAId, "in_accounting");
     const vAgreed2 = await newVisit(siteAId, "in_accounting");
-    const vRejected = await newVisit(siteAId, "awaiting_gate_exit");
+    const vRejected = await newVisit(siteAId, "exited");
 
     await adminClient().from("pricing").insert([
       { visit_id: vAgreed1, unit_price: 100, agreement_status: "agreed", payment_terms: "immediate", priced_by: owner.userId },

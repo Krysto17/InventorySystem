@@ -3,13 +3,12 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 
 describe("happy path: unprocessed → agreed → in_accounting", () => {
   let siteId: string;
-  let gate: TestUser, proc: TestUser, recv: TestUser, mgr: TestUser;
+  let proc: TestUser, recv: TestUser, mgr: TestUser;
   let supplierId: string, materialTypeId: string, machineId: string;
 
   beforeAll(async () => {
     const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteId = sites![0].id as string;
-    gate = await makeUser({ username: "hpu-gate", role: "gate", siteId });
     proc = await makeUser({ username: "hpu-proc", role: "processing", siteId });
     recv = await makeUser({ username: "hpu-recv", role: "receiving", siteId });
     mgr = await makeUser({ username: "hpu-mgr", role: "manager", siteId });
@@ -29,8 +28,8 @@ describe("happy path: unprocessed → agreed → in_accounting", () => {
     machineId = mc!.id as string;
   });
 
-  it("walks a visit gate → processing → receiving → pricing(agreed) → in_accounting", async () => {
-    const { data: v } = await gate.client
+  it("walks a visit processing → receiving → pricing(agreed) → in_accounting", async () => {
+    const { data: v } = await proc.client
       .from("visits")
       .insert({
         site_id: siteId,
@@ -38,14 +37,12 @@ describe("happy path: unprocessed → agreed → in_accounting", () => {
         declared_material_type_id: materialTypeId,
         vehicle_plate: "HPU-001",
         entry_path: "unprocessed",
-        state: "at_gate_in",
-        created_by: gate.userId,
+        state: "in_processing",
+        created_by: proc.userId,
       })
       .select("id")
       .single();
     expect(v?.id).toBeTruthy();
-
-    await gate.client.from("visits").update({ state: "in_processing" }).eq("id", v!.id);
 
     const { data: pr } = await proc.client
       .from("processing_records")

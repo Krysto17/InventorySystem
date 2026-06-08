@@ -28,7 +28,7 @@ describe("payments RLS", () => {
     siteBId = sites![1].id as string;
     acctA = await makeUser({ username: "pay-acct-a", role: "accounting", siteId: siteAId });
     acctB = await makeUser({ username: "pay-acct-b", role: "accounting", siteId: siteBId });
-    gateA = await makeUser({ username: "pay-gate-a", role: "gate", siteId: siteAId });
+    gateA = await makeUser({ username: "pay-gate-a", role: "receiving", siteId: siteAId });
     owner = await makeUser({ username: "pay-owner", role: "owner", siteId: null });
     const { data: s } = await adminClient()
       .from("suppliers")

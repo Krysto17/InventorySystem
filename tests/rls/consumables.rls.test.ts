@@ -22,7 +22,7 @@ describe("consumables + consumable_movements RLS", () => {
     siteBId = sites![1].id as string;
     invA  = await makeUser({ username: "cons-inv-a",  role: "inventory", siteId: siteAId });
     invB  = await makeUser({ username: "cons-inv-b",  role: "inventory", siteId: siteBId });
-    gateA = await makeUser({ username: "cons-gate-a", role: "gate",      siteId: siteAId });
+    gateA = await makeUser({ username: "cons-gate-a", role: "receiving",      siteId: siteAId });
     owner = await makeUser({ username: "cons-owner",  role: "owner",     siteId: null });
   });
 

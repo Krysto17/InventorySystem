@@ -8,9 +8,14 @@ export default async function ProcessingHomePage() {
   const queue = await listVisitsByState(["in_processing"]);
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold">Processing</h1>
-        <p className="text-sm text-gray-500">{queue.length} visit{queue.length !== 1 ? "s" : ""} pending</p>
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Processing</h1>
+          <p className="text-sm text-gray-500">{queue.length} visit{queue.length !== 1 ? "s" : ""} pending</p>
+        </div>
+        <Link href="/processing/intake" className="px-4 py-2 bg-black text-white rounded text-sm">
+          + New visit intake
+        </Link>
       </header>
 
       <Card>

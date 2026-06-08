@@ -3,13 +3,13 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 
 describe("visits state machine — transitions", () => {
   let siteId: string;
-  let gate: TestUser, owner: TestUser;
+  let proc: TestUser, owner: TestUser;
   let supplierId: string, materialTypeId: string;
 
   beforeAll(async () => {
     const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteId = sites![0].id as string;
-    gate = await makeUser({ username: "sm-gate", role: "gate", siteId });
+    proc = await makeUser({ username: "sm-proc", role: "processing", siteId });
     owner = await makeUser({ username: "sm-owner", role: "owner", siteId: null });
     const { data: s } = await adminClient()
       .from("suppliers")
@@ -21,16 +21,18 @@ describe("visits state machine — transitions", () => {
     materialTypeId = m!.id as string;
   });
 
+  // Visits start directly at the pipeline state — no gate stage.
   async function newVisit(entryPath: "unprocessed" | "pre_processed") {
-    const { data, error } = await gate.client
+    const initialState = entryPath === "unprocessed" ? "in_processing" : "in_receiving";
+    const { data, error } = await proc.client
       .from("visits")
       .insert({
         site_id: siteId,
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
         entry_path: entryPath,
-        state: "at_gate_in",
-        created_by: gate.userId,
+        state: initialState,
+        created_by: proc.userId,
       })
       .select("id")
       .single();
@@ -38,18 +40,18 @@ describe("visits state machine — transitions", () => {
     return data!.id as string;
   }
 
-  it("at_gate_in → in_processing is allowed", async () => {
+  it("in_processing → in_receiving is allowed", async () => {
     const id = await newVisit("unprocessed");
-    const { error } = await gate.client
+    const { error } = await proc.client
       .from("visits")
-      .update({ state: "in_processing" })
+      .update({ state: "in_receiving" })
       .eq("id", id);
     expect(error).toBeNull();
   });
 
-  it("at_gate_in → pricing is REJECTED (illegal jump)", async () => {
+  it("in_processing → pricing is REJECTED (illegal jump)", async () => {
     const id = await newVisit("unprocessed");
-    const { error } = await gate.client
+    const { error } = await proc.client
       .from("visits")
       .update({ state: "pricing" })
       .eq("id", id);
@@ -59,7 +61,6 @@ describe("visits state machine — transitions", () => {
 
   it("in_receiving → pricing is REJECTED without analysis_records row", async () => {
     const id = await newVisit("pre_processed");
-    await owner.client.from("visits").update({ state: "in_receiving" }).eq("id", id);
     const { error } = await owner.client
       .from("visits")
       .update({ state: "pricing" })
@@ -70,10 +71,10 @@ describe("visits state machine — transitions", () => {
 
   it("owner can move state backward (logs owner_override event)", async () => {
     const id = await newVisit("unprocessed");
-    await owner.client.from("visits").update({ state: "in_processing" }).eq("id", id);
+    await owner.client.from("visits").update({ state: "in_receiving" }).eq("id", id);
     const { error } = await owner.client
       .from("visits")
-      .update({ state: "at_gate_in" })
+      .update({ state: "in_processing" })
       .eq("id", id);
     expect(error).toBeNull();
     const { data: events } = await adminClient()
@@ -84,13 +85,12 @@ describe("visits state machine — transitions", () => {
     expect(events!.map((e) => e.event_type)).toContain("owner_override");
   });
 
-  it("entering exited sets closed_at (requires authorization)", async () => {
+  it("entering exited (no-agreement) sets closed_at", async () => {
     const id = await newVisit("pre_processed");
-    await owner.client.from("visits").update({ state: "in_receiving" }).eq("id", id);
-    await owner.client.from("visits").update({ state: "awaiting_gate_exit" }).eq("id", id);
     await owner.client
-      .from("gate_exit_authorizations")
-      .insert({ visit_id: id, authorized_by: owner.userId });
+      .from("analysis_records")
+      .insert({ visit_id: id, weight: 1, grade: "F", recorded_by: owner.userId });
+    await owner.client.from("visits").update({ state: "pricing" }).eq("id", id);
     const { error } = await owner.client
       .from("visits")
       .update({ state: "exited" })

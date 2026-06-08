@@ -3,16 +3,15 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 
 describe("no-agreement exit path", () => {
   let siteId: string;
-  let gate: TestUser, recv: TestUser, mgr: TestUser, owner: TestUser;
+  let proc: TestUser, recv: TestUser, mgr: TestUser;
   let supplierId: string, materialTypeId: string, machineId: string;
 
   beforeAll(async () => {
     const { data: sites } = await adminClient().from("sites").select("id").limit(1);
     siteId = sites![0].id as string;
-    gate = await makeUser({ username: "nae-gate", role: "gate", siteId });
+    proc = await makeUser({ username: "nae-proc", role: "processing", siteId });
     recv = await makeUser({ username: "nae-recv", role: "receiving", siteId });
     mgr = await makeUser({ username: "nae-mgr", role: "manager", siteId });
-    owner = await makeUser({ username: "nae-owner", role: "owner", siteId: null });
     const { data: s } = await adminClient()
       .from("suppliers")
       .insert({ name: "NAE Supp", phone: "07011110001" })
@@ -29,22 +28,20 @@ describe("no-agreement exit path", () => {
     machineId = mc!.id as string;
   });
 
-  it("unprocessed: manager rejects, owner authorizes, gate releases — processing fee still owed", async () => {
-    const { data: v } = await gate.client
+  it("unprocessed: manager rejects → visit exits directly — processing fee still owed", async () => {
+    const { data: v } = await proc.client
       .from("visits")
       .insert({
         site_id: siteId,
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
         entry_path: "unprocessed",
-        state: "at_gate_in",
-        created_by: gate.userId,
+        state: "in_processing",
+        created_by: proc.userId,
       })
       .select("id")
       .single();
-    await gate.client.from("visits").update({ state: "in_processing" }).eq("id", v!.id);
 
-    const proc = await makeUser({ username: "nae-proc", role: "processing", siteId });
     const { data: pr } = await proc.client
       .from("processing_records")
       .insert({ visit_id: v!.id, recorded_by: proc.userId })
@@ -61,25 +58,13 @@ describe("no-agreement exit path", () => {
       .from("analysis_records")
       .insert({ visit_id: v!.id, weight: 0.1, grade: "F", recorded_by: recv.userId });
 
+    // Manager records "no agreement" — visit transitions straight to exited.
     await mgr.client.from("pricing").insert({
       visit_id: v!.id,
       agreement_status: "not_agreed",
       priced_by: mgr.userId,
     });
-    const { data: s1 } = await adminClient()
-      .from("visits")
-      .select("state")
-      .eq("id", v!.id)
-      .single();
-    expect(s1?.state).toBe("awaiting_gate_exit");
 
-    await owner.client.from("gate_exit_authorizations").insert({
-      visit_id: v!.id,
-      authorized_by: owner.userId,
-      note: "client takes material back",
-    });
-
-    await gate.client.from("visits").update({ state: "exited" }).eq("id", v!.id);
     const { data: final } = await adminClient()
       .from("visits")
       .select("state, closed_at")
@@ -88,6 +73,7 @@ describe("no-agreement exit path", () => {
     expect(final?.state).toBe("exited");
     expect(final?.closed_at).not.toBeNull();
 
+    // Processing fee is still owed even though no purchase happened.
     const { data: usage } = await adminClient()
       .from("processing_machine_usage")
       .select("line_cost")
@@ -96,19 +82,18 @@ describe("no-agreement exit path", () => {
   });
 
   it("pre_processed: nothing owed when exiting without agreement", async () => {
-    const { data: v } = await gate.client
+    const { data: v } = await proc.client
       .from("visits")
       .insert({
         site_id: siteId,
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
         entry_path: "pre_processed",
-        state: "at_gate_in",
-        created_by: gate.userId,
+        state: "in_receiving",
+        created_by: proc.userId,
       })
       .select("id")
       .single();
-    await gate.client.from("visits").update({ state: "in_receiving" }).eq("id", v!.id);
     await recv.client
       .from("analysis_records")
       .insert({ visit_id: v!.id, weight: 0.5, grade: "F", recorded_by: recv.userId });
@@ -117,11 +102,13 @@ describe("no-agreement exit path", () => {
       agreement_status: "not_agreed",
       priced_by: mgr.userId,
     });
-    await owner.client.from("gate_exit_authorizations").insert({
-      visit_id: v!.id,
-      authorized_by: owner.userId,
-    });
-    await gate.client.from("visits").update({ state: "exited" }).eq("id", v!.id);
+
+    const { data: final } = await adminClient()
+      .from("visits")
+      .select("state")
+      .eq("id", v!.id)
+      .single();
+    expect(final?.state).toBe("exited");
 
     const { data: pr } = await adminClient()
       .from("processing_records")

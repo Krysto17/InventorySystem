@@ -582,11 +582,13 @@ PRE: Phases 1-5 done. A fully-completed visit (gate intake → stocked) exists w
 
 ---
 
-# Phase 7 — Gate Role Removal 🚫 NOT STARTED
+# Phase 7 — Gate Role Removal ✅ DONE
 
 **Goal:** Remove the `gate` role and all gate-specific processes from the system. Visits enter the pipeline directly at processing; no gate intake stage exists.
 
-**Status:** `NOT STARTED`. **Owner decision confirmed:** remove the gate stage completely. The `processing` role will inherit visit creation (supplier search + vehicle plate + material type captured at the top of the processing intake form).
+**Status:** `DONE`. Migration 0017, processing-owned visit creation, removed gate route/PDF/exit-authorization flow, and full test suite (35 files, 140 tests) committed on `phase-7-gate-removal`. The `processing` role now creates visits via `/processing/intake`. No-agreement visits go `pricing → exited` directly.
+
+**Implementation note:** The `app_role` Postgres enum keeps an orphan `'gate'` value (dropping it would CASCADE-drop every RLS policy). `gate` is removed from `src/lib/auth/roles.ts` so it can't be provisioned, and every gate policy/table/state/flow is gone. Migration 0017 narrows the `visits.state` CHECK (removes `at_gate_in`/`awaiting_gate_exit`), rewrites the state-machine + pricing + audit triggers, drops `gate_exit_authorizations`, and swaps the visits INSERT/UPDATE RLS from gate to processing.
 
 **Artifacts (when planning):**
 - Spec to create: `docs/superpowers/specs/YYYY-MM-DD-phase-7-gate-removal-design.md`

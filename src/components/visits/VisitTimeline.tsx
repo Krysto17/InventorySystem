@@ -1,8 +1,7 @@
-import { GateIntakeCard } from "./GateIntakeCard";
+import { VisitOriginCard } from "./VisitOriginCard";
 import { ProcessingCard } from "./ProcessingCard";
 import { AnalysisCard } from "./AnalysisCard";
 import { PricingCard } from "./PricingCard";
-import { ExitAuthorizationCard } from "./ExitAuthorizationCard";
 import { AuditTrail } from "./AuditTrail";
 import { PaymentsCard } from "./PaymentsCard";
 import { StockIntakeCard } from "./StockIntakeCard";
@@ -56,17 +55,11 @@ export type VisitTimelineProps = {
     priced_by_name: string | null;
     overridden_by_name: string | null;
   } | null;
-  authorization: {
-    authorized_at: string;
-    authorized_by_name: string | null;
-    note: string | null;
-  } | null;
   payments: Parameters<typeof PaymentsCard>[0]["payments"];
   paymentBalance: Parameters<typeof PaymentsCard>[0]["balance"];
   events: Parameters<typeof AuditTrail>[0]["events"];
   viewer: {
     role:
-      | "gate"
       | "processing"
       | "receiving"
       | "manager"
@@ -79,7 +72,7 @@ export type VisitTimelineProps = {
 };
 
 export function VisitTimeline(props: VisitTimelineProps) {
-  const { visit, processing, analysis, pricing, authorization, payments, paymentBalance, events, viewer, machines, stockMovement } = props;
+  const { visit, processing, analysis, pricing, payments, paymentBalance, events, viewer, machines, stockMovement } = props;
   const isOwner = viewer.role === "owner";
 
   return (
@@ -109,7 +102,7 @@ export function VisitTimeline(props: VisitTimelineProps) {
         </div>
       </header>
 
-      <GateIntakeCard
+      <VisitOriginCard
         supplier={visit.supplier}
         material={visit.declared_material_type}
         vehiclePlate={visit.vehicle_plate}
@@ -257,19 +250,6 @@ export function VisitTimeline(props: VisitTimelineProps) {
           analysisGrade={analysis?.grade ?? null}
           canWrite={viewer.role === "inventory" || isOwner}
           stockMovement={stockMovement}
-        />
-      )}
-
-      {(visit.state === "awaiting_gate_exit" || authorization) && (
-        <ExitAuthorizationCard
-          visitId={visit.id}
-          authorization={authorization}
-          canAuthorize={isOwner && !authorization && visit.state === "awaiting_gate_exit"}
-          canRelease={
-            (viewer.role === "gate" || isOwner) &&
-            !!authorization &&
-            visit.state === "awaiting_gate_exit"
-          }
         />
       )}
 

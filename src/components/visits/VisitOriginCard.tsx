@@ -1,6 +1,6 @@
 import { formatTimestamp } from "@/lib/visits/format";
 
-export function GateIntakeCard({
+export function VisitOriginCard({
   supplier,
   material,
   vehiclePlate,
@@ -17,7 +17,7 @@ export function GateIntakeCard({
 }) {
   return (
     <section className="border rounded p-4">
-      <div className="text-xs uppercase text-gray-500 mb-1">Gate intake</div>
+      <div className="text-xs uppercase text-gray-500 mb-1">Visit details</div>
       <div className="font-medium">{supplier?.name ?? "—"}</div>
       <div className="text-sm text-gray-600">{supplier?.phone ?? "—"}</div>
       <div className="text-sm mt-2">

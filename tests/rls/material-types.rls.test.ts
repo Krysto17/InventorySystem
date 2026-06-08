@@ -18,7 +18,7 @@ describe("material_types RLS", () => {
       await admin.auth.admin.deleteUser(u.id);
     }
     siteId = await firstSiteId();
-    gate = await makeUser({ username: "mt-gate", role: "gate", siteId });
+    gate = await makeUser({ username: "mt-gate", role: "receiving", siteId });
     owner = await makeUser({ username: "mt-owner", role: "owner", siteId: null });
 
     // Insert a dedicated control row with known name and active=true.

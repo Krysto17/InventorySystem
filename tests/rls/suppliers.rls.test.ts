@@ -9,8 +9,8 @@ describe("suppliers RLS", () => {
     const { data: sites } = await adminClient().from("sites").select("id").limit(2);
     siteAId = sites![0].id as string;
     siteBId = sites![1].id as string;
-    gateA = await makeUser({ username: "sup-gate-a", role: "gate", siteId: siteAId });
-    gateB = await makeUser({ username: "sup-gate-b", role: "gate", siteId: siteBId });
+    gateA = await makeUser({ username: "sup-gate-a", role: "receiving", siteId: siteAId });
+    gateB = await makeUser({ username: "sup-gate-b", role: "receiving", siteId: siteBId });
     owner = await makeUser({ username: "sup-owner", role: "owner", siteId: null });
   });
 
