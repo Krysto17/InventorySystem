@@ -85,8 +85,9 @@ export default async function OwnerDashboard({
     (() => {
       let q = supabase
         .from("consumables")
-        .select("name, on_hand, unit, site:sites(name), site_id")
-        .order("name");
+        .select("name, category, entry_date, comment, site:sites(name), site_id")
+        .order("entry_date", { ascending: false })
+        .limit(12);
       if (siteFilter) q = q.eq("site_id", siteFilter);
       return q;
     })(),
@@ -378,27 +379,29 @@ export default async function OwnerDashboard({
 
         <Card>
           <CardHeader>
-            <h2 className="text-sm font-semibold">Consumables on hand</h2>
+            <h2 className="text-sm font-semibold">Recent consumables</h2>
           </CardHeader>
           <CardContent>
             {(consumables?.length ?? 0) === 0 ? (
-              <p className="text-sm text-zinc-500">No consumables tracked.</p>
+              <p className="text-sm text-zinc-500">No consumables logged.</p>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {(consumables ?? []).map((c) => {
+              <ul className="divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
+                {(consumables ?? []).map((c, i) => {
                   const site = g1<{ name?: string }>(c.site);
+                  const category = String(c.category ?? "").replace(/_/g, " ");
                   return (
-                    <div key={`${c.site_id}-${c.name}`} className="rounded-lg border border-zinc-200 p-2 text-sm dark:border-zinc-800">
-                      <div className="font-medium">{c.name as string}</div>
-                      <div className="text-xs text-zinc-500">{site?.name ?? "—"}</div>
-                      <div className="mt-1 text-lg font-bold">
-                        {Number(c.on_hand).toFixed(2)}{" "}
-                        <span className="text-xs font-normal text-zinc-500">{(c.unit as string | null) ?? "units"}</span>
+                    <li key={`${c.site_id}-${c.name}-${i}`} className="flex items-center justify-between py-2">
+                      <div>
+                        <div className="font-medium">{c.name as string}</div>
+                        <div className="text-xs capitalize text-zinc-500">
+                          {category} · {site?.name ?? "—"}
+                        </div>
                       </div>
-                    </div>
+                      <div className="text-xs text-zinc-500">{c.entry_date as string}</div>
+                    </li>
                   );
                 })}
-              </div>
+              </ul>
             )}
           </CardContent>
         </Card>

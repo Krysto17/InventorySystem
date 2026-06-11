@@ -174,7 +174,7 @@ describe("dashboard aggregation queries", () => {
 
     const { data: consumables, error: ce } = await owner.client
       .from("consumables")
-      .select("name, on_hand");
+      .select("name, category, entry_date");
     expect(ce).toBeNull();
   });
 });

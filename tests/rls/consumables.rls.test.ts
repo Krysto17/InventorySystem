@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
 
-describe("consumables + consumable_movements RLS", () => {
+describe("consumables RLS (categorized log)", () => {
   let siteAId: string, siteBId: string;
-  let invA: TestUser, invB: TestUser, gateA: TestUser, owner: TestUser;
+  let invA: TestUser, invB: TestUser, recvA: TestUser, owner: TestUser;
 
   async function insertConsumable(siteId: string) {
     const name = `Consumable-${Math.random().toString(36).slice(2, 8)}`;
     const { data, error } = await adminClient()
       .from("consumables")
-      .insert({ site_id: siteId, name, on_hand: 100, unit: "L" })
+      .insert({ site_id: siteId, name, category: "fuel_lubricants" })
       .select("id")
       .single();
     if (error) throw error;
@@ -22,35 +22,44 @@ describe("consumables + consumable_movements RLS", () => {
     siteBId = sites![1].id as string;
     invA  = await makeUser({ username: "cons-inv-a",  role: "inventory", siteId: siteAId });
     invB  = await makeUser({ username: "cons-inv-b",  role: "inventory", siteId: siteBId });
-    gateA = await makeUser({ username: "cons-gate-a", role: "receiving",      siteId: siteAId });
+    recvA = await makeUser({ username: "cons-recv-a", role: "receiving", siteId: siteAId });
     owner = await makeUser({ username: "cons-owner",  role: "owner",     siteId: null });
   });
 
-  // ── consumables ────────────────────────────────────────────────────────────
-
-  it("inventory at site A can insert a consumable for site A", async () => {
+  it("inventory at site A can log a consumable for site A", async () => {
     const { error } = await invA.client.from("consumables").insert({
       site_id: siteAId,
-      name: "Diesel-A",
-      on_hand: 50,
-      unit: "L",
+      name: "Diesel",
+      category: "fuel_lubricants",
+      comment: "Weekly refill",
+      recorded_by: invA.userId,
     });
     expect(error).toBeNull();
   });
 
-  it("inventory at site B cannot insert a consumable for site A", async () => {
-    const { error } = await invB.client.from("consumables").insert({
+  it("rejects an unknown category", async () => {
+    const { error } = await invA.client.from("consumables").insert({
       site_id: siteAId,
-      name: "Diesel-Hack",
-      unit: "L",
+      name: "Bad",
+      category: "not_a_category",
     });
     expect(error).not.toBeNull();
   });
 
-  it("non-inventory role cannot insert a consumable", async () => {
-    const { error } = await gateA.client.from("consumables").insert({
+  it("inventory at site B cannot log a consumable for site A", async () => {
+    const { error } = await invB.client.from("consumables").insert({
       site_id: siteAId,
-      name: "Gate-Diesel",
+      name: "Diesel-Hack",
+      category: "transport",
+    });
+    expect(error).not.toBeNull();
+  });
+
+  it("non-inventory role cannot log a consumable", async () => {
+    const { error } = await recvA.client.from("consumables").insert({
+      site_id: siteAId,
+      name: "Recv-Diesel",
+      category: "utility",
     });
     expect(error).not.toBeNull();
   });
@@ -59,7 +68,7 @@ describe("consumables + consumable_movements RLS", () => {
     await insertConsumable(siteAId);
     const { data, error } = await invA.client
       .from("consumables")
-      .select("id")
+      .select("id, category, entry_date")
       .eq("site_id", siteAId);
     expect(error).toBeNull();
     expect(data!.length).toBeGreaterThan(0);
@@ -74,61 +83,19 @@ describe("consumables + consumable_movements RLS", () => {
     expect(data?.length).toBe(0);
   });
 
-  // ── consumable_movements ───────────────────────────────────────────────────
-
-  it("inventory at site A can insert movement for site A consumable", async () => {
-    const cId = await insertConsumable(siteAId);
-    const { error } = await invA.client.from("consumable_movements").insert({
-      consumable_id: cId,
-      delta: -10,
-      recorded_by: invA.userId,
-      reason: "used",
-    });
+  it("owner can read all consumables across sites", async () => {
+    const { data, error } = await owner.client.from("consumables").select("id");
     expect(error).toBeNull();
+    expect(data!.length).toBeGreaterThan(0);
   });
 
-  it("on_hand is updated by movement trigger", async () => {
-    const cId = await insertConsumable(siteAId);
-    await adminClient().from("consumable_movements").insert({
-      consumable_id: cId,
-      delta: -30,
-      recorded_by: invA.userId,
-    });
+  it("entry_date defaults to today when omitted", async () => {
+    const id = await insertConsumable(siteAId);
     const { data } = await adminClient()
       .from("consumables")
-      .select("on_hand")
-      .eq("id", cId)
+      .select("entry_date")
+      .eq("id", id)
       .single();
-    expect(Number(data?.on_hand)).toBe(70); // 100 - 30
-  });
-
-  it("inventory at site B cannot insert movement for site A consumable", async () => {
-    const cId = await insertConsumable(siteAId);
-    const { error } = await invB.client.from("consumable_movements").insert({
-      consumable_id: cId,
-      delta: -5,
-      recorded_by: invB.userId,
-    });
-    expect(error).not.toBeNull();
-  });
-
-  it("non-inventory cannot insert consumable movement", async () => {
-    const cId = await insertConsumable(siteAId);
-    const { error } = await gateA.client.from("consumable_movements").insert({
-      consumable_id: cId,
-      delta: -1,
-      recorded_by: gateA.userId,
-    });
-    expect(error).not.toBeNull();
-  });
-
-  it("owner can read all consumables and movements", async () => {
-    const { data: c, error: ce } = await owner.client.from("consumables").select("id");
-    expect(ce).toBeNull();
-    expect(c!.length).toBeGreaterThan(0);
-
-    const { data: mv, error: me } = await owner.client.from("consumable_movements").select("id");
-    expect(me).toBeNull();
-    expect(mv!.length).toBeGreaterThan(0);
+    expect(data!.entry_date).toBe(new Date().toISOString().slice(0, 10));
   });
 });
