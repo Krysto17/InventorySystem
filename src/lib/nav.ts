@@ -6,6 +6,7 @@ export type NavIcon =
   | "intake"
   | "processing"
   | "receiving"
+  | "qc"
   | "pricing"
   | "accounting"
   | "inventory"
@@ -32,6 +33,9 @@ const NAV: Record<Role, NavItem[]> = {
   ],
   receiving: [
     { label: "Queue", href: "/receiving", icon: "receiving" },
+  ],
+  qc: [
+    { label: "XRF queue", href: "/qc", icon: "qc" },
   ],
   manager: [
     { label: "Pricing queue", href: "/manager", icon: "pricing" },

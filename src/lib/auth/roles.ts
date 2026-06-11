@@ -1,5 +1,5 @@
 export const ROLES = [
-  "processing", "receiving", "manager", "accounting", "inventory", "owner",
+  "processing", "receiving", "qc", "manager", "accounting", "inventory", "owner",
 ] as const;
 
 export type Role = (typeof ROLES)[number];
@@ -7,6 +7,7 @@ export type Role = (typeof ROLES)[number];
 export const ROLE_HOME: Record<Role, string> = {
   processing: "/processing",
   receiving: "/receiving",
+  qc: "/qc",
   manager: "/manager",
   accounting: "/accounting",
   inventory: "/inventory",

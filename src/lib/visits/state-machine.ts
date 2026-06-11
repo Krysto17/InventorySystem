@@ -1,6 +1,7 @@
 export const VISIT_STATES = [
   "in_processing",
   "in_receiving",
+  "in_qc",
   "pricing",
   "in_accounting",
   "exited",
@@ -31,7 +32,8 @@ export function isVisitOpen(state: VisitState): boolean {
 
 export const STATE_LABELS: Record<VisitState, string> = {
   in_processing: "Processing",
-  in_receiving: "Receiving / analysis",
+  in_receiving: "Receiving / magnetic analysis",
+  in_qc: "QC / XRF analysis",
   pricing: "Pricing",
   in_accounting: "Accounting",
   exited: "Exited",

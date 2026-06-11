@@ -39,6 +39,13 @@ describe("role-aware navigation", () => {
     expect((ROLES as readonly string[]).includes("gate")).toBe(false);
   });
 
+  it("qc role exists with its own XRF queue (Phase 9)", () => {
+    expect((ROLES as readonly string[]).includes("qc")).toBe(true);
+    const hrefs = navForRole("qc").map((n) => n.href);
+    expect(hrefs).toContain("/qc");
+    expect(hrefs.every((h) => !h.startsWith("/owner"))).toBe(true);
+  });
+
   describe("isActivePath", () => {
     it("matches exact path", () => {
       expect(isActivePath("/owner", "/owner")).toBe(true);
