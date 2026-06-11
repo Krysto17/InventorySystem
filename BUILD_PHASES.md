@@ -843,11 +843,22 @@ PASS criteria: 2 KPI cards render; inventory table has correct columns; "+ New V
 
 ---
 
-# Phase 9 — Domain Refinements: QC Role, Multi-Material Batches, Advances & Lot-Tracked Bulk Sales 🧪 NOT STARTED
+# Phase 9 — Domain Refinements: QC Role, Multi-Material Batches, Advances & Lot-Tracked Bulk Sales 🧪 DONE
 
 **Goal:** Evolve the domain model to match how the business actually runs: split out a dedicated **QC** role that owns XRF analysis (separate from Receiving's magnetic analysis), let a single supplier bring **multiple materials in one batch**, add a **supplier advances** ledger, redesign **consumables** as a categorized expense log, and rebuild **bulk sales** on **lot-tracked stock** with the supplier/average-cost-price breakdown.
 
-**Status:** `NOT STARTED`. **Branch from `phase-8-ui-dashboard`** → suggested branch `phase-9-domain-refinements`.
+**Status:** `DONE` on branch `phase-9-domain-refinements` (off `phase-8-ui-dashboard`). Migrations 0018–0023. Full suite: **41 files / 178 tests pass**; build clean.
+
+**Implementation notes (what shipped):**
+- **A — QC role:** `qc` added to the `app_role` enum (0018) + `roles.ts`/nav/Sidebar; `/qc` XRF queue; `in_qc` pipeline stage (`in_receiving → in_qc → pricing`).
+- **B/C/D/E — multi-material + QC XRF (0021/0022):** `visit_materials` (per-line weight + magnetic analysis + comment + optional per-line `unit_price`); `xrf_records` (one access-restricted XRF result per line — readable only by owner/manager/qc, enforced in RLS). Receiving adds lines then `advance_visit_to_qc()`; submitting all lines' XRF auto-advances to pricing; `pricing.purchase_amount` = sum of line amounts. **Additive** — the legacy single-material `analysis_records` path still works, so all prior tests stay green. `BatchMaterials` component on the visit detail page drives the new flow.
+- **F — advances (0019):** standalone site-scoped ledger; recorded by manager/accounting, approved by owner/manager/accounting; not netted against purchases.
+- **G — consumables (0020):** reshaped to a categorized expense log (name/category/date/comment); dropped the on-hand/movements model.
+- **H — lot-tracked bulk sales (0023):** `stock_lots` + `lot_sales` + `lot_sale_items`; owner approval flips lots to SOLD (irreversible, DB-enforced) and snapshots total weight / total cost / avg cost per kg; branded breakdown PDF (`/api/pdf/lot-sale/[id]`) matching the spec table; `/inventory/lot-sales` screen.
+
+**Carried forward (not done in this phase):** auto-creating a `stock_lot` at purchase intake (lots are currently registered by Inventory); migrating the owner dashboard's stock tile from the fungible `stock_movements` view to `stock_lots`; tightening the DB validator to make QC strictly blocking (the legacy `in_receiving → pricing` edge is still permitted for backward-compat). The **storage** container is unhealthy on the local image (DB/migrations unaffected); `db reset` exits non-zero on that health check only.
+
+**Original plan (for reference):** branch was `phase-9-domain-refinements`.
 
 > ⚠️ **This phase supersedes earlier design decisions.** When it lands, update `CLAUDE.md`:
 > - Roles become **7** again, but the new 7th is **`qc`** (not `gate`, which was removed in Phase 7): `processing · receiving · qc · manager · accounting · inventory · owner`.

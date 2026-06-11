@@ -28,18 +28,25 @@ cross-site oversight; every subprocess is exportable as a branded PDF.
 
 ## Roles (7) — each gets its own login + screen
 
-`gate` · `processing` · `receiving` · `manager` · `accounting` · `inventory` · `owner`
+`processing` · `receiving` · `qc` · `manager` · `accounting` · `inventory` · `owner`
 
+- `gate` was removed in Phase 7 (orphan enum value kept; not provisionable). `qc` was
+  added in Phase 9.
 - **Manager** = top operational/pricing authority; **Owner** overrides any manager price
   and is the only **cross-site, full-read** role.
-- Receiving and analysis are **one** role/record (the receiver records the analysis).
+- **Receiving** records weight + **magnetic** analysis per material line; **QC** records
+  the **XRF** analysis as a separate, access-restricted record (readable only by owner +
+  manager + the QC analyst). *(Phase 9 split — previously receiving and analysis were one
+  role/record.)*
 
 ## Core domain model
 
-- **Visit** = one supplier bringing material; the spine of the inbound workflow. Two entry
-  paths: `unprocessed` (→ plant) and `pre_processed` (→ straight to receiving). Two exits:
-  agreement (→ accounting → inventory) or no agreement (→ owner signs the package out at
-  the gate → `exited`).
+- **Visit** = one supplier bringing a **batch of materials** (Phase 9: a batch can hold
+  many `visit_materials` line items — monazite + zircon together — each independently
+  weighed, XRF'd, and optionally priced). The spine of the inbound workflow. Two entry
+  paths: `unprocessed` (→ plant) and `pre_processed` (→ straight to receiving). Pipeline:
+  `in_processing → in_receiving → in_qc → pricing → in_accounting → … → stocked`, or
+  `pricing → exited` on no agreement (gate exit removed in Phase 7).
 - **Two money figures per visit:** *processing fee* (client owes company; only on the
   `unprocessed` path; owed even if no sale) and *purchase amount* (company owes client;
   only if agreement). `processing_deducted` flag + a `payments` ledger handle
@@ -49,7 +56,10 @@ cross-site oversight; every subprocess is exportable as a branded PDF.
 - **Analysis grade drives price** — pricing is blocked until an analysis record exists.
 - **Inventory is a ledger** (`stock_movements` in/out), not a counter. Purchase intake is
   an explicit Inventory-Manager step; **bulk sales decrement stock only after Owner
-  approval**.
+  approval**. Phase 9 adds **lot-tracked** stock (`stock_lots`) + lot sales (`lot_sales`/
+  `lot_sale_items`): each lot is sold once (irreversible on Owner approval) with a
+  supplier/avg-cost breakdown PDF. **Consumables** are a categorized expense log (Phase 9),
+  not a quantity counter. **Advances** (`advances`) are a standalone supplier ledger.
 
 ## Auth
 
