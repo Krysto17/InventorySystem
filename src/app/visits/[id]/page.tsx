@@ -2,7 +2,9 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { VisitTimeline } from "@/components/visits/VisitTimeline";
+import { BatchMaterials } from "@/components/visits/BatchMaterials";
 import { PdfDownloadBar } from "@/components/visits/PdfDownloadBar";
+import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
 
 export default async function VisitDetailPage({
@@ -269,6 +271,11 @@ export default async function VisitDetailPage({
         hasPricing={pricingNorm !== null && pricingNorm.agreement_status !== "pending"}
         hasPayments={paymentsNorm.length > 0}
       />
+    <BatchMaterials
+      visitId={visitNorm.id}
+      visitState={visitNorm.state}
+      viewerRole={me.role as Role}
+    />
     <VisitTimeline
       visit={visitNorm}
       processing={processingNorm}
