@@ -46,6 +46,7 @@ const NAV: Record<Role, NavItem[]> = {
   inventory: [
     { label: "Stock", href: "/inventory", icon: "inventory" },
     { label: "Bulk sales", href: "/inventory/bulk-sales", icon: "bulkSales" },
+    { label: "Lot sales", href: "/inventory/lot-sales", icon: "bulkSales" },
     { label: "Consumables", href: "/inventory/consumables", icon: "consumables" },
   ],
   owner: [

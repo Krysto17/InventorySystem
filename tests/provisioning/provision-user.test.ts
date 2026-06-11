@@ -8,7 +8,9 @@ describe("provisionUser", () => {
   beforeAll(async () => {
     const admin = adminClient();
     const { data: existing } = await admin.auth.admin.listUsers({ perPage: 1000 });
-    for (const u of existing.users) await admin.auth.admin.deleteUser(u.id);
+    // Delete in parallel — sequential deletion of the (now large) test-user set
+    // overran the default 10s hook timeout when run as part of the full suite.
+    await Promise.all(existing.users.map((u) => admin.auth.admin.deleteUser(u.id)));
 
     // Create a real owner whose id we can use as created_by in tests.
     const { data, error } = await admin.auth.admin.createUser({
@@ -27,7 +29,7 @@ describe("provisionUser", () => {
       must_change_password: false,
     });
     if (ownerProfErr) throw ownerProfErr;
-  });
+  }, 60_000);
 
   it("creates an auth user + profile + setup_code row and returns a temp password", async () => {
     const siteId = await firstSiteId();
