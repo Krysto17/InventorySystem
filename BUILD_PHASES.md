@@ -843,11 +843,262 @@ PASS criteria: 2 KPI cards render; inventory table has correct columns; "+ New V
 
 ---
 
-# Phase 9 — Merge to Main 🔀 NOT STARTED
+# Phase 9 — Domain Refinements: QC Role, Multi-Material Batches, Advances & Lot-Tracked Bulk Sales 🧪 NOT STARTED
+
+**Goal:** Evolve the domain model to match how the business actually runs: split out a dedicated **QC** role that owns XRF analysis (separate from Receiving's magnetic analysis), let a single supplier bring **multiple materials in one batch**, add a **supplier advances** ledger, redesign **consumables** as a categorized expense log, and rebuild **bulk sales** on **lot-tracked stock** with the supplier/average-cost-price breakdown.
+
+**Status:** `NOT STARTED`. **Branch from `phase-8-ui-dashboard`** → suggested branch `phase-9-domain-refinements`.
+
+> ⚠️ **This phase supersedes earlier design decisions.** When it lands, update `CLAUDE.md`:
+> - Roles become **7** again, but the new 7th is **`qc`** (not `gate`, which was removed in Phase 7): `processing · receiving · qc · manager · accounting · inventory · owner`.
+> - The rule *"Receiving and analysis are one role/record"* is **no longer true** — Receiving records weight + **magnetic** analysis; **QC** records the **XRF** analysis as a separate, access-restricted record.
+> - The Phase 4 bulk-sale schema (single material/grade/weight per sale) is **replaced** by the lot-selection model below.
+> - A **Visit** is no longer one supplier + one material; it is one supplier + **one batch of many material line items**.
+
+**Artifacts (when planning):**
+- Spec to create: `docs/superpowers/specs/YYYY-MM-DD-phase-9-domain-refinements-design.md`
+- Plan to create: `docs/superpowers/plans/YYYY-MM-DD-phase-9-domain-refinements.md`
+- Suggested branch: `phase-9-domain-refinements` — branch from `phase-8-ui-dashboard`
+- Migrations start at `0018_*` (last shipped migration is `0017_gate_removal.sql`)
+
+---
+
+**Confirmed decisions (from owner, captured before planning):**
+
+| Decision | Confirmed answer |
+|---|---|
+| QC in the pipeline | **New blocking stage after Receiving:** `in_processing → in_receiving (magnetic) → in_qc (XRF) → pricing`. Pricing itself is **optional** (see workstream E). |
+| Multi-material batch | **Per-material line items.** One visit/batch holds many material lines; each line carries its own weight, magnetic analysis, XRF result, and (optional) price. |
+| Bulk-sale stock model | **Lot-tracked.** Each purchase intake becomes a distinct, identifiable lot (supplier, material, weight, cost price). Bulk sale selects specific lots and marks them SOLD. Replaces the fungible grade-bucket ledger. |
+| Supplier advances | **Standalone records.** Advances are their own approved ledger; they are **not** auto-netted against purchase amounts. Owner reconciles manually (consistent with "this is not a full financial system"). |
+| "maker" in the advances brief | Read as **manager** (typo). Advances are **recorded by the manager**; **approved by owner, manager, or accountant**. |
+
+---
+
+**What Phase 9 builds — by workstream:**
+
+### A. QC role
+
+- Add `'qc'` to the `app_role` enum (`0018_qc_role.sql`). Adding an enum value is safe (unlike the Phase-7 *removal* problem) — no CASCADE.
+- Add `qc` to `src/lib/auth/roles.ts` (`ROLES`, `ROLE_HOME` → `/qc`) and the middleware home-redirect map. **Roles single source of truth stays in `roles.ts`.**
+- Owner can provision a `qc` employee at `/owner/employees` (the existing provisioning form already reads `ROLES`; verify the new role appears).
+- New `/qc` route group with a queue of visits in state `in_qc`.
+
+### B. Multi-material batches
+
+- New table `visit_materials` (the per-line spine of the batch):
+  ```
+  visit_materials
+    id uuid PK
+    visit_id FK -> visits
+    material_type_id FK -> material_types
+    weight_kg numeric(12,3)            -- receiving-recorded output weight for THIS material
+    magnetic_analysis text             -- receiving-recorded (free text / structured later)
+    receiving_comment text
+    created_at, recorded_by
+  ```
+- `visits` keeps `supplier_id`, `site_id`, `vehicle_plate`, `entry_path`, `state` — but **material moves off the visit row onto `visit_materials`**. The old single `material_type` declaration on the visit becomes a batch of lines.
+- Receiving screen lets the user **add multiple material lines** to one visit before advancing it to `in_qc`.
+- Downstream records (XRF, pricing, stock lots) reference a **`visit_material_id`**, not the visit directly — so monazite and zircon in the same batch are analyzed and priced independently.
+
+### C. Receiving redesign (magnetic analysis)
+
+- Receiving records, **per material line**: supplier (inherited from the visit), material type, **weight in kg**, **magnetic analysis**, and a **comment box**.
+- The old `analysis_records` (which mixed weight + grade + XRF) is split: weight + magnetic + comment live on `visit_materials` (Receiving's lane); XRF moves to `xrf_records` (QC's lane, workstream D).
+- Advancing a visit `in_receiving → in_qc` requires ≥1 material line with a weight.
+
+### D. QC XRF records (access-restricted)
+
+- New table `xrf_records`:
+  ```
+  xrf_records
+    id uuid PK
+    visit_material_id FK -> visit_materials   -- one XRF result per material line
+    result text                               -- free-text XRF write-up typed by QC
+    submitted boolean NOT NULL DEFAULT false
+    recorded_by FK -> profiles (qc)
+    created_at, updated_at
+  ```
+- QC screen shows, per line: **supplier, material type, weight**, and a **free-text result box** to type and submit the XRF analysis.
+- **RLS visibility rule (critical):** a submitted `xrf_records.result` is readable **only by `owner` and `manager`** (and the `qc` author who wrote it). `receiving`, `accounting`, `inventory` **cannot** read XRF results. This is a column/row visibility constraint enforced in Postgres, not just hidden in the UI.
+- Submitting all lines' XRF advances the visit `in_qc → pricing`.
+- **Branded PDF:** an XRF analysis report (per visit or per line) is exportable as a branded PDF (extends the Phase 6 PDF system; access-scoped to owner/manager).
+
+### E. Optional pricing (manager or owner)
+
+- Pricing a QC'd line is **optional**. Either **manager or owner** may assign a `unit_price` to a `visit_material` line.
+- Pricing model moves to **per-line**: `pricing` (or a new `material_pricing`) keys on `visit_material_id`, with `unit_price`, `purchase_amount = unit_price × weight_kg`, agreement decision, payment terms (Owner's call, transcribed — unchanged rule).
+- Because pricing is optional, the pipeline must handle a visit that is **never priced**: after QC, the manager/owner can (a) price + agree → `in_accounting` → … → `stocked`, (b) record no agreement → `exited`, or (c) leave it unpriced as an analysis-only record. **Confirm the exact terminal behavior for unpriced visits during planning.**
+
+### F. Supplier advances
+
+- New table `advances`:
+  ```
+  advances
+    id uuid PK
+    supplier_id FK -> suppliers          -- advances attach to the global supplier, not a visit
+    purpose text NOT NULL
+    amount_naira numeric(14,2) NOT NULL CHECK (amount_naira > 0)
+    recorded_by FK -> profiles            -- normally the manager
+    approval_status text CHECK (approval_status IN ('pending','approved','rejected'))
+    approved_by FK -> profiles NULL        -- owner, manager, or accountant
+    approved_at timestamptz NULL
+    created_at, comment text
+  ```
+- **Insert:** manager (primarily). **Approve:** owner, manager, or accountant (RLS allows those three roles).
+- **Standalone** — advances are tracked and reportable but **not** auto-deducted from any `purchase_amount`. (If the owner later wants netting, that's a separate phase.)
+- Surfaced on the owner dashboard (outstanding advances per supplier) and exportable as a branded PDF.
+
+### G. Consumables redesign (categorized expense log)
+
+Replace the Phase 4 `consumables` (name + on_hand + unit) with an expense-style log:
+```
+consumables                              -- redesigned
+  id uuid PK
+  site_id FK -> sites
+  name text NOT NULL
+  category text NOT NULL CHECK (category IN (
+    'fuel_lubricants','utility','wages','repairs_maintenance',
+    'stationaries','transport','toiletries','others'))
+  entry_date date NOT NULL DEFAULT current_date
+  comment text
+  recorded_by FK -> profiles
+  created_at
+```
+- Inventory Manager (+ Owner) add a consumable: **name, category (the 8-value enum above), date, comment box**.
+- Drop the old `consumable_movements` on-hand ledger unless the owner still wants quantity tracking (confirm in planning — the new brief describes a categorized log, not a stock counter).
+
+### H. Lot-tracked bulk sales
+
+This replaces the Phase 4 bulk-sale model.
+
+- **Stock becomes lot-tracked.** When the Inventory Manager takes a purchased material line into stock, it creates a **lot**:
+  ```
+  stock_lots
+    id uuid PK
+    site_id FK -> sites
+    material_type_id FK -> material_types
+    supplier_id FK -> suppliers           -- who supplied this lot
+    ref_visit_material_id FK NULL          -- provenance back to the batch line
+    weight_kg numeric(12,3) NOT NULL
+    cost_price_per_kg numeric(12,2)        -- what the company paid per kg for this lot
+    status text CHECK (status IN ('available','sold')) DEFAULT 'available'
+    created_at, recorded_by
+  ```
+- **Bulk sale = selecting available lots of one material**, then:
+  ```
+  bulk_sales (revised)
+    id uuid PK, site_id, material_type_id, buyer_name, buyer_phone
+    approval_status ('pending','approved','rejected'), approved_by, approved_at
+    total_weight_kg, total_cost_price, avg_cost_price_per_kg   -- snapshotted on approval
+  bulk_sale_lots
+    bulk_sale_id FK, stock_lot_id FK        -- the lots included in this sale
+  ```
+- **Execution (matches the owner's spec):** on selecting lots, the UI/PDF tabulates per lot — **Supplier · Weight (kg) · Price (₦) · Total Amount (₦)** where `Total = Weight × Price` — sums **Total Weight** and **Total Cost Price**, and computes **Average Price per kg = Total Cost Price ÷ Total Weight**. On Owner approval, each selected lot flips `status='available' → 'sold'` (it can't be sold again) and the bulk sale row snapshots the totals.
+- **Owner approval still required** (unchanged rule from Phase 4). A lot already `sold` cannot be re-selected — enforced at the DB level, not just the UI.
+- **Branded PDF (bulk sale breakdown)** must render exactly this shape:
+
+  ```
+  Bulk Sale Material: e.g. Monazite
+
+  | Supplier   | Weight (kg) | Price (₦) | Total Amount (₦) |
+  |------------|-------------|-----------|-------------------|
+  | Supplier 1 | W1          | P1        | W1 × P1           |
+  | Supplier 2 | W2          | P2        | W2 × P2           |
+  | TOTAL      | ΣW          | —         | ΣAmount           |
+
+  Cost Price Computation:
+  ΣAmount ÷ ΣW = ₦[Average Price per kg]
+
+  Inventory Update:
+  [ ] Unselected lot           (Available)
+  [x] Selected Supplier 1 lot  (SOLD)
+  [x] Selected Supplier 2 lot  (SOLD)
+  ```
+
+---
+
+**Planning step (brainstorm with owner before building):**
+
+1. **Unpriced-visit terminal state.** With pricing now optional, what happens to a QC'd visit that's never priced? Stays open indefinitely, auto-closes, or becomes an analysis-only terminal record? (Workstream E.)
+2. **XRF visibility edges.** Confirmed owner + manager can read XRF. Can the QC author read their own past submissions? Can accounting see *that* an XRF exists (count) without the result? Lock the exact rule before writing RLS.
+3. **Magnetic analysis shape.** Free text now. Will it ever need to be structured (numeric % fields) like XRF? If yes, decide the columns now to avoid a later migration.
+4. **Lot cost price source.** Is `cost_price_per_kg` the agreed purchase unit price from pricing (auto-filled) or entered fresh at intake? If a line was never priced, where does its lot cost come from?
+5. **Partial-lot sales.** The owner's spec marks whole lots SOLD. Can a buyer take *part* of a lot, or is it all-or-nothing per lot? All-or-nothing is simpler and matches the brief; confirm.
+6. **Consumables quantity.** Does the owner still want on-hand quantity tracking, or is the categorized log (name/category/date/comment) the whole feature now? (Workstream G.)
+7. **Advance + supplier history.** Should advances appear on the supplier's visit-history view so whoever prices a future visit *sees* the outstanding advance (even though it's not auto-netted)?
+8. **Migration of existing data.** Local/cloud already have single-material visits + fungible stock. Decide whether to migrate existing rows into the new line-item / lot tables or treat Phase 9 as a clean cutover (acceptable pre-launch).
+
+---
+
+**Testing strategy:**
+
+| Suite | What to verify |
+|---|---|
+| `tests/rls/qc.rls.test.ts` | QC reads/writes XRF on own-site visits only; non-owner/non-manager **cannot read** submitted XRF results; owner + manager can |
+| `tests/rls/visit-materials.rls.test.ts` | Receiving writes material lines own-site; lines read by the visit's lane; closed-visit lines read-only for non-owner |
+| `tests/rls/advances.rls.test.ts` | Manager inserts; owner/manager/accountant approve; other roles blocked; cross-site denied |
+| `tests/rls/stock-lots.rls.test.ts` + `bulk-sales.rls.test.ts` | Lot creation by inventory; sale approval owner-only; a `sold` lot can't be re-sold (DB-enforced) |
+| `tests/state-machine/transitions.test.ts` | New `in_qc` stage: `in_receiving → in_qc → pricing`; XRF-not-submitted blocks `in_qc → pricing`; optional-pricing terminal paths |
+| `tests/integration/multi-material-batch.test.ts` | One visit, ≥2 material lines, each independently weighed / XRF'd / priced |
+| `tests/integration/bulk-sale-lots.test.ts` | Select N lots → totals + avg-cost computed correctly; on approval all selected lots flip to `sold`; re-selecting a sold lot rejected |
+| `tests/integration/advances.test.ts` | Insert → pending → approve; standalone (no effect on any `purchase_amount`) |
+| `tests/lib/state-machine.test.ts` | TS mirror includes `in_qc`; matches DB allowed set |
+
+---
+
+**Phase 9 Playwright walkthrough:**
+
+```
+PRE: Phases 1–8 done. npx supabase db reset after applying 0018+ migrations. Owner provisions a qc1 employee.
+
+QC ROLE + MULTI-MATERIAL BATCH:
+1. Log in as owner1 → /owner/employees → create qc1 (role: qc, site: Osun).
+2. Log in as proc1 → /processing/intake → create a visit for one supplier. Process it → in_receiving.
+3. Log in as recv1 → /receiving → open the visit. Add TWO material lines:
+   • Monazite: weight 120 kg, magnetic analysis text, comment.
+   • Zircon:   weight 80 kg,  magnetic analysis text, comment.
+   Advance → state in_qc.
+4. Log in as qc1 → /qc → open the visit. For each line, type an XRF result and submit.
+   State advances to pricing only after all lines are submitted.
+5. Log in as recv1 (or acct1) → open the visit → confirm the XRF result text is NOT visible.
+6. Log in as mgr1 → open the visit → XRF results ARE visible. Optionally assign a unit price to one line.
+7. Download the branded XRF analysis PDF as owner1; confirm recv1 gets 403 on the same PDF URL.
+
+ADVANCES:
+8. Log in as mgr1 → advances screen → record an advance (supplier, purpose, ₦amount) → pending.
+9. Log in as acct1 (or owner1) → approve it. Verify it appears on the owner dashboard, and does NOT change any visit's purchase balance.
+
+CONSUMABLES:
+10. Log in as inv1 → consumables → add one per a few categories (fuel_lubricants, wages, transport) with date + comment.
+
+LOT-TRACKED BULK SALE:
+11. Walk two different suppliers' Monazite lines through to stocked → two available lots (different cost prices).
+12. Log in as inv1 → bulk sales → select both Monazite lots → see the per-supplier table + total weight + avg cost/kg. Submit → pending.
+13. Log in as owner1 → approve. Both lots flip to SOLD; the bulk-sale PDF matches the owner's required format.
+14. Try to start a new bulk sale → the two sold lots no longer appear as available.
+
+PASS criteria: qc role exists; one visit holds multiple independently-analyzed materials; XRF is owner/manager-only; advances are standalone + approved; bulk sale selects lots, computes avg cost, marks them SOLD irreversibly, and prints the branded breakdown.
+```
+
+---
+
+**Manager checkpoints in Phase 9:**
+
+1. **Update CLAUDE.md when this lands** — role count, the QC role, and the "receiving = analysis" rule are all changed by this phase. Future Claude agents read CLAUDE.md first.
+2. **XRF confidentiality is a security boundary, not UI polish.** It must be enforced in RLS so a curious accountant or inventory user can't read XRF results via the API. Test it explicitly.
+3. **Lot model replaces fungible stock.** Once Phase 9 ships, the Phase 4 grade-bucket aggregation on the dashboard must be reworked to read `stock_lots`. Don't leave two competing stock views.
+4. **A sold lot is final.** The "can't sell the same lot twice" guard must be a DB constraint/trigger, like the Phase 4 stock-balance invariant — never UI-only.
+5. **Advances are not a financial system.** Resist the temptation to auto-net them against purchases; the owner explicitly wants them standalone. Revisit only if he asks.
+6. **Migration sequencing.** `visit_materials` + `stock_lots` change the spine of the data model. Apply and verify with `npx supabase db reset` on a fresh DB before pushing anything to cloud.
+
+---
+
+# Phase 10 — Merge to Main 🔀 NOT STARTED
 
 **Goal:** All phase branches merged into `main` in correct order. `main` becomes the single source of truth for the deployable codebase.
 
-**Status:** `NOT STARTED`. `main` currently only has the initial design spec + Phase 1 plan docs. Phase 1's source code lives on `phase-1-foundation`; Phases 2–8 live on their respective branches.
+**Status:** `NOT STARTED`. `main` currently only has the initial design spec + Phase 1 plan docs. Phase 1's source code lives on `phase-1-foundation`; Phases 2–8 live on their respective branches; Phase 9 (domain refinements) is not yet built. Merge order runs 1 → 9.
 
 **Strategy:**
 
@@ -868,7 +1119,9 @@ main ─┬── (current: just docs)
       │     ↓
       ├── phase-7-gate-removal
       │     ↓
-      └── phase-8-ui-dashboard
+      ├── phase-8-ui-dashboard
+      │     ↓
+      └── phase-9-domain-refinements
 ```
 
 **Each merge step:**
@@ -898,7 +1151,7 @@ npm run build              # production build with type-check
 
 If any test fails, do not merge the next phase until fixed. Roll back if needed (`git revert <merge-sha>`).
 
-**Phase 9 Playwright walkthrough:**
+**Phase 10 Playwright walkthrough:**
 
 ```
 After all merges, on main:
@@ -914,15 +1167,15 @@ After all merges, on main:
 PASS criteria: every phase's documented walkthrough still works. If a Phase 2 walkthrough breaks after Phase 8's design-system retrofit, that's a regression — fix on main with a follow-up commit.
 ```
 
-**Manager checkpoints in Phase 9:**
+**Manager checkpoints in Phase 10:**
 
-1. **Don't merge in parallel.** Each phase depends on the previous: Phase 3 → Phase 2's schema; Phase 4 → Phase 3's payments ledger; Phase 5 → Phase 4's stock data; Phase 6 → Phase 5's design system; Phase 7 → Phase 6's stable PDF templates (gate PDF must exist before it can be removed); Phase 8 → Phase 7's final role set. Merge sequentially.
+1. **Don't merge in parallel.** Each phase depends on the previous: Phase 3 → Phase 2's schema; Phase 4 → Phase 3's payments ledger; Phase 5 → Phase 4's stock data; Phase 6 → Phase 5's design system; Phase 7 → Phase 6's stable PDF templates (gate PDF must exist before it can be removed); Phase 8 → Phase 7's final role set; Phase 9 → Phase 8's UI shell (and revises the role set, stock model, and bulk-sale schema). Merge sequentially.
 2. **Keep tags.** Every merge tags `main` with the phase name. If a regression appears later, you can bisect by tags.
 3. **Migrations are immutable after merge.** Once `0006_material_types.sql` is on main, do not edit it. Add `0007a_*.sql` to fix anything.
 
 ---
 
-# Phase 10 — Deploy to Vercel 🚀 NOT STARTED
+# Phase 11 — Deploy to Vercel 🚀 NOT STARTED
 
 **Goal:** `main` is live on a Vercel production URL backed by the cloud Supabase project. End users (the family) can access it from anywhere with a browser.
 
@@ -983,7 +1236,7 @@ PASS criteria: every phase's documented walkthrough still works. If a Phase 2 wa
 - **Performance baseline:** Run Lighthouse against the production URL. Capture Time-to-Interactive < 3s as a baseline. Phase 5 dashboard may push this; budget accordingly.
 - **Cron / scheduled tasks:** None yet. If Phase 5 adds materialized view refresh, configure Vercel Cron or Supabase scheduled functions and document them here.
 
-**Phase 10 Playwright walkthrough (production):**
+**Phase 11 Playwright walkthrough (production):**
 
 ```
 1. Open the Vercel production URL in an incognito browser.
@@ -1000,7 +1253,7 @@ PASS criteria: every phase's documented walkthrough still works. If a Phase 2 wa
 PASS criteria: every action completes within a reasonable time; no console errors; cookies / sessions persist across redirects; RLS denies cross-site access exactly as it did locally.
 ```
 
-**Manager checkpoints in Phase 10:**
+**Manager checkpoints in Phase 11:**
 
 1. **Service-role key safety.** It must NEVER end up in a `NEXT_PUBLIC_*` env var. If it does, rotate it immediately via Supabase dashboard.
 2. **Backup strategy.** Supabase free tier doesn't include automated backups for the cloud DB beyond 7 days. If this goes into real production, upgrade the plan or set up a nightly `pg_dump` to cloud storage.
@@ -1033,7 +1286,9 @@ main (trunk; only has docs until first merge)
  │                                         │
  │                                         └── phase-7-gate-removal
  │                                                │
- │                                                └── phase-8-ui-dashboard ───► ...
+ │                                                └── phase-8-ui-dashboard
+ │                                                       │
+ │                                                       └── phase-9-domain-refinements ───► ...
 ```
 
 ### Starting a new phase — copy-paste these commands
