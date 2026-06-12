@@ -1105,11 +1105,160 @@ PASS criteria: qc role exists; one visit holds multiple independently-analyzed m
 
 ---
 
-# Phase 10 — Merge to Main 🔀 NOT STARTED
+# Phase 10 — Enterprise Governance: Auditor Role, Cross-Site Reports, Record Locking & Supplier Identity 🏛 NOT STARTED
+
+**Goal:** Adopt the governance half of the enterprise blueprint (`stripesinventory_enterprise_blueprint_claude_md.md`): real site names, an **Auditor** role with an Auditor → Manager → Owner review chain, **cross-site read** for manager + accountant, a **hybrid record-locking** policy, formal **supplier identity** (IDs + name history), and **QC↔Receiving matching** with automatic mismatch flagging.
+
+**Status:** `NOT STARTED`. **Branch from `phase-9-domain-refinements`** → suggested branch `phase-10-governance`.
+
+> ⚠️ **This phase supersedes earlier decisions.** When it lands, update `CLAUDE.md`:
+> - Roles become **8**: `processing · receiving · qc · manager · accounting · inventory · auditor · owner`.
+> - The rule *"Owner is the only cross-site, full-read role"* is **relaxed**: manager + accountant gain cross-site **READ** (reports + inventory visibility). All **writes** remain site-scoped; owner remains the only cross-site **write** role.
+> - The edit policy *"each role edits its own record until the visit closes"* becomes **hybrid**: the author can edit until the **next stage acts** on the record, then it's manager/owner-only.
+> - The blueprint's **"Director"** and **"System Owner"** both map to the existing **`owner`** role — one person, one login. No new director role.
+
+**Artifacts (when planning):**
+- Spec to create: `docs/superpowers/specs/YYYY-MM-DD-phase-10-governance-design.md`
+- Plan to create: `docs/superpowers/plans/YYYY-MM-DD-phase-10-governance.md`
+- Migrations start at `0024_*` (last shipped is `0023_lot_sales.sql`)
+
+---
+
+**Confirmed decisions (owner, captured before planning):**
+
+| Decision | Confirmed answer |
+|---|---|
+| Director / System Owner | **Both = the existing `owner` role.** Blueprint terminology only. |
+| Cross-site visibility | **Manager + accountant get cross-site READ**; writes stay site-scoped; owner keeps full cross-site write. |
+| Edit policy | **Hybrid grace window** — author edits until the next stage acts on the record (e.g. receiving lines lock once QC starts), then manager/owner only. Everything still audited. |
+
+---
+
+**What Phase 10 builds — by workstream:**
+
+### A. Real site names
+
+- Migration updating the `sites` rows: `Site 1/2/3` → **`Dong`, `New-Site`, `Old-Site`** (UPDATE by id — visits/profiles reference `site_id`, so renames are safe; do NOT edit migration 0001).
+
+### B. Auditor role (8th role)
+
+- Add `'auditor'` to `app_role` + `roles.ts`/nav/Sidebar; `/auditor` home.
+- Auditor can perform **manager tasks** (pricing drafts, advances, expenses) but every write lands as a **draft** (`review_status = 'draft' | 'submitted' | 'approved' | 'rejected'`) that a **manager must approve** before it takes effect; owner is the final escalation (Auditor → Manager → Owner).
+- Auditor cannot final-approve, cannot override owner, cannot reach owner settings.
+
+### C. Cross-site read for manager + accountant
+
+- RLS read policies widened on reporting tables (`visits`, `stock_movements`, `stock_lots`, `payments`, `advances`, `consumables`, `lot_sales`): manager + accountant may SELECT across sites; INSERT/UPDATE remain own-site.
+- Combined + per-site report views for manager/accountant (site filter like the owner dashboard).
+
+### D. Hybrid record locking
+
+- `visit_materials` (receiving's lane) lock for receiving once the visit enters `in_qc` (the next stage acted); manager/owner can still correct.
+- `xrf_records` lock for QC once pricing acts on the visit (any line priced or pricing row created); manager/owner can still correct.
+- Enforced in RLS UPDATE policies (not UI); all corrections audited as today.
+
+### E. Supplier identity & profile
+
+- **Supplier IDs**: sequential business code `SUP-MJZ-0001` (Postgres sequence + generated column or trigger); displayed everywhere a supplier appears.
+- **Name-change history**: renaming a supplier appends the old name — display becomes `Ahmed Musa (Formerly Musa Ahmed)`; prior names stored, searchable.
+- **Supplier profile page**: full history — visits, materials, advances, debt balance (Phase 11), payments, utility charges.
+
+### F. QC↔Receiving matching + analysis rules
+
+- QC re-records **weight** per line (blueprint requires supplier/material/weight on the QC record); supplier + material are already structural (FK to `visit_materials`).
+- **Automatic mismatch flagging**: if QC weight differs from receiving weight beyond a tolerance, flag the line (`mismatch` boolean + event); mismatch queue visible to manager/owner.
+- **Magnetic analysis only for Monazite** — validation: `magnetic_analysis` may only be set on lines whose material is Monazite.
+- **Not all supplies require chemical analysis** — per-line `requires_analysis` flag; lines marked exempt don't block `in_qc → pricing`.
+- **QC can view pricing** (read access to pricing data for context; still cannot write it).
+
+---
+
+**Planning step (confirm before building):**
+
+1. **Mismatch tolerance.** Absolute kg or percentage? Who clears a flagged mismatch — manager or owner?
+2. **Who marks a line "no analysis required"?** Receiving at intake, QC on review, or manager?
+3. **Auditor scope.** Blueprint says "all manager tasks" — confirm whether that includes lot-sale creation and consumable logging or just pricing/advances/expenses.
+4. **Existing supplier rows** get IDs backfilled in creation order — confirm numbering start.
+
+**Testing strategy:** RLS suites for auditor draft-chain (draft invisible-to-effect until manager approves), cross-site read (manager/acct can SELECT other sites, cannot write), edit-lock windows (receiving update fails after in_qc; manager correction succeeds), supplier ID generation/uniqueness, monazite-only magnetic constraint, mismatch flag trigger.
+
+**Phase 10 Playwright walkthrough (abbreviated):** rename check on login screens; auditor drafts a price → manager approves → effect applies; manager switches site filter and sees other sites read-only; receiving tries to edit a weighed line after QC started → blocked; supplier renamed shows "(Formerly …)"; QC enters mismatching weight → flag appears in manager queue.
+
+**Manager checkpoints in Phase 10:**
+1. Cross-site read is a **security boundary change** — test it per role as rigorously as Phase 1's isolation.
+2. The auditor chain must not create a second source of truth: a draft price must never feed `purchase_amount` until approved.
+3. Update CLAUDE.md when this lands (role count, cross-site rule, edit policy).
+
+---
+
+# Phase 11 — Supplier Finance: Deduction Ledger, Utility Billing, Payment Statuses & Receipts 💸 NOT STARTED
+
+**Goal:** Adopt the finance half of the blueprint: advances become a **deduction ledger** with automatic supplier debt balances, a **utility/processing billing** module (light bills, price-per-bag, branded utility invoices), expanded **payment statuses**, **receipt uploads** (Supabase Storage), an **expense approval flow**, and a standalone **cost-price dashboard**.
+
+**Status:** `NOT STARTED`. **Branch from `phase-10-governance`** → suggested branch `phase-11-supplier-finance`.
+
+> ⚠️ **Supersedes Phase 9's advances decision.** Phase 9 shipped advances as a standalone, manually-reconciled ledger. The owner has now confirmed the blueprint model: advances (and utility bills) are **deductible against supplier payments**, with multiple advances, **partial deductions**, and an automatically maintained **outstanding-debt balance** per supplier. Update CLAUDE.md accordingly when this lands.
+
+**Artifacts (when planning):**
+- Spec/plan under `docs/superpowers/` as usual; migrations continue after Phase 10's.
+
+---
+
+**What Phase 11 builds — by workstream:**
+
+### A. Supplier debt ledger (advances v2)
+
+- `supplier_ledger` (or extend `advances` + add `deductions`): every advance, deduction, payment, utility charge, and expense hit against a supplier produces a ledger row; **outstanding balance computed automatically**.
+- **Partial deductions**: manager deducts any portion of outstanding debt from a visit's payout; remainder carries forward.
+- Pricing/payment screens surface the supplier's outstanding debt + prior activity automatically (blueprint's "supplier workflow intelligence": previous records, unpaid advances, other supplied materials).
+
+### B. Utility / processing billing
+
+- Extend the processing module: **price per bag**, **light bills**, utility total per visit; **branded utility invoice PDF** (customer name, supplier ID, machines, hours, bags, price/bag, total, site, date).
+- Utility charges are deductible from supplier payouts via the ledger (workstream A).
+
+### C. Payment statuses
+
+- `payments` gain a status: `pending → approved (owner) → paid / partially_paid` plus `rejected`; accountant **confirms** owner-approved payments and records them paid.
+
+### D. Receipt uploads (first use of Supabase Storage)
+
+- Accountant uploads a payment receipt (image/PDF) per payment; stored in a private bucket; **readable only by accountant / manager / owner** (Storage RLS).
+
+### E. Expense approval flow
+
+- Manager (and auditor as a draft) submits an expense: type, amount, date → **owner approves**. Merge with the Phase 9 consumables log (one categorized expense table with an approval column) rather than a parallel table — confirm in planning.
+
+### F. Cost-price dashboard
+
+- Standalone tool for **manager / accountant / owner**: select material batches (Phase 9 `stock_lots`), combine, enter weights/prices, generate the **weighted cost price**; save mixed-batch records; retrieve historical computations. (The Phase 9 lot-sale breakdown already computes avg cost/kg on sale — this dashboard does it ad hoc, without selling.)
+
+---
+
+**Planning step (confirm before building):**
+
+1. **Deduction authority.** Manager deducts (blueprint) — does the owner approve each deduction, or only see it in the audit trail?
+2. **Light bills**: per-visit charge, per-site monthly expense, or both?
+3. **Partially Paid semantics**: derived from payment rows vs balance (recommended) or manually set by the accountant?
+4. **Expense vs consumables**: confirm the single-table merge.
+5. **Does the debt balance block new advances** past a threshold, or only warn?
+
+**Testing strategy:** ledger-balance invariants (sum of rows = balance; partial deduction carries forward), deduction permission tests, payment-status transition tests, Storage RLS tests (receiving/inventory denied receipt access), utility-invoice PDF route auth, cost-price computation correctness.
+
+**Phase 11 Playwright walkthrough (abbreviated):** give supplier two advances → price a visit → deduct part → balance carries → pay remainder → status partially_paid → upload receipt → verify receiving user cannot open the receipt URL → generate utility invoice PDF → cost-price dashboard combines two lots and shows the weighted price.
+
+**Manager checkpoints in Phase 11:**
+1. This phase **ends the "not a full financial system" stance for supplier money** — the per-supplier ledger becomes authoritative. Bulk-sale revenue (buyer side) remains owner's domain, outside the app.
+2. Ledger rows are append-only; corrections are reversal rows, never edits.
+3. Storage bucket must be private from day one — a public bucket leaks receipts.
+
+---
+
+# Phase 12 — Merge to Main 🔀 NOT STARTED
 
 **Goal:** All phase branches merged into `main` in correct order. `main` becomes the single source of truth for the deployable codebase.
 
-**Status:** `NOT STARTED`. `main` currently only has the initial design spec + Phase 1 plan docs. Phase 1's source code lives on `phase-1-foundation`; Phases 2–8 live on their respective branches; Phase 9 (domain refinements) is not yet built. Merge order runs 1 → 9.
+**Status:** `NOT STARTED`. `main` currently only has the initial design spec + Phase 1 plan docs. Phases 1–9 are built, each on its own branch; Phases 10–11 (blueprint adoption) are not yet built. Merge order runs 1 → 11 (or merge 1 → 9 first and land 10–11 on top of main — decide when 10–11 are done).
 
 **Strategy:**
 
@@ -1132,7 +1281,11 @@ main ─┬── (current: just docs)
       │     ↓
       ├── phase-8-ui-dashboard
       │     ↓
-      └── phase-9-domain-refinements
+      ├── phase-9-domain-refinements
+      │     ↓
+      ├── phase-10-governance
+      │     ↓
+      └── phase-11-supplier-finance
 ```
 
 **Each merge step:**
@@ -1162,7 +1315,7 @@ npm run build              # production build with type-check
 
 If any test fails, do not merge the next phase until fixed. Roll back if needed (`git revert <merge-sha>`).
 
-**Phase 10 Playwright walkthrough:**
+**Phase 12 Playwright walkthrough:**
 
 ```
 After all merges, on main:
@@ -1178,15 +1331,15 @@ After all merges, on main:
 PASS criteria: every phase's documented walkthrough still works. If a Phase 2 walkthrough breaks after Phase 8's design-system retrofit, that's a regression — fix on main with a follow-up commit.
 ```
 
-**Manager checkpoints in Phase 10:**
+**Manager checkpoints in Phase 12:**
 
-1. **Don't merge in parallel.** Each phase depends on the previous: Phase 3 → Phase 2's schema; Phase 4 → Phase 3's payments ledger; Phase 5 → Phase 4's stock data; Phase 6 → Phase 5's design system; Phase 7 → Phase 6's stable PDF templates (gate PDF must exist before it can be removed); Phase 8 → Phase 7's final role set; Phase 9 → Phase 8's UI shell (and revises the role set, stock model, and bulk-sale schema). Merge sequentially.
+1. **Don't merge in parallel.** Each phase depends on the previous: Phase 3 → Phase 2's schema; Phase 4 → Phase 3's payments ledger; Phase 5 → Phase 4's stock data; Phase 6 → Phase 5's design system; Phase 7 → Phase 6's stable PDF templates (gate PDF must exist before it can be removed); Phase 8 → Phase 7's final role set; Phase 9 → Phase 8's UI shell (and revises the role set, stock model, and bulk-sale schema); Phase 10 → Phase 9's QC/lot tables; Phase 11 → Phase 10's auditor chain + supplier identity. Merge sequentially.
 2. **Keep tags.** Every merge tags `main` with the phase name. If a regression appears later, you can bisect by tags.
 3. **Migrations are immutable after merge.** Once `0006_material_types.sql` is on main, do not edit it. Add `0007a_*.sql` to fix anything.
 
 ---
 
-# Phase 11 — Deploy to Vercel 🚀 NOT STARTED
+# Phase 13 — Deploy to Vercel 🚀 NOT STARTED
 
 **Goal:** `main` is live on a Vercel production URL backed by the cloud Supabase project. End users (the family) can access it from anywhere with a browser.
 
@@ -1247,7 +1400,7 @@ PASS criteria: every phase's documented walkthrough still works. If a Phase 2 wa
 - **Performance baseline:** Run Lighthouse against the production URL. Capture Time-to-Interactive < 3s as a baseline. Phase 5 dashboard may push this; budget accordingly.
 - **Cron / scheduled tasks:** None yet. If Phase 5 adds materialized view refresh, configure Vercel Cron or Supabase scheduled functions and document them here.
 
-**Phase 11 Playwright walkthrough (production):**
+**Phase 13 Playwright walkthrough (production):**
 
 ```
 1. Open the Vercel production URL in an incognito browser.
@@ -1264,7 +1417,7 @@ PASS criteria: every phase's documented walkthrough still works. If a Phase 2 wa
 PASS criteria: every action completes within a reasonable time; no console errors; cookies / sessions persist across redirects; RLS denies cross-site access exactly as it did locally.
 ```
 
-**Manager checkpoints in Phase 11:**
+**Manager checkpoints in Phase 13:**
 
 1. **Service-role key safety.** It must NEVER end up in a `NEXT_PUBLIC_*` env var. If it does, rotate it immediately via Supabase dashboard.
 2. **Backup strategy.** Supabase free tier doesn't include automated backups for the cloud DB beyond 7 days. If this goes into real production, upgrade the plan or set up a nightly `pg_dump` to cloud storage.
@@ -1299,7 +1452,11 @@ main (trunk; only has docs until first merge)
  │                                                │
  │                                                └── phase-8-ui-dashboard
  │                                                       │
- │                                                       └── phase-9-domain-refinements ───► ...
+ │                                                       └── phase-9-domain-refinements
+ │                                                              │
+ │                                                              └── phase-10-governance
+ │                                                                     │
+ │                                                                     └── phase-11-supplier-finance ───► ...
 ```
 
 ### Starting a new phase — copy-paste these commands
