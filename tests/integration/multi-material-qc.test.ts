@@ -18,9 +18,14 @@ describe("multi-material batch → QC → pricing (integration)", () => {
     mgr  = await makeUser({ username: "mm-mgr",  role: "manager",    siteId });
     const { data: s } = await adminClient().from("suppliers").insert({ name: "Batch Supplier" }).select("id").single();
     supplierId = s!.id as string;
-    const { data: mats } = await adminClient().from("material_types").select("id").limit(2);
-    matA = mats![0].id as string;
-    matB = mats![1].id as string;
+    // Monazite + Zircon — the real multi-material pairing; magnetic analysis
+    // is only legal on the Monazite line (Phase 10 rule).
+    const { data: mz } = await adminClient()
+      .from("material_types").select("id").eq("name", "Monazite").single();
+    const { data: zr } = await adminClient()
+      .from("material_types").select("id").eq("name", "Zircon").single();
+    matA = mz!.id as string;
+    matB = zr!.id as string;
   });
 
   it("runs the full multi-material pipeline", async () => {
@@ -39,7 +44,7 @@ describe("multi-material batch → QC → pricing (integration)", () => {
     }).select("id").single();
     const { data: lineB } = await recv.client.from("visit_materials").insert({
       visit_id: visitId, material_type_id: matB, weight_kg: 80,
-      magnetic_analysis: "low", recorded_by: recv.userId,
+      recorded_by: recv.userId,
     }).select("id").single();
     expect(lineA?.id).toBeTruthy();
     expect(lineB?.id).toBeTruthy();

@@ -90,7 +90,7 @@ describe("payments RLS", () => {
     expect(data?.length).toBe(1);
   });
 
-  it("accounting cannot read payments for other site", async () => {
+  it("accounting CAN read payments for other site (Phase 10 cross-site read)", async () => {
     const vid = await newInAccountingVisit(siteBId, acctB.userId);
     await adminClient().from("payments").insert({
       visit_id: vid,
@@ -102,7 +102,7 @@ describe("payments RLS", () => {
       .from("payments")
       .select("id")
       .eq("visit_id", vid);
-    expect(data?.length).toBe(0);
+    expect(data?.length).toBe(1);
   });
 
   it("owner can read payments across all sites", async () => {

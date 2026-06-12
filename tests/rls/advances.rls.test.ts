@@ -83,9 +83,15 @@ describe("advances RLS", () => {
     expect(error).not.toBeNull();
   });
 
-  it("manager at site B cannot read site A advances", async () => {
+  it("manager at site B CAN read site A advances (Phase 10 cross-site read)", async () => {
     const id = await insertPending(siteAId, mgrA.userId);
     const { data } = await mgrB.client.from("advances").select("id").eq("id", id);
+    expect(data ?? []).toHaveLength(1);
+  });
+
+  it("inventory role still cannot read other-site advances", async () => {
+    const id = await insertPending(siteBId, mgrB.userId);
+    const { data } = await invA.client.from("advances").select("id").eq("id", id);
     expect(data ?? []).toHaveLength(0);
   });
 

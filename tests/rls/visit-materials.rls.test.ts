@@ -44,7 +44,10 @@ describe("visit_materials RLS (batch line items)", () => {
     owner = await makeUser({ username: "vm-owner",  role: "owner",      siteId: null });
     const { data: s } = await adminClient().from("suppliers").insert({ name: "VM Supplier" }).select("id").single();
     supplierId = s!.id as string;
-    const { data: m } = await adminClient().from("material_types").select("id").limit(1).single();
+    // Magnetic analysis is only allowed on Monazite (Phase 10 rule), so the
+    // line-item tests use Monazite as their material.
+    const { data: m } = await adminClient()
+      .from("material_types").select("id").eq("name", "Monazite").single();
     materialTypeId = m!.id as string;
   });
 
