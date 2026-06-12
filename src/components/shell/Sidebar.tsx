@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, PackagePlus, Factory, FlaskConical, Tags, Wallet,
   Boxes, ShoppingCart, Droplets, Users, Settings2, Layers, ScrollText,
-  Search, LogOut, X, Microscope, ClipboardCheck, BarChart3,
+  Search, LogOut, X, Microscope, BarChart3,
 } from "lucide-react";
 import { navForRole, isActivePath, type NavIcon } from "@/lib/nav";
 import type { Role } from "@/lib/auth/roles";
@@ -18,7 +18,6 @@ const ICONS: Record<NavIcon, React.ComponentType<{ size?: number }>> = {
   receiving: FlaskConical,
   qc: Microscope,
   pricing: Tags,
-  drafts: ClipboardCheck,
   reports: BarChart3,
   accounting: Wallet,
   inventory: Boxes,
@@ -38,7 +37,6 @@ const ROLE_LABEL: Record<Role, string> = {
   manager: "Manager",
   accounting: "Accounting",
   inventory: "Inventory",
-  auditor: "Auditor",
   owner: "Owner",
 };
 

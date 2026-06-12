@@ -1105,17 +1105,23 @@ PASS criteria: qc role exists; one visit holds multiple independently-analyzed m
 
 ---
 
-# Phase 10 — Enterprise Governance: Auditor Role, Cross-Site Reports, Record Locking & Supplier Identity 🏛 NOT STARTED
+# Phase 10 — Enterprise Governance: Cross-Site Reports, Record Locking, Supplier Identity & QC Matching 🏛 DONE
 
-**Goal:** Adopt the governance half of the enterprise blueprint (`stripesinventory_enterprise_blueprint_claude_md.md`): real site names, an **Auditor** role with an Auditor → Manager → Owner review chain, **cross-site read** for manager + accountant, a **hybrid record-locking** policy, formal **supplier identity** (IDs + name history), and **QC↔Receiving matching** with automatic mismatch flagging.
+**Goal:** Adopt the governance half of the enterprise blueprint (`stripesinventory_enterprise_blueprint_claude_md.md`): real site names, **cross-site read** for manager + accountant, a **hybrid record-locking** policy, formal **supplier identity** (IDs + name history), and **QC↔Receiving matching** with automatic mismatch flagging.
 
-**Status:** `NOT STARTED`. **Branch from `phase-9-domain-refinements`** → suggested branch `phase-10-governance`.
+**Status:** `DONE` on branch `phase-10-governance` (off `phase-9-domain-refinements`). Migrations 0024–0028. Full suite: **44 files / 190 tests pass**; build clean (25 routes).
 
-> ⚠️ **This phase supersedes earlier decisions.** When it lands, update `CLAUDE.md`:
-> - Roles become **8**: `processing · receiving · qc · manager · accounting · inventory · auditor · owner`.
-> - The rule *"Owner is the only cross-site, full-read role"* is **relaxed**: manager + accountant gain cross-site **READ** (reports + inventory visibility). All **writes** remain site-scoped; owner remains the only cross-site **write** role.
-> - The edit policy *"each role edits its own record until the visit closes"* becomes **hybrid**: the author can edit until the **next stage acts** on the record, then it's manager/owner-only.
-> - The blueprint's **"Director"** and **"System Owner"** both map to the existing **`owner`** role — one person, one login. No new director role.
+> ⚠️ **Decisions this phase locked in** (reflected in `CLAUDE.md`):
+> - The blueprint's **"Auditor"**, **"Director"**, and **"System Owner"** are all the **same person — the existing `owner` role**. The role count stays **7**; no separate auditor login and no draft-review chain (a drafts mechanism was built and then removed mid-phase when the owner clarified this).
+> - The rule *"Owner is the only cross-site, full-read role"* is **relaxed**: manager + accountant gain cross-site **READ** (reports + inventory visibility) via `has_cross_site_read()`. All **writes** remain site-scoped; owner remains the only cross-site **write** role.
+> - The edit policy *"each role edits its own record until the visit closes"* becomes **hybrid**: the author edits until the **next stage acts** (receiving lines lock when QC starts; XRF records lock when pricing acts), then it's manager/owner-only.
+
+**Implementation notes (what shipped):**
+- **A — sites (0024):** `Dong`, `New-Site`, `Old-Site` (UPDATE by id; 0001 untouched).
+- **C — cross-site read (0025):** manager+accounting SELECT across sites on visits, visit_materials, stock_movements, stock_lots, payments, advances, consumables, lot_sales(+items). Shared `CrossSiteReports` page at `/manager/reports` + `/accounting/reports`.
+- **D — record locking (0026):** receiving edits lines only while `in_receiving`; QC edits XRF until `pricing_has_acted()` (pricing row or any priced line); manager/owner retain correction rights.
+- **E — supplier identity (0027):** `SUP-MJZ-####` codes (sequence + backfill), `former_names[]` rename history, owner supplier-profile page at `/owner/suppliers/[id]`.
+- **F — QC matching (0028):** Monazite/Zircon seeded; magnetic analysis restricted to Monazite (trigger); QC re-records `weight_kg` with a 2%-tolerance auto `mismatch` flag + manager mismatch queue on `/manager`; per-line `requires_analysis` (exempt-only batches skip QC straight to pricing; mixed batches gate on required lines only); QC reads pricing (already site-scoped readable).
 
 **Artifacts (when planning):**
 - Spec to create: `docs/superpowers/specs/YYYY-MM-DD-phase-10-governance-design.md`
@@ -1128,7 +1134,7 @@ PASS criteria: qc role exists; one visit holds multiple independently-analyzed m
 
 | Decision | Confirmed answer |
 |---|---|
-| Director / System Owner | **Both = the existing `owner` role.** Blueprint terminology only. |
+| Director / System Owner / Auditor | **All = the existing `owner` role** (same person). Blueprint terminology only — no new roles, no draft-review chain. |
 | Cross-site visibility | **Manager + accountant get cross-site READ**; writes stay site-scoped; owner keeps full cross-site write. |
 | Edit policy | **Hybrid grace window** — author edits until the next stage acts on the record (e.g. receiving lines lock once QC starts), then manager/owner only. Everything still audited. |
 
@@ -1140,11 +1146,9 @@ PASS criteria: qc role exists; one visit holds multiple independently-analyzed m
 
 - Migration updating the `sites` rows: `Site 1/2/3` → **`Dong`, `New-Site`, `Old-Site`** (UPDATE by id — visits/profiles reference `site_id`, so renames are safe; do NOT edit migration 0001).
 
-### B. Auditor role (8th role)
+### B. Auditor role — RESOLVED: no separate role
 
-- Add `'auditor'` to `app_role` + `roles.ts`/nav/Sidebar; `/auditor` home.
-- Auditor can perform **manager tasks** (pricing drafts, advances, expenses) but every write lands as a **draft** (`review_status = 'draft' | 'submitted' | 'approved' | 'rejected'`) that a **manager must approve** before it takes effect; owner is the final escalation (Auditor → Manager → Owner).
-- Auditor cannot final-approve, cannot override owner, cannot reach owner settings.
+The owner confirmed mid-phase that the blueprint's Auditor is the **same person as the owner** (as are Director and System Owner). The owner role already holds every auditor capability, so no separate role, login, or draft-review chain exists. (An `auditor_drafts` mechanism was implemented and then removed before the branch was pushed; no orphan enum value was left behind.)
 
 ### C. Cross-site read for manager + accountant
 
@@ -1173,21 +1177,19 @@ PASS criteria: qc role exists; one visit holds multiple independently-analyzed m
 
 ---
 
-**Planning step (confirm before building):**
+**Defaults applied (revisit with the owner if they prove wrong):**
 
-1. **Mismatch tolerance.** Absolute kg or percentage? Who clears a flagged mismatch — manager or owner?
-2. **Who marks a line "no analysis required"?** Receiving at intake, QC on review, or manager?
-3. **Auditor scope.** Blueprint says "all manager tasks" — confirm whether that includes lot-sale creation and consumable logging or just pricing/advances/expenses.
-4. **Existing supplier rows** get IDs backfilled in creation order — confirm numbering start.
+1. **Mismatch tolerance:** 2% relative; the manager resolves a flag by correcting either weight (the flag auto-recomputes on every write).
+2. **"No analysis required"** is marked by **receiving at intake** (checkbox on the add-line form); manager/owner can change it while the visit is open.
+3. **Supplier IDs** backfilled in creation order starting at `SUP-MJZ-0001`.
 
-**Testing strategy:** RLS suites for auditor draft-chain (draft invisible-to-effect until manager approves), cross-site read (manager/acct can SELECT other sites, cannot write), edit-lock windows (receiving update fails after in_qc; manager correction succeeds), supplier ID generation/uniqueness, monazite-only magnetic constraint, mismatch flag trigger.
+**Testing delivered:** cross-site read (manager/acct can SELECT other sites, cannot write; other roles still site-scoped), edit-lock windows (receiving update fails after in_qc, QC update fails after pricing acts; manager/owner corrections succeed), supplier ID generation + rename history, monazite-only magnetic constraint, 2%-tolerance mismatch flag, exempt-line pipeline skips.
 
-**Phase 10 Playwright walkthrough (abbreviated):** rename check on login screens; auditor drafts a price → manager approves → effect applies; manager switches site filter and sees other sites read-only; receiving tries to edit a weighed line after QC started → blocked; supplier renamed shows "(Formerly …)"; QC enters mismatching weight → flag appears in manager queue.
+**Phase 10 Playwright walkthrough (abbreviated):** site names show Dong/New-Site/Old-Site; manager opens /manager/reports and sees all sites read-only; receiving tries to edit a weighed line after QC started → blocked; supplier renamed shows "(Formerly …)"; QC enters a mismatching weight → flag appears on /manager; a no-analysis batch jumps straight to pricing.
 
 **Manager checkpoints in Phase 10:**
-1. Cross-site read is a **security boundary change** — test it per role as rigorously as Phase 1's isolation.
-2. The auditor chain must not create a second source of truth: a draft price must never feed `purchase_amount` until approved.
-3. Update CLAUDE.md when this lands (role count, cross-site rule, edit policy).
+1. Cross-site read is a **security boundary change** — tested per role like Phase 1's isolation.
+2. CLAUDE.md updated with this phase (auditor=owner, cross-site rule, edit policy, supplier identity).
 
 ---
 
@@ -1227,7 +1229,7 @@ PASS criteria: qc role exists; one visit holds multiple independently-analyzed m
 
 ### E. Expense approval flow
 
-- Manager (and auditor as a draft) submits an expense: type, amount, date → **owner approves**. Merge with the Phase 9 consumables log (one categorized expense table with an approval column) rather than a parallel table — confirm in planning.
+- Manager submits an expense: type, amount, date → **owner approves**. Merge with the Phase 9 consumables log (one categorized expense table with an approval column) rather than a parallel table — confirm in planning.
 
 ### F. Cost-price dashboard
 
@@ -1333,7 +1335,7 @@ PASS criteria: every phase's documented walkthrough still works. If a Phase 2 wa
 
 **Manager checkpoints in Phase 12:**
 
-1. **Don't merge in parallel.** Each phase depends on the previous: Phase 3 → Phase 2's schema; Phase 4 → Phase 3's payments ledger; Phase 5 → Phase 4's stock data; Phase 6 → Phase 5's design system; Phase 7 → Phase 6's stable PDF templates (gate PDF must exist before it can be removed); Phase 8 → Phase 7's final role set; Phase 9 → Phase 8's UI shell (and revises the role set, stock model, and bulk-sale schema); Phase 10 → Phase 9's QC/lot tables; Phase 11 → Phase 10's auditor chain + supplier identity. Merge sequentially.
+1. **Don't merge in parallel.** Each phase depends on the previous: Phase 3 → Phase 2's schema; Phase 4 → Phase 3's payments ledger; Phase 5 → Phase 4's stock data; Phase 6 → Phase 5's design system; Phase 7 → Phase 6's stable PDF templates (gate PDF must exist before it can be removed); Phase 8 → Phase 7's final role set; Phase 9 → Phase 8's UI shell (and revises the role set, stock model, and bulk-sale schema); Phase 10 → Phase 9's QC/lot tables; Phase 11 → Phase 10's supplier identity + cross-site policies. Merge sequentially.
 2. **Keep tags.** Every merge tags `main` with the phase name. If a regression appears later, you can bisect by tags.
 3. **Migrations are immutable after merge.** Once `0006_material_types.sql` is on main, do not edit it. Add `0007a_*.sql` to fix anything.
 

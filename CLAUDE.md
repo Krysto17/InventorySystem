@@ -1,8 +1,9 @@
 # CLAUDE.md — Mining Material Tracking & Inventory System
 
 Role-based data-monitoring system for **MAGNETIC JOEZION NIG. LTD**, a family-run tin /
-raw-metals processing and purchasing business with **three sites**. The owner needs full
-cross-site oversight; every subprocess is exportable as a branded PDF.
+raw-metals processing and purchasing business with **three sites** (**Dong**, **New-Site**,
+**Old-Site**). The owner needs full cross-site oversight; every subprocess is exportable
+as a branded PDF.
 
 ## ⚠️ Source of truth
 
@@ -31,13 +32,22 @@ cross-site oversight; every subprocess is exportable as a branded PDF.
 `processing` · `receiving` · `qc` · `manager` · `accounting` · `inventory` · `owner`
 
 - `gate` was removed in Phase 7 (orphan enum value kept; not provisionable). `qc` was
-  added in Phase 9.
+  added in Phase 9. The blueprint's **Auditor / Director / System Owner are all the same
+  person as `owner`** (Phase 10) — no separate roles.
 - **Manager** = top operational/pricing authority; **Owner** overrides any manager price
-  and is the only **cross-site, full-read** role.
-- **Receiving** records weight + **magnetic** analysis per material line; **QC** records
-  the **XRF** analysis as a separate, access-restricted record (readable only by owner +
-  manager + the QC analyst). *(Phase 9 split — previously receiving and analysis were one
-  role/record.)*
+  and is the only cross-site **write** role. Since Phase 10, **manager + accounting have
+  cross-site READ** (`has_cross_site_read()`) for combined reports; all writes stay
+  site-scoped.
+- **Receiving** records weight + **magnetic** analysis per material line (magnetic is
+  **Monazite-only**, DB-enforced); **QC** records the **XRF** analysis + its own weight as
+  a separate, access-restricted record (readable only by owner + manager + the QC
+  analyst). A >2% weight difference auto-flags a **mismatch** for the manager. Lines can
+  be marked `requires_analysis = false`; exempt-only batches skip QC. *(Phases 9–10.)*
+- **Hybrid edit locking (Phase 10):** the recording role edits its record only until the
+  next stage acts (receiving lines lock when QC starts; XRF locks when pricing acts);
+  after that manager/owner only. All edits audited.
+- **Suppliers** carry a business code (`SUP-MJZ-0001`) and a rename history
+  (`former_names`, rendered "Ahmed Musa (Formerly Musa Ahmed)").
 
 ## Core domain model
 

@@ -10,10 +10,11 @@ type Line = {
   weight_kg: number;
   magnetic_analysis: string | null;
   receiving_comment: string | null;
+  requires_analysis: boolean;
   unit_price: number | null;
   purchase_amount: number | null;
   material: { name: string } | null;
-  xrf: { result: string | null; submitted: boolean } | null;
+  xrf: { result: string | null; submitted: boolean; weight_kg: number | null; mismatch: boolean } | null;
 };
 
 const g1 = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
@@ -32,9 +33,10 @@ export async function BatchMaterials({
   const { data: rawLines } = await supabase
     .from("visit_materials")
     .select(`
-      id, weight_kg, magnetic_analysis, receiving_comment, unit_price, purchase_amount,
+      id, weight_kg, magnetic_analysis, receiving_comment, requires_analysis,
+      unit_price, purchase_amount,
       material:material_types(name),
-      xrf:xrf_records(result, submitted)
+      xrf:xrf_records(result, submitted, weight_kg, mismatch)
     `)
     .eq("visit_id", visitId)
     .order("created_at", { ascending: true });
@@ -44,10 +46,11 @@ export async function BatchMaterials({
     weight_kg: Number(l.weight_kg),
     magnetic_analysis: l.magnetic_analysis as string | null,
     receiving_comment: l.receiving_comment as string | null,
+    requires_analysis: Boolean(l.requires_analysis),
     unit_price: l.unit_price != null ? Number(l.unit_price) : null,
     purchase_amount: l.purchase_amount != null ? Number(l.purchase_amount) : null,
     material: g1((l as { material: unknown }).material) as { name: string } | null,
-    xrf: g1((l as { xrf: unknown }).xrf) as { result: string | null; submitted: boolean } | null,
+    xrf: g1((l as { xrf: unknown }).xrf) as Line["xrf"],
   }));
 
   // Nothing to show for legacy single-material visits with no batch lines.
@@ -81,7 +84,19 @@ export async function BatchMaterials({
             {lines.map((l) => (
               <div key={l.id} className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
                 <div className="flex items-center justify-between">
-                  <div className="font-medium">{l.material?.name ?? "—"}</div>
+                  <div className="font-medium">
+                    {l.material?.name ?? "—"}
+                    {!l.requires_analysis && (
+                      <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800">
+                        no analysis required
+                      </span>
+                    )}
+                    {canSeeXrf && l.xrf?.mismatch && (
+                      <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                        weight mismatch
+                      </span>
+                    )}
+                  </div>
                   <div className="text-zinc-500">{l.weight_kg.toFixed(3)} kg</div>
                 </div>
                 {l.magnetic_analysis && (
@@ -96,11 +111,14 @@ export async function BatchMaterials({
                   <div className="mt-2 rounded bg-zinc-50 p-2 text-xs dark:bg-zinc-800/50">
                     <span className="font-medium">XRF{l.xrf.submitted ? " (submitted)" : " (draft)"}:</span>{" "}
                     {l.xrf.result ?? "—"}
+                    {l.xrf.weight_kg != null && (
+                      <span className="ml-2 text-zinc-500">QC weight: {Number(l.xrf.weight_kg).toFixed(3)} kg</span>
+                    )}
                   </div>
                 )}
 
                 {/* QC: record / submit XRF for this line */}
-                {canQc && (
+                {canQc && l.requires_analysis && (
                   <form action={recordXrf} className="mt-2 space-y-2">
                     <input type="hidden" name="visit_id" value={visitId} />
                     <input type="hidden" name="visit_material_id" value={l.id} />
@@ -111,6 +129,17 @@ export async function BatchMaterials({
                       placeholder="Type XRF analysis result…"
                       className="block w-full rounded border px-2 py-1 text-sm"
                     />
+                    <label className="block text-xs">
+                      Weight as measured by QC (kg)
+                      <input
+                        type="number"
+                        name="weight_kg"
+                        step="0.001"
+                        min="0"
+                        defaultValue={l.xrf?.weight_kg ?? ""}
+                        className="mt-1 block w-40 rounded border px-2 py-1 text-sm"
+                      />
+                    </label>
                     <div className="flex gap-2">
                       <button name="submitted" value="false" type="submit" className="rounded border px-3 py-1 text-xs hover:bg-zinc-50">
                         Save draft
@@ -177,12 +206,16 @@ export async function BatchMaterials({
                 <input type="number" name="weight_kg" step="0.001" min="0" required className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
               </label>
               <label className="text-xs font-medium">
-                Magnetic analysis
+                Magnetic analysis <span className="font-normal text-zinc-400">(Monazite only)</span>
                 <input type="text" name="magnetic_analysis" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
               </label>
               <label className="col-span-2 text-xs font-medium">
                 Comment
                 <input type="text" name="receiving_comment" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+              </label>
+              <label className="col-span-2 flex items-center gap-2 text-xs font-medium">
+                <input type="checkbox" name="requires_analysis" defaultChecked />
+                Requires chemical (XRF) analysis
               </label>
               <button type="submit" className="col-span-2 rounded border px-3 py-1.5 text-sm hover:bg-zinc-50">
                 + Add material line
@@ -193,7 +226,9 @@ export async function BatchMaterials({
               <form action={advanceToQc}>
                 <input type="hidden" name="visit_id" value={visitId} />
                 <button type="submit" className="w-full rounded bg-black px-3 py-2 text-sm text-white">
-                  Done weighing — send to QC →
+                  {lines.some((l) => l.requires_analysis)
+                    ? "Done weighing — send to QC →"
+                    : "Done weighing — send to pricing (no analysis needed) →"}
                 </button>
               </form>
             )}

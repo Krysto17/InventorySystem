@@ -17,6 +17,7 @@ export async function addMaterialLine(formData: FormData): Promise<void> {
 
   const magnetic = String(formData.get("magnetic_analysis") ?? "").trim() || null;
   const comment = String(formData.get("receiving_comment") ?? "").trim() || null;
+  const requiresAnalysis = formData.get("requires_analysis") != null;
 
   const supabase = await createClient();
   await supabase.from("visit_materials").insert({
@@ -25,6 +26,7 @@ export async function addMaterialLine(formData: FormData): Promise<void> {
     weight_kg: weight,
     magnetic_analysis: magnetic,
     receiving_comment: comment,
+    requires_analysis: requiresAnalysis,
     recorded_by: me.id,
   });
   revalidatePath(`/visits/${visitId}`);
@@ -54,6 +56,8 @@ export async function recordXrf(formData: FormData): Promise<void> {
   const lineId = String(formData.get("visit_material_id") ?? "");
   const result = String(formData.get("result") ?? "").trim() || null;
   const submitted = String(formData.get("submitted") ?? "") === "true";
+  const weightRaw = String(formData.get("weight_kg") ?? "").trim();
+  const weightKg = weightRaw === "" ? null : Number(weightRaw);
   if (!lineId) return;
 
   const supabase = await createClient();
@@ -65,10 +69,12 @@ export async function recordXrf(formData: FormData): Promise<void> {
     .maybeSingle();
 
   if (existing) {
-    await supabase.from("xrf_records").update({ result, submitted }).eq("id", existing.id);
+    await supabase.from("xrf_records")
+      .update({ result, submitted, weight_kg: weightKg })
+      .eq("id", existing.id);
   } else {
     await supabase.from("xrf_records").insert({
-      visit_material_id: lineId, result, submitted, recorded_by: me.id,
+      visit_material_id: lineId, result, submitted, weight_kg: weightKg, recorded_by: me.id,
     });
   }
   if (visitId) revalidatePath(`/visits/${visitId}`);
