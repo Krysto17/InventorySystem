@@ -340,3 +340,77 @@ export async function fetchLotSalePdfData(saleId: string): Promise<PdfLotSaleDat
     items,
   };
 }
+
+// ─── Utility invoice (Phase 11) ─────────────────────────────────────────────
+
+export type PdfUtilityData = {
+  visit_id: string;
+  site_name: string | null;
+  supplier_name: string | null;
+  supplier_code: string | null;
+  vehicle_plate: string | null;
+  created_at: string;
+  machines: { machine_name: string; charge_basis: string; measurement: number; rate: number; line_cost: number }[];
+  charges: { kind: string; description: string | null; amount: number }[];
+  processing_fee_total: number;
+  utility_total: number;
+  grand_total: number;
+};
+
+export async function fetchUtilityInvoiceData(visitId: string): Promise<PdfUtilityData | null> {
+  const supabase = await createClient();
+  const { data: v } = await supabase
+    .from("visits")
+    .select(`
+      id, created_at, vehicle_plate,
+      site:sites(name),
+      supplier:suppliers(name, supplier_code),
+      processing:processing_records(
+        usage:processing_machine_usage(
+          measurement, rate_snapshot, line_cost,
+          machine:machines(name, charge_basis)
+        )
+      ),
+      charges:utility_charges(kind, description, amount)
+    `)
+    .eq("id", visitId)
+    .maybeSingle();
+  if (!v) return null;
+
+  const supplier = g1<{ name: string; supplier_code: string | null }>(v.supplier);
+  const processing = g1<{ usage: unknown[] }>((v as { processing: unknown }).processing);
+  const machines = ((processing?.usage as unknown[]) ?? []).map((u) => {
+    const row = u as {
+      machine: unknown; measurement: unknown; rate_snapshot: unknown; line_cost: unknown;
+    };
+    const m = g1<{ name: string; charge_basis: string }>(row.machine);
+    return {
+      machine_name: m?.name ?? "—",
+      charge_basis: m?.charge_basis ?? "—",
+      measurement: num(row.measurement),
+      rate: num(row.rate_snapshot),
+      line_cost: num(row.line_cost),
+    };
+  });
+  const charges = (((v as { charges: unknown[] }).charges as unknown[]) ?? []).map((c) => {
+    const row = c as { kind: unknown; description: unknown; amount: unknown };
+    return { kind: String(row.kind), description: str(row.description), amount: num(row.amount) };
+  });
+
+  const processingFeeTotal = machines.reduce((s, m) => s + m.line_cost, 0);
+  const utilityTotal = charges.reduce((s, c) => s + c.amount, 0);
+
+  return {
+    visit_id: v.id as string,
+    site_name: g1<{ name: string }>(v.site)?.name ?? null,
+    supplier_name: supplier?.name ?? null,
+    supplier_code: supplier?.supplier_code ?? null,
+    vehicle_plate: str(v.vehicle_plate),
+    created_at: v.created_at as string,
+    machines,
+    charges,
+    processing_fee_total: processingFeeTotal,
+    utility_total: utilityTotal,
+    grand_total: processingFeeTotal + utilityTotal,
+  };
+}

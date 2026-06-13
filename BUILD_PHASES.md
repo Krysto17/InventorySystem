@@ -1193,13 +1193,21 @@ The owner confirmed mid-phase that the blueprint's Auditor is the **same person 
 
 ---
 
-# Phase 11 — Supplier Finance: Deduction Ledger, Utility Billing, Payment Statuses & Receipts 💸 NOT STARTED
+# Phase 11 — Supplier Finance: Deduction Ledger, Utility Billing, Payment Statuses & Receipts 💸 DONE
 
 **Goal:** Adopt the finance half of the blueprint: advances become a **deduction ledger** with automatic supplier debt balances, a **utility/processing billing** module (light bills, price-per-bag, branded utility invoices), expanded **payment statuses**, **receipt uploads** (Supabase Storage), an **expense approval flow**, and a standalone **cost-price dashboard**.
 
-**Status:** `NOT STARTED`. **Branch from `phase-10-governance`** → suggested branch `phase-11-supplier-finance`.
+**Status:** `DONE` on branch `phase-11-supplier-finance` (off `phase-10-governance`). Migrations 0029–0034. Full suite: **49 files / 212 tests pass**; build clean.
 
-> ⚠️ **Supersedes Phase 9's advances decision.** Phase 9 shipped advances as a standalone, manually-reconciled ledger. The owner has now confirmed the blueprint model: advances (and utility bills) are **deductible against supplier payments**, with multiple advances, **partial deductions**, and an automatically maintained **outstanding-debt balance** per supplier. Update CLAUDE.md accordingly when this lands.
+> ⚠️ **Superseded Phase 9's advances decision.** Phase 9 shipped advances as a standalone, manually-reconciled ledger; the owner confirmed the blueprint model instead — approved advances are a recoverable **debt** with **partial deductions** and an auto-maintained **outstanding balance**. CLAUDE.md updated.
+
+**Implementation notes (what shipped):**
+- **A — debt ledger (0029):** `advance_deductions` + `supplier_outstanding_debt()` (= Σ approved advances − Σ deductions); over-deduction blocked by trigger; manager/accounting record own-site, owner anywhere; deductions audited when tied to a visit. Surfaced on the `SupplierFinanceCard`.
+- **B — utility billing (0030):** `utility_charges` per visit (light_bill/other), recorded by processing/manager while the visit is open; branded **utility invoice PDF** at `/api/pdf/utility/[id]` (machines + charges + totals); `UtilityChargesCard`.
+- **C — payment statuses (0031):** `pending → approved (owner only) → paid/partially_paid (accounting/owner)` + `rejected`; non-owner inserts limited to pending/paid; legacy rows backfill `paid`; balances count only executed rows. Workflow buttons on `SupplierFinanceCard`.
+- **D — receipts (0032):** private `receipts` Storage bucket; upload accounting/owner, read accounting/manager/owner (Storage RLS); `payments.receipt_path`; upload control on the finance card.
+- **E — expense approval (0033):** consumables gain optional `amount_naira` + `approval_status` (owner-only flip, stamped); managers may submit expenses; approval UI on the consumables screen.
+- **F — cost-price dashboard (0034):** `cost_price_runs` + `cost_price_run_lots` (mixed materials OK; snapshot via trigger; selling nothing); `/manager/cost-price` + `/accounting/cost-price` via shared `CostPriceTool`.
 
 **Artifacts (when planning):**
 - Spec/plan under `docs/superpowers/` as usual; migrations continue after Phase 10's.
@@ -1237,22 +1245,22 @@ The owner confirmed mid-phase that the blueprint's Auditor is the **same person 
 
 ---
 
-**Planning step (confirm before building):**
+**Defaults applied (revisit with the owner if wrong):**
 
-1. **Deduction authority.** Manager deducts (blueprint) — does the owner approve each deduction, or only see it in the audit trail?
-2. **Light bills**: per-visit charge, per-site monthly expense, or both?
-3. **Partially Paid semantics**: derived from payment rows vs balance (recommended) or manually set by the accountant?
-4. **Expense vs consumables**: confirm the single-table merge.
-5. **Does the debt balance block new advances** past a threshold, or only warn?
+1. **Deduction authority:** manager *and* accountant record deductions; they appear in the audit trail (no separate owner approval per deduction — the original advance was already approved).
+2. **Light bills:** per-visit charge (`utility_charges`), settled through the existing payments ledger; no separate per-site monthly module.
+3. **Partially paid:** an explicit accountant action in the status workflow (not auto-derived), so partial disbursements are recorded deliberately.
+4. **Expense = consumables:** single-table merge confirmed (amount + approval columns added).
+5. **Debt does not block new advances** — it's tracked and surfaced, not a hard gate (matches "surface, don't block").
 
-**Testing strategy:** ledger-balance invariants (sum of rows = balance; partial deduction carries forward), deduction permission tests, payment-status transition tests, Storage RLS tests (receiving/inventory denied receipt access), utility-invoice PDF route auth, cost-price computation correctness.
+**Testing delivered:** debt balance + partial-deduction carry-forward + over-deduction block; deduction permissions; full payment-status lifecycle + illegal-jump rejection; live Storage RLS (accountant upload ok, receiving denied, manager/owner download); utility charges per role + closed-visit block; expense approval (owner-only flip); cost-price weighted-average correctness + cross-site read.
 
-**Phase 11 Playwright walkthrough (abbreviated):** give supplier two advances → price a visit → deduct part → balance carries → pay remainder → status partially_paid → upload receipt → verify receiving user cannot open the receipt URL → generate utility invoice PDF → cost-price dashboard combines two lots and shows the weighted price.
+**Phase 11 Playwright walkthrough (abbreviated):** give supplier two advances (approve both) → open a visit → SupplierFinanceCard shows outstanding debt → deduct part → balance carries → accountant raises a payout → owner approves → accountant marks partially_paid then paid → upload receipt → confirm a receiving user cannot open the receipt → add a light bill → download the utility invoice PDF → /manager/cost-price combines two lots and shows the weighted price.
 
 **Manager checkpoints in Phase 11:**
-1. This phase **ends the "not a full financial system" stance for supplier money** — the per-supplier ledger becomes authoritative. Bulk-sale revenue (buyer side) remains owner's domain, outside the app.
-2. Ledger rows are append-only; corrections are reversal rows, never edits.
-3. Storage bucket must be private from day one — a public bucket leaks receipts.
+1. This phase **ends the "not a full financial system" stance for supplier money** — the per-supplier debt balance becomes authoritative. Bulk-sale revenue (buyer side) remains owner's domain, outside the app.
+2. Storage bucket is private from day one (`public = false`) — a public bucket would leak receipts.
+3. Only executed payments (`paid`/`partially_paid`) count toward visit balances; pending/approved/rejected are workflow states.
 
 ---
 

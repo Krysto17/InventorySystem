@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { VisitTimeline } from "@/components/visits/VisitTimeline";
 import { BatchMaterials } from "@/components/visits/BatchMaterials";
+import { UtilityChargesCard } from "@/components/visits/UtilityChargesCard";
+import { SupplierFinanceCard } from "@/components/visits/SupplierFinanceCard";
 import { PdfDownloadBar } from "@/components/visits/PdfDownloadBar";
 import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
@@ -21,6 +23,7 @@ export default async function VisitDetailPage({
     .from("visits")
     .select(`
       id, state, entry_path, vehicle_plate, created_at, closed_at, processing_deducted,
+      supplier_id,
       site:sites(name),
       supplier:suppliers(name, phone),
       declared_material_type:material_types(name),
@@ -79,7 +82,7 @@ export default async function VisitDetailPage({
   const { data: paymentsRaw } = await supabase
     .from("payments")
     .select(`
-      id, direction, amount, method, notes, paid_at,
+      id, direction, amount, method, notes, paid_at, status,
       recorded_by_profile:profiles!payments_recorded_by_fkey(full_name)
     `)
     .eq("visit_id", id)
@@ -229,12 +232,19 @@ export default async function VisitDetailPage({
     processingNorm
       ? processingNorm.usage.reduce((s, u) => s + Number(u.line_cost), 0)
       : null;
+  // Only executed payments count toward balances (Phase 11: pending/approved/
+  // rejected rows are workflow states, not money moved).
+  const executed = new Set(["paid", "partially_paid"]);
+  const isExecuted = (p: { id: string }) => {
+    const raw = (paymentsRaw ?? []).find((r) => r.id === p.id);
+    return raw == null || executed.has((raw.status as string) ?? "paid");
+  };
   const processingFeePaid = paymentsNorm
-    .filter((p) => p.direction === "processing_fee_in")
+    .filter((p) => p.direction === "processing_fee_in" && isExecuted(p))
     .reduce((s, p) => s + p.amount, 0);
   const purchaseAmountOwed = pricingNorm?.purchase_amount ?? null;
   const purchaseAmountPaid = paymentsNorm
-    .filter((p) => p.direction === "purchase_amount_out")
+    .filter((p) => p.direction === "purchase_amount_out" && isExecuted(p))
     .reduce((s, p) => s + p.amount, 0);
 
   const paymentBalance = {
@@ -274,6 +284,16 @@ export default async function VisitDetailPage({
     <BatchMaterials
       visitId={visitNorm.id}
       visitState={visitNorm.state}
+      viewerRole={me.role as Role}
+    />
+    <UtilityChargesCard
+      visitId={visitNorm.id}
+      visitState={visitNorm.state}
+      viewerRole={me.role as Role}
+    />
+    <SupplierFinanceCard
+      visitId={visitNorm.id}
+      supplierId={(visit as { supplier_id?: string }).supplier_id ?? null}
       viewerRole={me.role as Role}
     />
     <VisitTimeline

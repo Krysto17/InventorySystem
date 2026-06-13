@@ -1,16 +1,25 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { createConsumable } from "./actions";
+import { getProfile } from "@/lib/auth/get-profile";
+import { createConsumable, reviewExpense } from "./actions";
 import { CONSUMABLE_CATEGORIES, CATEGORY_LABELS } from "./categories";
 import { formatTimestamp } from "@/lib/visits/format";
 
+const STATUS_BADGE: Record<string, string> = {
+  pending: "bg-yellow-100 text-yellow-800",
+  approved: "bg-green-100 text-green-800",
+  rejected: "bg-red-100 text-red-800",
+};
+
 export default async function ConsumablesPage() {
+  const me = await getProfile();
+  const isOwner = me?.role === "owner";
   const supabase = await createClient();
 
   const { data: consumables } = await supabase
     .from("consumables")
     .select(`
-      id, name, category, entry_date, comment, created_at,
+      id, name, category, entry_date, comment, created_at, amount_naira, approval_status,
       recorded_by_profile:profiles!consumables_recorded_by_fkey(full_name)
     `)
     .order("entry_date", { ascending: false })
@@ -66,6 +75,16 @@ export default async function ConsumablesPage() {
             </label>
           </div>
           <label className="block text-sm font-medium">
+            Amount (₦, optional)
+            <input
+              type="number"
+              name="amount_naira"
+              min="0.01"
+              step="0.01"
+              className="mt-1 block w-full border rounded px-2 py-1 text-sm"
+            />
+          </label>
+          <label className="block text-sm font-medium">
             Comment
             <textarea
               name="comment"
@@ -94,6 +113,8 @@ export default async function ConsumablesPage() {
                   <th className="px-3 py-2">Date</th>
                   <th className="px-3 py-2">Name</th>
                   <th className="px-3 py-2">Category</th>
+                  <th className="px-3 py-2">Amount</th>
+                  <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2">Comment</th>
                   <th className="px-3 py-2">Logged by</th>
                 </tr>
@@ -106,11 +127,34 @@ export default async function ConsumablesPage() {
                       ? (rec[0] as { full_name?: string })?.full_name
                       : (rec as { full_name?: string } | null)?.full_name) ?? "—";
                   const category = c.category as keyof typeof CATEGORY_LABELS;
+                  const status = c.approval_status as string;
                   return (
                     <tr key={c.id as string} className="hover:bg-gray-50">
                       <td className="px-3 py-2 whitespace-nowrap">{c.entry_date as string}</td>
                       <td className="px-3 py-2 font-medium">{c.name as string}</td>
                       <td className="px-3 py-2">{CATEGORY_LABELS[category] ?? category}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {c.amount_naira != null ? `₦${Number(c.amount_naira).toLocaleString()}` : "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`rounded px-1.5 py-0.5 text-xs ${STATUS_BADGE[status] ?? ""}`}>
+                          {status}
+                        </span>
+                        {isOwner && status === "pending" && (
+                          <span className="ml-2 inline-flex gap-1">
+                            <form action={reviewExpense} className="inline">
+                              <input type="hidden" name="consumable_id" value={c.id as string} />
+                              <input type="hidden" name="decision" value="approved" />
+                              <button type="submit" className="rounded bg-green-700 px-1.5 py-0.5 text-[10px] text-white">✓</button>
+                            </form>
+                            <form action={reviewExpense} className="inline">
+                              <input type="hidden" name="consumable_id" value={c.id as string} />
+                              <input type="hidden" name="decision" value="rejected" />
+                              <button type="submit" className="rounded border px-1.5 py-0.5 text-[10px]">✗</button>
+                            </form>
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-gray-600">{(c.comment as string | null) ?? "—"}</td>
                       <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
                         {recName} · {formatTimestamp(c.created_at as string)}

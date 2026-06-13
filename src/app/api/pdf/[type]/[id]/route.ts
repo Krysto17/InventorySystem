@@ -3,8 +3,9 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import React from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
-import { fetchVisitPdfData, fetchBulkSalePdfData, fetchLotSalePdfData } from "@/lib/pdf/fetch-data";
+import { fetchVisitPdfData, fetchBulkSalePdfData, fetchLotSalePdfData, fetchUtilityInvoiceData } from "@/lib/pdf/fetch-data";
 import { LotSaleBreakdownPdf } from "@/lib/pdf/templates/lot-sale-breakdown";
+import { UtilityInvoicePdf } from "@/lib/pdf/templates/utility-invoice";
 import { ProcessingReportPdf } from "@/lib/pdf/templates/processing-report";
 import { AnalysisReportPdf }   from "@/lib/pdf/templates/analysis-report";
 import { PricingSheetPdf }     from "@/lib/pdf/templates/pricing-sheet";
@@ -64,6 +65,16 @@ export async function GET(
     const docId = docHash(type, id);
     const buffer = await renderToBuffer(pdf(BulkSaleReceiptPdf, { data, docId }));
     return pdfResponse(buffer, `bulk-sale-${id.slice(0, 8)}.pdf`);
+  }
+
+  // ── Utility / processing invoice (Phase 11) ───────────────────────────────
+  if (type === "utility") {
+    const data = await fetchUtilityInvoiceData(id);
+    if (!data) return notFound("Visit not found");
+
+    const docId = docHash(type, id);
+    const buffer = await renderToBuffer(pdf(UtilityInvoicePdf, { data, docId }));
+    return pdfResponse(buffer, `utility-invoice-${id.slice(0, 8)}.pdf`);
   }
 
   // ── Lot-tracked bulk sale breakdown (Phase 9) ─────────────────────────────

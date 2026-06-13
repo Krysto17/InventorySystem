@@ -60,7 +60,17 @@ as a branded PDF.
 - **Two money figures per visit:** *processing fee* (client owes company; only on the
   `unprocessed` path; owed even if no sale) and *purchase amount* (company owes client;
   only if agreement). `processing_deducted` flag + a `payments` ledger handle
-  net/separate settlement and installments.
+  net/separate settlement and installments. **Payments carry a status** (Phase 11:
+  `pending → approved` (owner) `→ paid/partially_paid` (accounting) + `rejected`); only
+  executed rows count toward balances. **Utility charges** (`utility_charges`: light
+  bills etc.) bill the client per visit on top of the processing fee.
+- **Supplier debt (Phase 11):** approved **advances** are a recoverable debt; manager/
+  accounting record **partial deductions** (`advance_deductions`) against payouts;
+  `supplier_outstanding_debt()` is the running balance (over-deduction blocked in DB).
+  This supersedes Phase 9's standalone-advances stance for supplier money. Receipts live
+  in a **private Storage bucket** (accounting uploads; accounting/manager/owner read).
+  **Expenses** = the consumables log + `amount_naira` + owner approval. A **cost-price
+  dashboard** (`cost_price_runs`) saves ad-hoc weighted averages over `stock_lots`.
 - **Machines** have a `charge_basis` of `weight`/`bag`/`hour` + a rate; processing cost is
   derived and snapshotted.
 - **Analysis grade drives price** — pricing is blocked until an analysis record exists.
