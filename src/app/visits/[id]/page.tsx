@@ -2,6 +2,10 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { VisitTimeline } from "@/components/visits/VisitTimeline";
+import { ApprovalChain } from "@/components/visits/ApprovalChain";
+import { Stamp, Eyebrow } from "@/components/ui/stamp";
+import { Badge, stateVariant } from "@/components/ui/badge";
+import { STATE_LABELS } from "@/lib/visits/state-machine";
 import { BatchMaterials } from "@/components/visits/BatchMaterials";
 import { UtilityChargesCard } from "@/components/visits/UtilityChargesCard";
 import { SupplierFinanceCard } from "@/components/visits/SupplierFinanceCard";
@@ -271,7 +275,20 @@ export default async function VisitDetailPage({
     : null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 p-6">
+      <header className="space-y-3 border-b-[1.5px] border-line pb-4">
+        <Eyebrow>{visitNorm.site?.name ?? "—"} · supply visit</Eyebrow>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-extrabold tracking-tight text-ink">
+            {visitNorm.supplier?.name ?? "—"}
+          </h1>
+          <Stamp>{visitNorm.id.slice(0, 8).toUpperCase()}</Stamp>
+          <Badge variant={stateVariant(visitNorm.state)}>
+            {STATE_LABELS[visitNorm.state] ?? visitNorm.state}
+          </Badge>
+        </div>
+        <ApprovalChain state={visitNorm.state} entryPath={visitNorm.entry_path} />
+      </header>
       <PdfDownloadBar
         visitId={visitNorm.id}
         visitState={visitNorm.state}

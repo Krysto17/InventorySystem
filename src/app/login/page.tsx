@@ -6,19 +6,55 @@ import { signIn } from "./actions";
 export default function LoginPage() {
   const [state, action, pending] = useActionState(signIn, null);
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
-      <h1 className="text-2xl font-bold">MAGNETIC JOEZION NIG. LTD</h1>
-      <form action={action} className="flex flex-col gap-3">
-        <input name="username" placeholder="Username" required
-          className="rounded border p-2" />
-        <input name="password" type="password" placeholder="Password" required
-          className="rounded border p-2" />
-        {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
-        <button disabled={pending}
-          className="rounded bg-black p-2 text-white disabled:opacity-50">
-          {pending ? "Signing in…" : "Sign in"}
-        </button>
-      </form>
+    <main className="bg-rule flex min-h-screen items-center justify-center p-6">
+      <div className="shadow-offset w-[min(420px,92vw)] border-[1.5px] border-ink bg-panel">
+        <div className="flex items-baseline justify-between border-b-[1.5px] border-ink px-6 py-5">
+          <div className="text-xl font-extrabold tracking-tight text-ink">
+            Magnetic<span className="text-ore">Joezion</span>
+          </div>
+          <div className="mono text-[10px] text-ink-2">INVENTORY · LEDGER</div>
+        </div>
+
+        <form action={action} className="flex flex-col gap-4 p-6">
+          <div>
+            <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.1em] text-ink-2">
+              Username
+            </label>
+            <input
+              name="username"
+              required
+              autoComplete="username"
+              className="mono w-full rounded border-[1.5px] border-line bg-panel p-2.5 text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-ore"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.1em] text-ink-2">
+              Password
+            </label>
+            <input
+              name="password"
+              type="password"
+              required
+              autoComplete="current-password"
+              className="mono w-full rounded border-[1.5px] border-line bg-panel p-2.5 text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-ore"
+            />
+          </div>
+
+          {state?.error && <p className="text-sm font-medium text-reject">{state.error}</p>}
+
+          <button
+            disabled={pending}
+            className="w-full rounded border-[1.5px] border-ore bg-ore p-3 text-sm font-bold text-white hover:bg-ore-strong disabled:opacity-50"
+          >
+            {pending ? "Signing in…" : "Sign in"}
+          </button>
+
+          <p className="border-t border-dashed border-line pt-3.5 text-[12px] text-ink-2">
+            Your site and role are set by the owner. New accounts receive a one-time
+            password over WhatsApp and set their own on first login.
+          </p>
+        </form>
+      </div>
     </main>
   );
 }

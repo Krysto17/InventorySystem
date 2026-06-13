@@ -64,25 +64,25 @@ export function Sidebar({ role, fullName, username, open, onClose }: Props) {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-zinc-200 bg-white transition-transform dark:border-zinc-800 dark:bg-zinc-900 md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r-[1.5px] border-line bg-[#F4F5F4] transition-transform dark:bg-[#1B1F23] md:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         {/* Brand */}
-        <div className="flex items-center justify-between px-4 py-4">
+        <div className="flex items-center justify-between border-b-[1.5px] border-line px-4 py-3.5">
           <Link href={`/${role}`.replace("/owner", "/owner")} className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
+            <span className="flex h-8 w-8 items-center justify-center rounded bg-ore text-sm font-bold text-white">
               MJ
             </span>
-            <span className="text-sm font-semibold leading-tight text-zinc-900 dark:text-zinc-50">
+            <span className="text-sm font-extrabold leading-tight tracking-tight text-ink">
               Magnetic Joezion
-              <span className="block text-[10px] font-normal text-zinc-500">Inventory System</span>
+              <span className="mono block text-[9px] font-normal tracking-[0.08em] text-ink-2">INVENTORY · LEDGER</span>
             </span>
           </Link>
           <button
             type="button"
             onClick={onClose}
-            className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 md:hidden"
+            className="text-ink-2 hover:text-ink md:hidden"
             aria-label="Close menu"
           >
             <X size={18} />
@@ -90,7 +90,10 @@ export function Sidebar({ role, fullName, username, open, onClose }: Props) {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
+        <nav className="flex-1 overflow-y-auto py-3">
+          <div className="px-5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#9AA3A1]">
+            Modules
+          </div>
           {items.map((item) => {
             const Icon = ICONS[item.icon];
             const active = isActivePath(item.href, pathname);
@@ -99,13 +102,13 @@ export function Sidebar({ role, fullName, username, open, onClose }: Props) {
                 key={item.href}
                 href={item.href}
                 onClick={onClose}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                className={`flex items-center gap-3 border-l-[3px] px-4 py-2.5 text-[13px] font-semibold transition-colors ${
                   active
-                    ? "bg-brand-50 font-medium text-brand-700 dark:bg-brand-600/15 dark:text-brand-100"
-                    : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    ? "border-ore bg-panel text-ore"
+                    : "border-transparent text-ink-2 hover:text-ink"
                 }`}
               >
-                <Icon size={17} />
+                <Icon size={16} />
                 {item.label}
               </Link>
             );
@@ -113,17 +116,17 @@ export function Sidebar({ role, fullName, username, open, onClose }: Props) {
         </nav>
 
         {/* User + logout */}
-        <div className="border-t border-zinc-200 p-3 dark:border-zinc-800">
+        <div className="border-t-[1.5px] border-line p-3">
           <div className="mb-2 px-1">
-            <div className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-50">{fullName}</div>
-            <div className="truncate text-xs text-zinc-500">
+            <div className="truncate text-sm font-semibold text-ink">{fullName}</div>
+            <div className="mono truncate text-[11px] text-ink-2">
               {username} · {ROLE_LABEL[role]}
             </div>
           </div>
           <form action={logout}>
             <button
               type="submit"
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm font-semibold text-ink-2 hover:bg-panel hover:text-ink"
             >
               <LogOut size={16} /> Sign out
             </button>
