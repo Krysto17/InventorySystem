@@ -6,6 +6,7 @@ import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
 import { setSettlementStatus } from "@/app/visits/[id]/settlement-actions";
 import { setAdvanceApproval } from "@/app/(manager)/manager/advances/actions";
+import { reviewExpense } from "@/app/(inventory)/inventory/consumables/actions";
 
 const g1 = <T,>(v: unknown): T | null =>
   Array.isArray(v) ? ((v[0] ?? null) as T | null) : ((v ?? null) as T | null);
@@ -26,6 +27,12 @@ export default async function OwnerApprovalsPage() {
         .select("id, purpose, amount_naira, created_at, supplier:suppliers(name, supplier_code)")
         .eq("approval_status", "pending").order("created_at", { ascending: true }),
     ]);
+
+  const { data: pendingExpenses } = await supabase
+    .from("consumables")
+    .select("id, name, category, amount_naira, entry_date, site:sites(name)")
+    .eq("approval_status", "pending")
+    .order("entry_date", { ascending: true });
 
   // Overview: materials on hand (ledger balance), light bills deducted, advances out.
   const onHand = new Map<string, number>();
@@ -56,7 +63,7 @@ export default async function OwnerApprovalsPage() {
         </Card>
         <Card>
           <CardHeader><h2 className="text-sm font-semibold">Pending approvals</h2></CardHeader>
-          <CardContent><div className="mono text-2xl font-bold text-ore">{(pendingSupplies?.length ?? 0) + (pendingAdvances?.length ?? 0)}</div></CardContent>
+          <CardContent><div className="mono text-2xl font-bold text-ore">{(pendingSupplies?.length ?? 0) + (pendingAdvances?.length ?? 0) + (pendingExpenses?.length ?? 0)}</div></CardContent>
         </Card>
       </div>
 
@@ -157,6 +164,48 @@ export default async function OwnerApprovalsPage() {
                       </form>
                       <form action={setAdvanceApproval}>
                         <input type="hidden" name="advance_id" value={a.id as string} />
+                        <input type="hidden" name="decision" value="rejected" />
+                        <button type="submit" className="rounded border px-3 py-1 text-xs">Reject</button>
+                      </form>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Pending expenses (consumables) */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Expenses awaiting approval</h2>
+            <Badge variant={pendingExpenses?.length ? "yellow" : "default"}>{pendingExpenses?.length ?? 0}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {(pendingExpenses?.length ?? 0) === 0 ? (
+            <p className="px-4 py-3 text-sm text-ink-2">No expenses pending.</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {(pendingExpenses ?? []).map((e) => {
+                const site = g1<{ name: string }>((e as { site: unknown }).site);
+                return (
+                  <li key={e.id as string} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+                    <div>
+                      <strong>{e.name as string}</strong>
+                      <span className="text-ink-2"> · {String(e.category).replace(/_/g, " ")} · {site?.name ?? "—"} · {e.entry_date as string}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{e.amount_naira != null ? ngn(Number(e.amount_naira)) : "—"}</span>
+                      <form action={reviewExpense}>
+                        <input type="hidden" name="consumable_id" value={e.id as string} />
+                        <input type="hidden" name="decision" value="approved" />
+                        <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve</button>
+                      </form>
+                      <form action={reviewExpense}>
+                        <input type="hidden" name="consumable_id" value={e.id as string} />
                         <input type="hidden" name="decision" value="rejected" />
                         <button type="submit" className="rounded border px-3 py-1 text-xs">Reject</button>
                       </form>

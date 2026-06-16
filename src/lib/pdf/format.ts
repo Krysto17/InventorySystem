@@ -11,7 +11,10 @@ export function formatTs(iso: string | null | undefined): string {
 
 export function formatNgn(amount: number | null | undefined): string {
   if (amount == null) return "—";
-  return `₦${Number(amount).toLocaleString("en-NG", { minimumFractionDigits: 2 })}`;
+  // PDFs render with the built-in Helvetica font, which has no ₦ (U+20A6)
+  // glyph, so the symbol prints as a broken bar. Use the unambiguous "NGN"
+  // currency code instead, which is always clear and visible in the PDF.
+  return `NGN ${Number(amount).toLocaleString("en-NG", { minimumFractionDigits: 2 })}`;
 }
 
 export function formatKg(weight: number | null | undefined): string {

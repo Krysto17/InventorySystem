@@ -95,9 +95,16 @@ describe("advances RLS", () => {
     expect(data ?? []).toHaveLength(0);
   });
 
-  it("accountant can approve an advance; approved_at is stamped", async () => {
+  it("owner approves an advance (approved_at stamped); accountant cannot approve", async () => {
     const id = await insertPending(siteAId, mgrA.userId);
-    const { error } = await acctA.client
+    // The accountant may no longer approve — only the owner does (accountant pays).
+    const acctTry = await acctA.client
+      .from("advances")
+      .update({ approval_status: "approved" })
+      .eq("id", id);
+    expect(acctTry.error).not.toBeNull();
+
+    const { error } = await owner.client
       .from("advances")
       .update({ approval_status: "approved" })
       .eq("id", id);

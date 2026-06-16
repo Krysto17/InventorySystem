@@ -156,8 +156,8 @@ export async function BatchSettlementCard({
           </div>
         )}
 
-        {/* Accountant: pay once approved */}
-        {(isAccounting || isOwner) && status === "approved" && (
+        {/* Accountant: pay once approved (only the accountant marks paid) */}
+        {isAccounting && status === "approved" && (
           <form action={setSettlementStatus} className="border-t border-line pt-3">
             <input type="hidden" name="visit_id" value={visitId} />
             <input type="hidden" name="settlement_id" value={settlement!.id as string} />

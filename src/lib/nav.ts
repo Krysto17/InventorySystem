@@ -50,6 +50,7 @@ const NAV: Record<Role, NavItem[]> = {
   ],
   accounting: [
     { label: "Settlements", href: "/accounting", icon: "accounting" },
+    { label: "To pay", href: "/accounting/payouts", icon: "accounting" },
     { label: "Reports", href: "/accounting/reports", icon: "reports" },
   ],
   inventory: [
@@ -61,6 +62,7 @@ const NAV: Record<Role, NavItem[]> = {
   owner: [
     { label: "Dashboard", href: "/owner", icon: "dashboard" },
     { label: "Approvals", href: "/owner/approvals", icon: "pricing" },
+    { label: "Ledger", href: "/owner/ledger", icon: "accounting" },
     { label: "All visits", href: "/owner/visits", icon: "visits" },
     { label: "Search", href: "/owner/search", icon: "search" },
     { label: "Employees", href: "/owner/employees", icon: "employees" },
