@@ -1,0 +1,7 @@
+- generic [active] [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e14] [cursor=pointer]:
+    - img [ref=e15]
+  - alert [ref=e8]
+  - main [ref=e23]:
+    - heading "Owner — Oversight" [level=1] [ref=e24]
+    - paragraph [ref=e25]: Signed in as Owner (owner)

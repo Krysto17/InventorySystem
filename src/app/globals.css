@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+/* Class-based dark mode (driven by next-themes setting `class="dark"` on <html>). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* ── Industrial-ledger palette ─────────────────────────────────────────────
+     Laterite ochre (cassiterite of the Jos Plateau) on cool graphite + zinc. */
+  --color-ore:           #9A4E0F;
+  --color-ore-strong:    #7C3F0C;
+  --color-ore-soft:      #F3E4D4;
+  --color-approve:       #1F6B3A;
+  --color-approve-soft:  #DEEDE2;
+  --color-reject:        #8C2B2B;
+  --color-reject-soft:   #F2DEDE;
+  --color-pending:       #7A6A1F;
+  --color-pending-soft:  #F0EAD0;
+  --color-paper:         #EBEDEC;
+  --color-panel:         #FFFFFF;
+  --color-ink:           #1B1F23;
+  --color-ink-2:         #4A5258;
+  --color-line:          #C9CFCE;
+  --color-stamp:         #2C3338;
+
+  /* Accent ramp: remap the existing `brand-*` utilities onto ochre so every
+     screen built in earlier phases adopts the new accent automatically. */
+  --color-brand-50:  #F7ECE0;
+  --color-brand-100: #F3E4D4;
+  --color-brand-500: #B5651D;
+  --color-brand-600: #9A4E0F;
+  --color-brand-700: #7C3F0C;
+
+  /* Hard, industrial corners (sharpens every rounded-* utility app-wide). */
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 5px;
+  --radius-card: 4px;
+}
+
+:root {
+  --background: #EBEDEC;        /* paper */
+  --foreground: #1B1F23;        /* ink */
+  --font-sans: "Archivo", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.dark {
+  --background: #16191C;        /* graphite */
+  --foreground: #EBEDEC;
+  --color-panel: #1F2429;
+  --color-line:  #353C42;
+  --color-paper: #16191C;
+  --color-ink:   #EBEDEC;
+  --color-ink-2: #9AA3A1;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), "Archivo", Arial, Helvetica, sans-serif;
+}
+
+/* ── Reusable atoms from the prototype ──────────────────────────────────────── */
+
+/* Eyebrow: small ochre uppercase kicker above page titles. */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ore);
+}
+
+/* Stamp: monospace identifier on graphite — for batch / visit / supplier IDs. */
+.stamp {
+  font-family: var(--font-mono), "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: var(--color-stamp);
+  color: #fff;
+  padding: 2px 7px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+/* Offset hard shadow — the signature "carbon-copy" depth (login card, etc.). */
+.shadow-offset { box-shadow: 6px 6px 0 var(--color-ore); }
+
+/* Diagonal-rule paper for the login backdrop. */
+.bg-rule {
+  background: repeating-linear-gradient(135deg, var(--color-paper) 0 38px, #E3E6E4 38px 40px);
+}
+.dark .bg-rule {
+  background: repeating-linear-gradient(135deg, #16191C 0 38px, #1B1F23 38px 40px);
+}
+
+/* Monospace figures for IDs and money. */
+.mono { font-family: var(--font-mono), "IBM Plex Mono", monospace; }
+
+/* Smooth theme transition (colors only). */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color;
+  transition-duration: 120ms;
+}

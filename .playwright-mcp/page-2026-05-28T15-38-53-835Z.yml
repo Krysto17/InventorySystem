@@ -1,0 +1,24 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - heading "Add Employee" [level=1] [ref=e3]
+    - generic [ref=e4]:
+      - textbox "Full name" [ref=e5]
+      - textbox "Username" [ref=e6]
+      - combobox [ref=e7]:
+        - option "gate" [selected]
+        - option "processing"
+        - option "receiving"
+        - option "manager"
+        - option "accounting"
+        - option "inventory"
+        - option "owner"
+      - combobox [ref=e8]:
+        - option "— site (leave blank for owner) —" [selected]
+        - option "Site 1"
+        - option "Site 2"
+        - option "Site 3"
+      - paragraph [ref=e20]: "Created test_gate. Temp password: 2npgJUOlUmEY — send via WhatsApp; they must change it on first login."
+      - button "Create employee" [ref=e9]
+  - button "Open Next.js Dev Tools" [ref=e15] [cursor=pointer]:
+    - img [ref=e16]
+  - alert [ref=e19]

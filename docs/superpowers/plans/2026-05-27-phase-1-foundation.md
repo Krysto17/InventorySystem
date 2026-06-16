@@ -39,7 +39,7 @@ package.json
 .env.local                              # gitignored; Supabase URL + keys
 .env.example                            # committed template
 next.config.ts
-tailwind.config.ts
+postcss.config.mjs                      # Tailwind v4 plugin; v4 has no tailwind.config.ts (theme lives in globals.css)
 vitest.config.ts
 middleware.ts                           # role-based route guard
 supabase/
@@ -94,7 +94,8 @@ tests/
 ## Task 1: Scaffold Next.js + Tailwind + tooling
 
 **Files:**
-- Create: `package.json`, `next.config.ts`, `tailwind.config.ts`, `tsconfig.json`, `.gitignore`, `src/app/layout.tsx`, `src/app/page.tsx`
+- Create: `package.json`, `next.config.ts`, `tsconfig.json`, `postcss.config.mjs`, `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/globals.css`
+- Note: Tailwind v4 has **no** `tailwind.config.ts`; configuration lives in `src/app/globals.css` via `@import "tailwindcss"` + `@theme inline { … }`. The `postcss.config.mjs` registers the `@tailwindcss/postcss` plugin.
 
 - [ ] **Step 1: Scaffold the app**
 

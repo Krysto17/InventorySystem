@@ -1,0 +1,9 @@
+- generic [active] [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e14] [cursor=pointer]:
+    - img [ref=e15]
+  - alert [ref=e8]
+  - main [ref=e18]:
+    - heading "Set a new password" [level=1] [ref=e19]
+    - generic [ref=e20]:
+      - textbox "New password" [ref=e21]
+      - button "Save password" [ref=e22]
