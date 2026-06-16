@@ -60,6 +60,7 @@ const NAV: Record<Role, NavItem[]> = {
   ],
   owner: [
     { label: "Dashboard", href: "/owner", icon: "dashboard" },
+    { label: "Approvals", href: "/owner/approvals", icon: "pricing" },
     { label: "All visits", href: "/owner/visits", icon: "visits" },
     { label: "Search", href: "/owner/search", icon: "search" },
     { label: "Employees", href: "/owner/employees", icon: "employees" },

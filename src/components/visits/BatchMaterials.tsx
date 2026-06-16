@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { addMaterialLine, advanceToQc, recordXrf, setLinePrice } from "@/app/visits/[id]/batch-actions";
+import { addMaterialLine, advanceToQc, recordXrf, setLinePrice, finalizeLinePrice } from "@/app/visits/[id]/batch-actions";
 import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
 
@@ -13,6 +13,7 @@ type Line = {
   requires_analysis: boolean;
   unit_price: number | null;
   purchase_amount: number | null;
+  price_finalized: boolean;
   material: { name: string } | null;
   xrf: { result: string | null; submitted: boolean; weight_kg: number | null; mismatch: boolean } | null;
 };
@@ -34,7 +35,7 @@ export async function BatchMaterials({
     .from("visit_materials")
     .select(`
       id, weight_kg, magnetic_analysis, receiving_comment, requires_analysis,
-      unit_price, purchase_amount,
+      unit_price, purchase_amount, price_finalized,
       material:material_types(name),
       xrf:xrf_records(result, submitted, weight_kg, mismatch)
     `)
@@ -49,6 +50,7 @@ export async function BatchMaterials({
     requires_analysis: Boolean(l.requires_analysis),
     unit_price: l.unit_price != null ? Number(l.unit_price) : null,
     purchase_amount: l.purchase_amount != null ? Number(l.purchase_amount) : null,
+    price_finalized: Boolean(l.price_finalized),
     material: g1((l as { material: unknown }).material) as { name: string } | null,
     xrf: g1((l as { xrf: unknown }).xrf) as Line["xrf"],
   }));
@@ -156,25 +158,46 @@ export async function BatchMaterials({
                   <div className="mt-2 text-xs">
                     Price: ₦{l.unit_price.toLocaleString()} / kg ·{" "}
                     <span className="font-medium">₦{(l.purchase_amount ?? 0).toLocaleString()}</span>
+                    {l.price_finalized && (
+                      <span className="ml-2 rounded bg-approve-soft px-1.5 py-0.5 text-[10px] font-medium text-approve">
+                        🔒 finalized by owner
+                      </span>
+                    )}
                   </div>
                 )}
-                {canPrice && (
-                  <form action={setLinePrice} className="mt-2 flex items-end gap-2">
-                    <input type="hidden" name="visit_id" value={visitId} />
-                    <input type="hidden" name="visit_material_id" value={l.id} />
-                    <label className="text-xs">
-                      Price ₦/kg (optional)
-                      <input
-                        type="number"
-                        name="unit_price"
-                        step="0.01"
-                        min="0"
-                        defaultValue={l.unit_price ?? ""}
-                        className="mt-1 block w-32 rounded border px-2 py-1 text-sm"
-                      />
-                    </label>
-                    <button type="submit" className="rounded border px-3 py-1 text-xs hover:bg-zinc-50">Set price</button>
-                  </form>
+
+                {/* Price form — manager is locked out once the owner finalizes */}
+                {canPrice && (viewerRole === "owner" || !l.price_finalized) && (
+                  <div className="mt-2 flex flex-wrap items-end gap-2">
+                    <form action={setLinePrice} className="flex items-end gap-2">
+                      <input type="hidden" name="visit_id" value={visitId} />
+                      <input type="hidden" name="visit_material_id" value={l.id} />
+                      <label className="text-xs">
+                        Price ₦/kg {viewerRole === "owner" ? "(final)" : "(draft)"}
+                        <input
+                          type="number"
+                          name="unit_price"
+                          step="0.01"
+                          min="0"
+                          defaultValue={l.unit_price ?? ""}
+                          className="mt-1 block w-32 rounded border px-2 py-1 text-sm"
+                        />
+                      </label>
+                      <button type="submit" className="rounded border px-3 py-1 text-xs hover:bg-zinc-50">Set price</button>
+                    </form>
+                    {viewerRole === "owner" && l.unit_price != null && !l.price_finalized && (
+                      <form action={finalizeLinePrice}>
+                        <input type="hidden" name="visit_id" value={visitId} />
+                        <input type="hidden" name="visit_material_id" value={l.id} />
+                        <button type="submit" className="rounded bg-ore px-3 py-1 text-xs font-semibold text-white hover:bg-ore-strong">
+                          Finalize price
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                )}
+                {canPrice && viewerRole !== "owner" && l.price_finalized && (
+                  <div className="mt-2 text-xs text-zinc-500">Price finalized by owner — locked.</div>
                 )}
               </div>
             ))}

@@ -81,6 +81,19 @@ export async function recordXrf(formData: FormData): Promise<void> {
   revalidatePath("/qc");
 }
 
+// Owner finalizes a line's price — the manager can no longer change it
+// (enforced by the DB trigger; this is the UI entry point).
+export async function finalizeLinePrice(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || me.role !== "owner") return;
+  const visitId = String(formData.get("visit_id") ?? "");
+  const lineId = String(formData.get("visit_material_id") ?? "");
+  if (!lineId) return;
+  const supabase = await createClient();
+  await supabase.from("visit_materials").update({ price_finalized: true }).eq("id", lineId);
+  if (visitId) revalidatePath(`/visits/${visitId}`);
+}
+
 // Manager / owner assigns the optional per-line price.
 export async function setLinePrice(formData: FormData): Promise<void> {
   const me = await getProfile();

@@ -1,0 +1,173 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Stamp } from "@/components/ui/stamp";
+import { formatTimestamp } from "@/lib/visits/format";
+import { setSettlementStatus } from "@/app/visits/[id]/settlement-actions";
+import { setAdvanceApproval } from "@/app/(manager)/manager/advances/actions";
+
+const g1 = <T,>(v: unknown): T | null =>
+  Array.isArray(v) ? ((v[0] ?? null) as T | null) : ((v ?? null) as T | null);
+const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+
+export default async function OwnerApprovalsPage() {
+  const supabase = await createClient();
+
+  const [{ data: movements }, { data: settledLightBills }, { data: advances }, { data: pendingSupplies }, { data: pendingAdvances }] =
+    await Promise.all([
+      supabase.from("stock_movements").select("weight, direction, material:material_types(name)"),
+      supabase.from("batch_settlements").select("light_bill_total"),
+      supabase.from("advances").select("amount_naira, approval_status, supplier_id"),
+      supabase.from("batch_settlements")
+        .select("id, visit_id, net_balance, materials_total, light_bill_total, advance_deducted, created_at, visit:visits(supplier:suppliers(name))")
+        .eq("status", "pending").order("created_at", { ascending: true }),
+      supabase.from("advances")
+        .select("id, purpose, amount_naira, created_at, supplier:suppliers(name, supplier_code)")
+        .eq("approval_status", "pending").order("created_at", { ascending: true }),
+    ]);
+
+  // Overview: materials on hand (ledger balance), light bills deducted, advances out.
+  const onHand = new Map<string, number>();
+  for (const m of movements ?? []) {
+    const name = g1<{ name: string }>((m as { material: unknown }).material)?.name ?? "—";
+    onHand.set(name, (onHand.get(name) ?? 0) + (m.direction === "in" ? 1 : -1) * Number(m.weight));
+  }
+  const onHandRows = [...onHand.entries()].filter(([, kg]) => kg > 0.0005).sort((a, b) => a[0].localeCompare(b[0]));
+  const lightBillsDeducted = (settledLightBills ?? []).reduce((s, r) => s + Number(r.light_bill_total), 0);
+  const advancesOut = (advances ?? []).filter((a) => a.approval_status === "approved").reduce((s, a) => s + Number(a.amount_naira), 0);
+
+  return (
+    <main className="p-6 max-w-4xl mx-auto space-y-6">
+      <div className="flex items-center gap-4">
+        <Link href="/owner" className="text-sm text-gray-500 hover:underline">← Dashboard</Link>
+        <h1 className="text-2xl font-bold">Approvals &amp; overview</h1>
+      </div>
+
+      {/* Overview */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Card>
+          <CardHeader><h2 className="text-sm font-semibold">Light bills deducted</h2></CardHeader>
+          <CardContent><div className="mono text-2xl font-bold text-ink">{ngn(lightBillsDeducted)}</div></CardContent>
+        </Card>
+        <Card>
+          <CardHeader><h2 className="text-sm font-semibold">Advances given out</h2></CardHeader>
+          <CardContent><div className="mono text-2xl font-bold text-ink">{ngn(advancesOut)}</div></CardContent>
+        </Card>
+        <Card>
+          <CardHeader><h2 className="text-sm font-semibold">Pending approvals</h2></CardHeader>
+          <CardContent><div className="mono text-2xl font-bold text-ore">{(pendingSupplies?.length ?? 0) + (pendingAdvances?.length ?? 0)}</div></CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader><h2 className="text-sm font-semibold">Materials at hand</h2></CardHeader>
+        <CardContent className="p-0">
+          {onHandRows.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-ink-2">No stock on hand.</p>
+          ) : (
+            <ul className="divide-y divide-line text-sm">
+              {onHandRows.map(([name, kg]) => (
+                <li key={name} className="flex items-center justify-between px-4 py-2">
+                  <span>{name}</span><span className="mono font-medium">{kg.toFixed(3)} kg</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Pending supplies (batch settlements) */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Supplies awaiting approval</h2>
+            <Badge variant={pendingSupplies?.length ? "yellow" : "default"}>{pendingSupplies?.length ?? 0}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {(pendingSupplies?.length ?? 0) === 0 ? (
+            <p className="px-4 py-3 text-sm text-ink-2">No supplies pending.</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {(pendingSupplies ?? []).map((s) => {
+                const sup = g1<{ name: string }>(g1<{ supplier: unknown }>((s as { visit: unknown }).visit)?.supplier);
+                return (
+                  <li key={s.id as string} className="space-y-2 px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <div>
+                        <Link href={`/visits/${s.visit_id}`} className="font-medium underline">{sup?.name ?? "—"}</Link>
+                        <span className="text-ink-2"> · net {ngn(Number(s.net_balance))} · {formatTimestamp(s.created_at as string)}</span>
+                      </div>
+                      <span className="text-xs text-ink-2">
+                        materials {ngn(Number(s.materials_total))} − light {ngn(Number(s.light_bill_total))} − advance {ngn(Number(s.advance_deducted))}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <form action={setSettlementStatus}>
+                        <input type="hidden" name="visit_id" value={s.visit_id as string} />
+                        <input type="hidden" name="settlement_id" value={s.id as string} />
+                        <input type="hidden" name="status" value="approved" />
+                        <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve</button>
+                      </form>
+                      <form action={setSettlementStatus} className="flex items-end gap-2">
+                        <input type="hidden" name="visit_id" value={s.visit_id as string} />
+                        <input type="hidden" name="settlement_id" value={s.id as string} />
+                        <input type="hidden" name="status" value="rejected" />
+                        <input type="text" name="rejection_note" placeholder="Reason" className="rounded border px-2 py-1 text-xs" />
+                        <button type="submit" className="rounded border px-3 py-1 text-xs">Reject</button>
+                      </form>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Pending advances */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Advances awaiting approval</h2>
+            <Badge variant={pendingAdvances?.length ? "yellow" : "default"}>{pendingAdvances?.length ?? 0}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {(pendingAdvances?.length ?? 0) === 0 ? (
+            <p className="px-4 py-3 text-sm text-ink-2">No advances pending.</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {(pendingAdvances ?? []).map((a) => {
+                const sup = g1<{ name: string; supplier_code: string | null }>((a as { supplier: unknown }).supplier);
+                return (
+                  <li key={a.id as string} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+                    <div className="flex items-center gap-2">
+                      <strong>{sup?.name ?? "—"}</strong>
+                      {sup?.supplier_code && <Stamp>{sup.supplier_code}</Stamp>}
+                      <span className="text-ink-2">{a.purpose as string}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{ngn(Number(a.amount_naira))}</span>
+                      <form action={setAdvanceApproval}>
+                        <input type="hidden" name="advance_id" value={a.id as string} />
+                        <input type="hidden" name="decision" value="approved" />
+                        <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve</button>
+                      </form>
+                      <form action={setAdvanceApproval}>
+                        <input type="hidden" name="advance_id" value={a.id as string} />
+                        <input type="hidden" name="decision" value="rejected" />
+                        <button type="submit" className="rounded border px-3 py-1 text-xs">Reject</button>
+                      </form>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </main>
+  );
+}
