@@ -22,14 +22,14 @@ describe("transaction_events written by triggers", () => {
   });
 
   it("each action produces the correct event types", async () => {
-    // Pre-processed visit created directly at in_receiving (no gate stage).
+    // Processed visit created directly at in_receiving (no gate stage).
     const { data: v } = await proc.client
       .from("visits")
       .insert({
         site_id: siteId,
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
-        entry_path: "pre_processed",
+        entry_path: "processed",
         state: "in_receiving",
         created_by: proc.userId,
       })

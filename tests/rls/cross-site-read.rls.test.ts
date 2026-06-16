@@ -25,7 +25,7 @@ describe("cross-site read RLS (manager + accountant)", () => {
     // Seed site B data: a visit, a stock movement, an advance, a stock lot.
     const { data: v } = await adminClient().from("visits").insert({
       site_id: siteBId, supplier_id: supplierId, declared_material_type_id: materialTypeId,
-      entry_path: "pre_processed", state: "in_receiving", created_by: mgrA.userId,
+      entry_path: "processed", state: "in_receiving", created_by: mgrA.userId,
     }).select("id").single();
     visitBId = v!.id as string;
     await adminClient().from("stock_movements").insert({

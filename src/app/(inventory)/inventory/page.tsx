@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatWeight, formatTimestamp } from "@/lib/visits/format";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
 
 export default async function InventoryPage() {
   const supabase = await createClient();
@@ -59,6 +60,8 @@ export default async function InventoryPage() {
           <Link href="/inventory/consumables" className="px-3 py-1.5 border rounded hover:bg-gray-100">Consumables</Link>
         </nav>
       </header>
+
+      <LiveWorkflow />
 
       <Card>
         <CardHeader>

@@ -11,7 +11,7 @@ describe("QC matching + analysis rules (integration)", () => {
   async function newVisit(state = "in_receiving") {
     const { data: v } = await adminClient().from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: monaziteId,
-      entry_path: "pre_processed", state: "in_receiving", created_by: recv.userId,
+      entry_path: "processed", state: "in_receiving", created_by: recv.userId,
     }).select("id").single();
     if (state !== "in_receiving") await adminClient().from("visits").update({ state }).eq("id", v!.id);
     return v!.id as string;
@@ -98,7 +98,7 @@ describe("QC matching + analysis rules (integration)", () => {
     expect(st!.state).toBe("pricing");
   });
 
-  it("suppliers get sequential SUP-MJZ codes and renames keep history", async () => {
+  it("admin-created suppliers fall back to the SUP-MJZ prefix; renames keep history", async () => {
     const { data: s } = await adminClient().from("suppliers")
       .insert({ name: "Musa Ahmed" }).select("id, supplier_code").single();
     expect(s!.supplier_code).toMatch(/^SUP-MJZ-\d{4}$/);
@@ -108,5 +108,18 @@ describe("QC matching + analysis rules (integration)", () => {
       .select("name, former_names").eq("id", s!.id).single();
     expect(renamed!.name).toBe("Ahmed Musa");
     expect(renamed!.former_names).toContain("Musa Ahmed");
+  });
+
+  it("a supplier created by a site user gets a site-prefixed code", async () => {
+    // current_site() drives the prefix from the creating user's site name.
+    const { data: site } = await adminClient().from("sites").select("name").eq("id", siteId).single();
+    const prefix = site!.name.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase();
+    const { data, error } = await recv.client.from("suppliers")
+      .insert({ name: `Site Supplier ${Date.now()}` })
+      .select("supplier_code")
+      .single();
+    expect(error).toBeNull();
+    expect(data!.supplier_code).toBe(`SUP-${prefix}-${data!.supplier_code.slice(-4)}`);
+    expect(data!.supplier_code).toMatch(/^SUP-[A-Z]{3}-\d{4}$/);
   });
 });

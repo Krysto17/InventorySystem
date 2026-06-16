@@ -56,7 +56,7 @@ describe("PDF route access control", () => {
         site_id: siteId,
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
-        entry_path: "pre_processed",
+        entry_path: "processed",
         state: "in_accounting",
         created_by: recv.userId,
       })
@@ -75,9 +75,11 @@ describe("PDF route access control", () => {
         headers: { "Content-Type": "application/json", apikey: anonKey },
         body: JSON.stringify({ email: `${username}@${domain}`, password }),
       });
-      const { access_token } = await r.json() as { access_token: string };
-      // Set as a Next.js-compatible auth cookie
-      return `sb-127-auth-token=${encodeURIComponent(JSON.stringify([access_token, null]))}`;
+      const session = await r.json() as Record<string, unknown>;
+      // @supabase/ssr (>=0.5) stores the full session JSON base64-encoded with a
+      // `base64-` prefix under sb-<host>-auth-token. Mirror that exactly.
+      const value = "base64-" + Buffer.from(JSON.stringify(session)).toString("base64");
+      return `sb-127-auth-token=${value}`;
     }
 
     [ownerCookies, recvCookies] = await Promise.all([

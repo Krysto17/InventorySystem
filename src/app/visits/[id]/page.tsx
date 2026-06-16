@@ -109,7 +109,7 @@ export default async function VisitDetailPage({
   const visitNorm = {
     id: visit.id as string,
     state: visit.state as VisitState,
-    entry_path: visit.entry_path as "unprocessed" | "pre_processed",
+    entry_path: visit.entry_path as "unprocessed" | "processed",
     vehicle_plate: visit.vehicle_plate as string | null,
     created_at: visit.created_at as string,
     closed_at: visit.closed_at as string | null,

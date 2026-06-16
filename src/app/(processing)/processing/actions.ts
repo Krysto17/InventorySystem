@@ -34,7 +34,7 @@ export async function createVisit(
   const entryPath = String(formData.get("entry_path") ?? "").trim();
 
   if (!materialTypeId) return { error: "Material type is required" };
-  if (entryPath !== "unprocessed" && entryPath !== "pre_processed") {
+  if (entryPath !== "unprocessed" && entryPath !== "processed") {
     return { error: "Entry path is required" };
   }
 

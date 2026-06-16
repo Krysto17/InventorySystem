@@ -41,6 +41,8 @@
 :root {
   --background: #EBEDEC;        /* paper */
   --foreground: #1B1F23;        /* ink */
+  --font-sans: "Archivo", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 .dark {

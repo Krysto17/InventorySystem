@@ -9,7 +9,7 @@ describe("xrf_records RLS (confidential QC results)", () => {
   async function newVisitWithLine(siteId: string, state = "in_qc") {
     const { data: v } = await adminClient().from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: materialTypeId,
-      entry_path: "pre_processed", state: "in_receiving", created_by: qcA.userId,
+      entry_path: "processed", state: "in_receiving", created_by: qcA.userId,
     }).select("id").single();
     const { data: line } = await adminClient().from("visit_materials").insert({
       visit_id: v!.id, material_type_id: materialTypeId, weight_kg: 100, recorded_by: qcA.userId,

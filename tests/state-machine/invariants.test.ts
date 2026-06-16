@@ -27,7 +27,7 @@ describe("state-machine invariants", () => {
         site_id: siteId,
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
-        entry_path: "pre_processed",
+        entry_path: "processed",
         state: "in_receiving",
         created_by: proc.userId,
       })
@@ -48,7 +48,7 @@ describe("state-machine invariants", () => {
         site_id: siteId,
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
-        entry_path: "pre_processed",
+        entry_path: "processed",
         state: "in_receiving",
         created_by: proc.userId,
       })

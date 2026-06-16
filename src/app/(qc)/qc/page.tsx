@@ -3,6 +3,7 @@ import { listVisitsByState } from "@/lib/visits/queries";
 import { formatTimestamp } from "@/lib/visits/format";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
 
 export default async function QcHomePage() {
   const queue = await listVisitsByState(["in_qc"]);
@@ -14,6 +15,8 @@ export default async function QcHomePage() {
           {queue.length} visit{queue.length !== 1 ? "s" : ""} awaiting XRF analysis
         </p>
       </header>
+
+      <LiveWorkflow />
 
       <Card>
         <CardHeader>

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
 
-describe("happy path: pre_processed → agreed → in_accounting (no processing stage)", () => {
+describe("happy path: processed → agreed → in_accounting (no processing stage)", () => {
   let siteId: string;
   let proc: TestUser, recv: TestUser, mgr: TestUser;
   let supplierId: string, materialTypeId: string;
@@ -29,7 +29,7 @@ describe("happy path: pre_processed → agreed → in_accounting (no processing 
         site_id: siteId,
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
-        entry_path: "pre_processed",
+        entry_path: "processed",
         state: "in_receiving",
         created_by: proc.userId,
       })

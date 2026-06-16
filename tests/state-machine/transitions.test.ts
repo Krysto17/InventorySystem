@@ -22,7 +22,7 @@ describe("visits state machine — transitions", () => {
   });
 
   // Visits start directly at the pipeline state — no gate stage.
-  async function newVisit(entryPath: "unprocessed" | "pre_processed") {
+  async function newVisit(entryPath: "unprocessed" | "processed") {
     const initialState = entryPath === "unprocessed" ? "in_processing" : "in_receiving";
     const { data, error } = await proc.client
       .from("visits")
@@ -60,7 +60,7 @@ describe("visits state machine — transitions", () => {
   });
 
   it("in_receiving → pricing is REJECTED without analysis_records row", async () => {
-    const id = await newVisit("pre_processed");
+    const id = await newVisit("processed");
     const { error } = await owner.client
       .from("visits")
       .update({ state: "pricing" })
@@ -86,7 +86,7 @@ describe("visits state machine — transitions", () => {
   });
 
   it("entering exited (no-agreement) sets closed_at", async () => {
-    const id = await newVisit("pre_processed");
+    const id = await newVisit("processed");
     await owner.client
       .from("analysis_records")
       .insert({ visit_id: id, weight: 1, grade: "F", recorded_by: owner.userId });

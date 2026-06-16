@@ -40,6 +40,10 @@ const NAV: Record<Role, NavItem[]> = {
   ],
   manager: [
     { label: "Pricing queue", href: "/manager", icon: "pricing" },
+    { label: "Stock", href: "/inventory", icon: "inventory" },
+    { label: "Bulk sales", href: "/inventory/bulk-sales", icon: "bulkSales" },
+    { label: "Lot sales", href: "/inventory/lot-sales", icon: "bulkSales" },
+    { label: "Consumables", href: "/inventory/consumables", icon: "consumables" },
     { label: "Reports", href: "/manager/reports", icon: "reports" },
     { label: "Cost price", href: "/manager/cost-price", icon: "pricing" },
   ],

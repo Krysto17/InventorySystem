@@ -5,6 +5,12 @@ import { ROLE_HOME, type Role } from "@/lib/auth/roles";
 const PUBLIC_PATHS = ["/login", "/set-password"];
 const SHARED_AUTHENTICATED_PREFIXES = ["/visits/"];
 
+// Extra subtrees a role may enter beyond its own home. The manager owns
+// inventory (blueprint: no standalone inventory role), so it reaches /inventory.
+const EXTRA_ROLE_PREFIXES: Record<string, string[]> = {
+  manager: ["/inventory"],
+};
+
 function isSharedAuthenticatedPath(path: string): boolean {
   return SHARED_AUTHENTICATED_PREFIXES.some((p) => path.startsWith(p));
 }
@@ -60,12 +66,15 @@ export async function middleware(req: NextRequest) {
   }
 
   const home = ROLE_HOME[profile.role as Role];
-  // Owner may visit any route; other roles are confined to their home subtree or shared paths.
+  const extraPrefixes = EXTRA_ROLE_PREFIXES[profile.role] ?? [];
+  // Owner may visit any route; other roles are confined to their home subtree,
+  // shared paths, or any extra subtree granted to their role.
   if (
     profile.role !== "owner"
     && !path.startsWith(home)
     && !PUBLIC_PATHS.includes(path)
     && !isSharedAuthenticatedPath(path)
+    && !extraPrefixes.some((p) => path.startsWith(p))
   ) {
     return redirectWithSession(req, res, home);
   }
@@ -73,5 +82,7 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)).*)"],
+  // Exclude /api — route handlers (e.g. /api/pdf) authenticate themselves and
+  // must return JSON 401/403, not an HTML redirect to /login.
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)).*)"],
 };

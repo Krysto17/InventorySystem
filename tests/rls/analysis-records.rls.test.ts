@@ -13,7 +13,7 @@ describe("analysis_records RLS + state transition", () => {
         site_id: siteAId,
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
-        entry_path: "pre_processed",
+        entry_path: "processed",
         state: "in_receiving",
         created_by: recvA.userId,
       })

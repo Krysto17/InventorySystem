@@ -1,22 +1,14 @@
 import type { Metadata } from "next";
-import { Archivo, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/shell/ThemeProvider";
 import { AppShell } from "@/components/shell/AppShell";
 import { getProfile } from "@/lib/auth/get-profile";
 import { createClient } from "@/lib/supabase/server";
 
-// Industrial-ledger type system: Archivo (sans) + IBM Plex Mono (IDs, figures).
-const archivo = Archivo({
-  variable: "--font-sans",
-  subsets: ["latin"],
-});
-
-const plexMono = IBM_Plex_Mono({
-  variable: "--font-mono",
-  weight: ["400", "500", "600"],
-  subsets: ["latin"],
-});
+// Industrial-ledger type system: Archivo (sans) + IBM Plex Mono (IDs, figures),
+// loaded at runtime via <link> (see <head> below) with a system-font fallback,
+// rather than next/font's build-time fetch. The CSS var names (--font-sans /
+// --font-mono) are defined in globals.css.
 
 export const metadata: Metadata = {
   title: "Magnetic Joezion — Inventory",
@@ -45,8 +37,16 @@ export default async function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${archivo.variable} ${plexMono.variable} h-full antialiased`}
+      className="h-full antialiased"
     >
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+        />
+      </head>
       <body className="min-h-full">
         <ThemeProvider>
           <AppShell

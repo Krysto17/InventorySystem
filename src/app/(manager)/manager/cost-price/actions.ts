@@ -15,17 +15,26 @@ export async function createCostPriceRun(formData: FormData): Promise<void> {
   const supabase = await createClient();
   const { data: profile } = await supabase
     .from("profiles").select("site_id").eq("id", me.id).single();
-  let siteId = profile?.site_id as string | null;
-  if (!siteId) {
-    // Owner: anchor the run to the first selected lot's site.
-    const { data: lot } = await supabase.from("stock_lots").select("site_id").eq("id", lotIds[0]).single();
-    siteId = (lot?.site_id as string | null) ?? null;
-  }
+
+  // Anchor site + the material computed to the first selected lot. (A run is a
+  // weighted average for one material; the DB stamps a batch code + datestamp.)
+  const { data: firstLot } = await supabase
+    .from("stock_lots")
+    .select("site_id, material_type_id")
+    .eq("id", lotIds[0])
+    .single();
+
+  const siteId = (profile?.site_id as string | null) ?? (firstLot?.site_id as string | null) ?? null;
   if (!siteId) return;
 
   const { data: run, error } = await supabase
     .from("cost_price_runs")
-    .insert({ site_id: siteId, label, created_by: me.id })
+    .insert({
+      site_id: siteId,
+      label,
+      material_type_id: (firstLot?.material_type_id as string | null) ?? null,
+      created_by: me.id,
+    })
     .select("id")
     .single();
   if (error || !run) return;

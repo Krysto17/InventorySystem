@@ -14,7 +14,7 @@ export type VisitTimelineProps = {
   visit: {
     id: string;
     state: VisitState;
-    entry_path: "unprocessed" | "pre_processed";
+    entry_path: "unprocessed" | "processed";
     vehicle_plate: string | null;
     created_at: string;
     closed_at: string | null;

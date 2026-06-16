@@ -81,14 +81,14 @@ describe("no-agreement exit path", () => {
     expect(Number(usage![0].line_cost)).toBe(100 * 10);
   });
 
-  it("pre_processed: nothing owed when exiting without agreement", async () => {
+  it("processed: nothing owed when exiting without agreement", async () => {
     const { data: v } = await proc.client
       .from("visits")
       .insert({
         site_id: siteId,
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
-        entry_path: "pre_processed",
+        entry_path: "processed",
         state: "in_receiving",
         created_by: proc.userId,
       })

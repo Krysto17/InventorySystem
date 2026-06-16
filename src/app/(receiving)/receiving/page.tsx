@@ -3,6 +3,7 @@ import { listVisitsByState } from "@/lib/visits/queries";
 import { formatTimestamp } from "@/lib/visits/format";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
 
 export default async function ReceivingHomePage() {
   const queue = await listVisitsByState(["in_receiving"]);
@@ -12,6 +13,8 @@ export default async function ReceivingHomePage() {
         <h1 className="text-2xl font-bold">Receiving</h1>
         <p className="text-sm text-gray-500">{queue.length} visit{queue.length !== 1 ? "s" : ""} pending analysis</p>
       </header>
+
+      <LiveWorkflow />
 
       <Card>
         <CardHeader>

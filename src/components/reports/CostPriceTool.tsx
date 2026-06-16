@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
 import { createCostPriceRun } from "@/app/(manager)/manager/cost-price/actions";
 
@@ -25,7 +26,8 @@ export async function CostPriceTool() {
     supabase
       .from("cost_price_runs")
       .select(`
-        id, label, total_weight_kg, total_cost_price, avg_cost_price_per_kg, created_at,
+        id, label, batch_code, total_weight_kg, total_cost_price, avg_cost_price_per_kg, created_at,
+        material:material_types(name),
         items:cost_price_run_lots(
           stock_lot:stock_lots(weight_kg, cost_price_per_kg, material:material_types(name), supplier:suppliers(name))
         )
@@ -82,10 +84,17 @@ export async function CostPriceTool() {
           ) : (
             (runs ?? []).map((r) => {
               const items = ((r as { items: unknown[] }).items ?? []);
+              const runMat = g1<{ name: string }>((r as { material: unknown }).material);
               return (
                 <div key={r.id as string} className="rounded border border-zinc-200 p-3 dark:border-zinc-800">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-medium">{r.label as string}</div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {r.batch_code != null && <Stamp>{r.batch_code as string}</Stamp>}
+                      <span className="text-sm font-medium">{r.label as string}</span>
+                      {runMat?.name && (
+                        <span className="mono text-[11px] uppercase tracking-[0.05em] text-ore">{runMat.name}</span>
+                      )}
+                    </div>
                     <Badge variant="purple">
                       {r.avg_cost_price_per_kg != null ? `${ngn(Number(r.avg_cost_price_per_kg))}/kg` : "—"}
                     </Badge>

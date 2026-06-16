@@ -13,7 +13,7 @@ describe("visit_materials RLS (batch line items)", () => {
         site_id: siteId,
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
-        entry_path: "pre_processed",
+        entry_path: "processed",
         state,
         created_by: recvA.userId,
       })

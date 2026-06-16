@@ -7,7 +7,7 @@ import { getProfile } from "@/lib/auth/get-profile";
 export async function createBulkSale(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me) return;
-  if (me.role !== "inventory" && me.role !== "owner") return;
+  if (me.role !== "inventory" && me.role !== "manager" && me.role !== "owner") return;
 
   const materialTypeId = String(formData.get("material_type_id") ?? "");
   const buyerName = String(formData.get("buyer_name") ?? "").trim();

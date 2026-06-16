@@ -6,7 +6,7 @@ export type VisitQueueRow = {
   id: string;
   created_at: string;
   vehicle_plate: string | null;
-  entry_path: "unprocessed" | "pre_processed";
+  entry_path: "unprocessed" | "processed";
   state: VisitState;
   supplier: { id: string; name: string; phone: string | null } | null;
   declared_material_type: { id: string; name: string } | null;

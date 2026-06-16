@@ -12,7 +12,7 @@ export async function recordPurchaseIntake(
 ): Promise<IntakeState> {
   const me = await getProfile();
   if (!me) return { error: "Not signed in" };
-  if (me.role !== "inventory" && me.role !== "owner") return { error: "Forbidden" };
+  if (me.role !== "inventory" && me.role !== "manager" && me.role !== "owner") return { error: "Forbidden" };
 
   const visitId = String(formData.get("visit_id") ?? "");
   if (!visitId) return { error: "Missing visit id" };

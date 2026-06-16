@@ -29,10 +29,10 @@ describe("multi-material batch → QC → pricing (integration)", () => {
   });
 
   it("runs the full multi-material pipeline", async () => {
-    // 1. processing creates a pre_processed visit straight into receiving
+    // 1. processing creates a processed visit straight into receiving
     const { data: v, error: ve } = await proc.client.from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: matA,
-      entry_path: "pre_processed", state: "in_receiving", created_by: proc.userId,
+      entry_path: "processed", state: "in_receiving", created_by: proc.userId,
     }).select("id").single();
     expect(ve).toBeNull();
     const visitId = v!.id as string;

@@ -13,7 +13,7 @@ describe("installment payments — running balance", () => {
         site_id: siteId,
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
-        entry_path: "pre_processed",
+        entry_path: "processed",
         state: "pricing",
         created_by: acct.userId,
       })

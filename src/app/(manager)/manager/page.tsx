@@ -4,6 +4,7 @@ import { listVisitsByStateWithAnalysis } from "@/lib/visits/queries";
 import { formatTimestamp, formatWeight } from "@/lib/visits/format";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
 
 const g1 = <T,>(v: unknown): T | null =>
   (Array.isArray(v) ? ((v[0] ?? null) as T | null) : ((v ?? null) as T | null));
@@ -39,6 +40,8 @@ export default async function ManagerHomePage() {
         <h1 className="text-2xl font-bold">Manager</h1>
         <p className="text-sm text-gray-500">{queue.length} visit{queue.length !== 1 ? "s" : ""} awaiting pricing</p>
       </header>
+
+      <LiveWorkflow />
 
       <Card>
         <CardHeader>

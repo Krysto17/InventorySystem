@@ -87,7 +87,7 @@ export function IntakeForm({ materialTypes }: { materialTypes: MaterialType[] })
             <input type="radio" name="entry_path" value="unprocessed" required /> Unprocessed
           </label>
           <label className="flex items-center gap-2">
-            <input type="radio" name="entry_path" value="pre_processed" required /> Pre-processed
+            <input type="radio" name="entry_path" value="processed" required /> Processed
           </label>
         </fieldset>
         <p className="text-xs text-gray-500">

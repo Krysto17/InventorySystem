@@ -11,7 +11,7 @@ describe("hybrid record locking (integration)", () => {
   async function batchInQc() {
     const { data: v } = await adminClient().from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: monaziteId,
-      entry_path: "pre_processed", state: "in_receiving", created_by: recv.userId,
+      entry_path: "processed", state: "in_receiving", created_by: recv.userId,
     }).select("id").single();
     const { data: line } = await adminClient().from("visit_materials").insert({
       visit_id: v!.id, material_type_id: monaziteId, weight_kg: 100, recorded_by: recv.userId,
@@ -37,7 +37,7 @@ describe("hybrid record locking (integration)", () => {
   it("receiving edits its line while in_receiving, but not once QC starts", async () => {
     const { data: v } = await adminClient().from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: monaziteId,
-      entry_path: "pre_processed", state: "in_receiving", created_by: recv.userId,
+      entry_path: "processed", state: "in_receiving", created_by: recv.userId,
     }).select("id").single();
     const { data: line } = await adminClient().from("visit_materials").insert({
       visit_id: v!.id, material_type_id: monaziteId, weight_kg: 100, recorded_by: recv.userId,

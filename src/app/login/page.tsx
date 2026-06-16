@@ -48,11 +48,6 @@ export default function LoginPage() {
           >
             {pending ? "Signing in…" : "Sign in"}
           </button>
-
-          <p className="border-t border-dashed border-line pt-3.5 text-[12px] text-ink-2">
-            Your site and role are set by the owner. New accounts receive a one-time
-            password over WhatsApp and set their own on first login.
-          </p>
         </form>
       </div>
     </main>

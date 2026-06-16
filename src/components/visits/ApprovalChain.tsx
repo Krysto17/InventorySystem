@@ -37,7 +37,7 @@ export function ApprovalChain({
   entryPath,
 }: {
   state: VisitState;
-  entryPath?: "unprocessed" | "pre_processed";
+  entryPath?: "unprocessed" | "processed";
 }) {
   const exited = state === "exited";
   // No-agreement off-ramp: completed up to pricing, then an Exited terminal.
@@ -45,7 +45,7 @@ export function ApprovalChain({
 
   if (exited) {
     for (const n of ORDER) {
-      if (n.state === "in_processing" && entryPath === "pre_processed") {
+      if (n.state === "in_processing" && entryPath === "processed") {
         nodes.push({ label: n.label, kind: "skip" });
       } else if (n.state === "in_accounting" || n.state === "awaiting_stock_intake" || n.state === "stocked") {
         // never reached
@@ -57,7 +57,7 @@ export function ApprovalChain({
   } else {
     const currentIdx = ORDER.findIndex((n) => n.state === state);
     ORDER.forEach((n, i) => {
-      if (n.state === "in_processing" && entryPath === "pre_processed") {
+      if (n.state === "in_processing" && entryPath === "processed") {
         nodes.push({ label: n.label, kind: "skip" });
       } else if (i < currentIdx) {
         nodes.push({ label: n.label, kind: "done" });

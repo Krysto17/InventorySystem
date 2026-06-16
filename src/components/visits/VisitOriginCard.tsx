@@ -11,7 +11,7 @@ export function VisitOriginCard({
   supplier: { name: string; phone: string | null } | null;
   material: { name: string } | null;
   vehiclePlate: string | null;
-  entryPath: "unprocessed" | "pre_processed";
+  entryPath: "unprocessed" | "processed";
   createdAt: string;
   createdByName: string | null;
 }) {

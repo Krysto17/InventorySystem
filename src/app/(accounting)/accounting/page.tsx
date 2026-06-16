@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatTimestamp, formatNaira } from "@/lib/visits/format";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
 
 export default async function AccountingHomePage() {
   const supabase = await createClient();
@@ -24,6 +25,8 @@ export default async function AccountingHomePage() {
         <h1 className="text-2xl font-bold">Accounting</h1>
         <p className="text-sm text-gray-500">{visits?.length ?? 0} visit{(visits?.length ?? 0) !== 1 ? "s" : ""} pending settlement</p>
       </header>
+
+      <LiveWorkflow />
 
       <Card>
         <CardHeader>
