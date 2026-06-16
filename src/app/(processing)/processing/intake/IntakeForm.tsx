@@ -67,11 +67,6 @@ export function IntakeForm({ materialTypes }: { materialTypes: MaterialType[] })
 
       <section className="space-y-3">
         <h2 className="font-semibold">Visit</h2>
-        <input
-          name="vehicle_plate"
-          placeholder="Vehicle plate"
-          className="w-full border rounded px-3 py-2"
-        />
         <select
           name="declared_material_type_id"
           required

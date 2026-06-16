@@ -9,6 +9,7 @@ import { STATE_LABELS } from "@/lib/visits/state-machine";
 import { BatchMaterials } from "@/components/visits/BatchMaterials";
 import { UtilityChargesCard } from "@/components/visits/UtilityChargesCard";
 import { SupplierFinanceCard } from "@/components/visits/SupplierFinanceCard";
+import { BatchSettlementCard } from "@/components/visits/BatchSettlementCard";
 import { PdfDownloadBar } from "@/components/visits/PdfDownloadBar";
 import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
@@ -306,6 +307,11 @@ export default async function VisitDetailPage({
     <UtilityChargesCard
       visitId={visitNorm.id}
       visitState={visitNorm.state}
+      viewerRole={me.role as Role}
+    />
+    <BatchSettlementCard
+      visitId={visitNorm.id}
+      supplierId={(visit as { supplier_id?: string }).supplier_id ?? null}
       viewerRole={me.role as Role}
     />
     <SupplierFinanceCard
