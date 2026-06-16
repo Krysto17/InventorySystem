@@ -2,7 +2,6 @@ import { VisitOriginCard } from "./VisitOriginCard";
 import { ProcessingCard } from "./ProcessingCard";
 import { AnalysisCard } from "./AnalysisCard";
 import { PricingCard } from "./PricingCard";
-import { AuditTrail } from "./AuditTrail";
 import { PaymentsCard } from "./PaymentsCard";
 import { StockIntakeCard } from "./StockIntakeCard";
 import { STATE_LABELS, type VisitState } from "@/lib/visits/state-machine";
@@ -15,7 +14,6 @@ export type VisitTimelineProps = {
     id: string;
     state: VisitState;
     entry_path: "unprocessed" | "processed";
-    vehicle_plate: string | null;
     created_at: string;
     closed_at: string | null;
     site: { name: string } | null;
@@ -57,7 +55,6 @@ export type VisitTimelineProps = {
   } | null;
   payments: Parameters<typeof PaymentsCard>[0]["payments"];
   paymentBalance: Parameters<typeof PaymentsCard>[0]["balance"];
-  events: Parameters<typeof AuditTrail>[0]["events"];
   viewer: {
     role:
       | "processing"
@@ -72,7 +69,7 @@ export type VisitTimelineProps = {
 };
 
 export function VisitTimeline(props: VisitTimelineProps) {
-  const { visit, processing, analysis, pricing, payments, paymentBalance, events, viewer, machines, stockMovement } = props;
+  const { visit, processing, analysis, pricing, payments, paymentBalance, viewer, machines, stockMovement } = props;
   const isOwner = viewer.role === "owner";
 
   return (
@@ -105,7 +102,6 @@ export function VisitTimeline(props: VisitTimelineProps) {
       <VisitOriginCard
         supplier={visit.supplier}
         material={visit.declared_material_type}
-        vehiclePlate={visit.vehicle_plate}
         entryPath={visit.entry_path}
         createdAt={visit.created_at}
         createdByName={visit.created_by_name}
@@ -253,7 +249,6 @@ export function VisitTimeline(props: VisitTimelineProps) {
         />
       )}
 
-      <AuditTrail events={events} />
     </main>
   );
 }

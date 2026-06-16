@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +52,12 @@ export async function BatchSettlementCard({
   const isAccounting = viewerRole === "accounting";
   const status = (settlement?.status as string | undefined) ?? null;
   const locked = status === "approved" || status === "paid";
+
+  // Supply invoice (downloadable + WhatsApp-shareable) once the batch is submitted.
+  const h = await headers();
+  const origin = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host") ?? "localhost:3000"}`;
+  const invoiceUrl = `${origin}/api/pdf/supply-invoice/${visitId}`;
+  const waText = encodeURIComponent(`Supply invoice — net payable ${ngn(net)}.\nView: ${invoiceUrl}`);
 
   return (
     <Card>
@@ -159,6 +166,16 @@ export async function BatchSettlementCard({
               Mark paid ({ngn(Number(settlement!.net_balance))})
             </button>
           </form>
+        )}
+
+        {/* Supply invoice — available once the batch has been submitted */}
+        {status && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
+            <a href={invoiceUrl} target="_blank" rel="noreferrer"
+              className="rounded border px-3 py-1 text-xs hover:bg-paper">Download supply invoice</a>
+            <a href={`https://wa.me/?text=${waText}`} target="_blank" rel="noreferrer"
+              className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Share via WhatsApp</a>
+          </div>
         )}
 
         {status === "rejected" && settlement?.rejection_note != null && (

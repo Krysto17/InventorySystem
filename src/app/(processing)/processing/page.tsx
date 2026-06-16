@@ -38,7 +38,7 @@ export default async function ProcessingHomePage() {
                   <Link href={`/visits/${v.id}`} className="block px-4 py-3 hover:bg-gray-50">
                     <div className="font-medium text-sm">{v.supplier?.name ?? "—"}</div>
                     <div className="text-xs text-gray-500">
-                      {v.declared_material_type?.name ?? "—"} · {v.vehicle_plate ?? "no plate"} ·{" "}
+                      {v.declared_material_type?.name ?? "—"} ·{" "}
                       {formatTimestamp(v.created_at)}
                     </div>
                   </Link>

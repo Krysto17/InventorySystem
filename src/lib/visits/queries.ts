@@ -5,7 +5,6 @@ import type { VisitState } from "./state-machine";
 export type VisitQueueRow = {
   id: string;
   created_at: string;
-  vehicle_plate: string | null;
   entry_path: "unprocessed" | "processed";
   state: VisitState;
   supplier: { id: string; name: string; phone: string | null } | null;
@@ -17,7 +16,7 @@ export async function listVisitsByState(states: VisitState[]): Promise<VisitQueu
   const { data, error } = await supabase
     .from("visits")
     .select(`
-      id, created_at, vehicle_plate, entry_path, state,
+      id, created_at, entry_path, state,
       supplier:suppliers(id, name, phone),
       declared_material_type:material_types(id, name)
     `)
@@ -34,7 +33,7 @@ export async function listVisitsByStateWithAnalysis(state: VisitState): Promise<
   const { data, error } = await supabase
     .from("visits")
     .select(`
-      id, created_at, vehicle_plate, entry_path, state,
+      id, created_at, entry_path, state,
       supplier:suppliers(id, name, phone),
       declared_material_type:material_types(id, name),
       analysis:analysis_records(grade, weight, purity)

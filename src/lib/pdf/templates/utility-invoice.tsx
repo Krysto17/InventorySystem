@@ -21,7 +21,6 @@ export function UtilityInvoicePdf({ data, docId }: { data: PdfUtilityData; docId
             <Text style={shared.sectionTitle}>Customer</Text>
             <View style={shared.row}><Text style={shared.label}>Name</Text><Text style={shared.value}>{data.supplier_name ?? "—"}</Text></View>
             <View style={shared.row}><Text style={shared.label}>Supplier ID</Text><Text style={shared.value}>{data.supplier_code ?? "—"}</Text></View>
-            <View style={shared.row}><Text style={shared.label}>Vehicle</Text><Text style={shared.value}>{data.vehicle_plate ?? "—"}</Text></View>
             <View style={shared.row}><Text style={shared.label}>Site</Text><Text style={shared.value}>{data.site_name ?? "—"}</Text></View>
           </View>
 

@@ -35,7 +35,6 @@ describe("happy path: unprocessed → agreed → in_accounting", () => {
         site_id: siteId,
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
-        vehicle_plate: "HPU-001",
         entry_path: "unprocessed",
         state: "in_processing",
         created_by: proc.userId,
