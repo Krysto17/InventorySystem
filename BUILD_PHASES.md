@@ -1264,11 +1264,15 @@ The owner confirmed mid-phase that the blueprint's Auditor is the **same person 
 
 ---
 
-# Phase 12 — Merge to Main 🔀 NOT STARTED
+# Phase 12 — Merge to Main 🔀 DONE
 
-**Goal:** All phase branches merged into `main` in correct order. `main` becomes the single source of truth for the deployable codebase.
+**Goal:** All phase branches merged into `main`. `main` becomes the single source of truth for the deployable codebase.
 
-**Status:** `NOT STARTED`. `main` currently only has the initial design spec + Phase 1 plan docs. Phases 1–9 are built, each on its own branch; Phases 10–11 (blueprint adoption) are not yet built. Merge order runs 1 → 11 (or merge 1 → 9 first and land 10–11 on top of main — decide when 10–11 are done).
+**Status:** `DONE`. `main` is at merge commit `71b441c`, tagged `phases-1-11-merged`. Build clean; **49 test files / 213 tests pass** on a fresh `db reset` of `main`.
+
+**What actually happened (vs. the original per-phase-PR plan below):** the phase branches were built as a **cumulative linear chain** — each branched off the previous (`phase-9` ← `phase-8` … `blueprint-tweaks` ← `ui-reskin-stripes` ← `phase-11`) — so the tip branch `blueprint-tweaks` already contained every phase's commits. `main` had diverged only by the original `BUILD_PHASES.md` handoff commit. So the merge was a single `git merge --no-ff blueprint-tweaks` into `main`, resolving the one add/add conflict on `BUILD_PHASES.md` in favour of the evolved version. All 68 phase commits are preserved in `main`'s history. The sequential per-phase PR strategy below is retained for reference but was unnecessary given the linear topology.
+
+**Follow-up (optional cleanup):** the 13 now-merged local/remote phase branches (`phase-1-foundation` … `blueprint-tweaks`) can be deleted; they're fully contained in `main`. Left in place for now.
 
 **Strategy:**
 
