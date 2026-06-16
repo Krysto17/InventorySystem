@@ -29,7 +29,6 @@ export async function createVisit(
   const newSupplierName = String(formData.get("new_supplier_name") ?? "").trim();
   const newSupplierPhone = String(formData.get("new_supplier_phone") ?? "").trim();
   const newSupplierNotes = String(formData.get("new_supplier_notes") ?? "").trim();
-  const vehiclePlate = String(formData.get("vehicle_plate") ?? "").trim() || null;
   const materialTypeId = String(formData.get("declared_material_type_id") ?? "").trim();
   const entryPath = String(formData.get("entry_path") ?? "").trim();
 
@@ -68,7 +67,6 @@ export async function createVisit(
       site_id: me.site_id,
       supplier_id: supplierId,
       declared_material_type_id: materialTypeId,
-      vehicle_plate: vehiclePlate,
       entry_path: entryPath,
       state: initialState,
       created_by: me.id,
@@ -96,7 +94,6 @@ export async function updateVisitOrigin(
     const raw = formData.get(k);
     return raw == null ? null : String(raw).trim();
   };
-  const vp = v("vehicle_plate"); if (vp != null) patch.vehicle_plate = vp || null;
   const dm = v("declared_material_type_id"); if (dm) patch.declared_material_type_id = dm;
   const sup = v("supplier_id"); if (sup) patch.supplier_id = sup;
 
@@ -162,6 +159,20 @@ export async function submitProcessing(
   }));
   const { error: uErr } = await supabase.from("processing_machine_usage").insert(usageRows);
   if (uErr) return { error: uErr.message };
+
+  // The processing fee is automatically billed to the supplier as a light bill
+  // (a utility charge on the visit), which the manager later deducts from — or
+  // collects against — the supplier's batch settlement.
+  const fee = usageRows.reduce((s, u) => s + u.measurement * u.rate_snapshot, 0);
+  if (fee > 0) {
+    await supabase.from("utility_charges").insert({
+      visit_id: visitId,
+      kind: "light_bill",
+      description: "Processing fee",
+      amount: fee,
+      recorded_by: me.id,
+    });
+  }
 
   revalidatePath(`/visits/${visitId}`);
   revalidatePath("/processing");

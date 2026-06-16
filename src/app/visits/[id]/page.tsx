@@ -27,7 +27,7 @@ export default async function VisitDetailPage({
   const { data: visit } = await supabase
     .from("visits")
     .select(`
-      id, state, entry_path, vehicle_plate, created_at, closed_at, processing_deducted,
+      id, state, entry_path, created_at, closed_at, processing_deducted,
       supplier_id,
       site:sites(name),
       supplier:suppliers(name, phone),
@@ -70,14 +70,6 @@ export default async function VisitDetailPage({
     .eq("visit_id", id)
     .maybeSingle();
 
-  const { data: events } = await supabase
-    .from("transaction_events")
-    .select(`
-      id, event_type, created_at, payload,
-      actor:profiles!transaction_events_actor_id_fkey(full_name)
-    `)
-    .eq("visit_id", id)
-    .order("created_at", { ascending: true });
 
   const { data: machines } = await supabase
     .from("machines")
@@ -111,7 +103,6 @@ export default async function VisitDetailPage({
     id: visit.id as string,
     state: visit.state as VisitState,
     entry_path: visit.entry_path as "unprocessed" | "processed",
-    vehicle_plate: visit.vehicle_plate as string | null,
     created_at: visit.created_at as string,
     closed_at: visit.closed_at as string | null,
     site: get1((visit as { site: unknown }).site) as { name: string } | null,
@@ -207,15 +198,6 @@ export default async function VisitDetailPage({
       }
     : null;
 
-
-  const eventsNorm = (events ?? []).map((e) => ({
-    id: e.id as string,
-    event_type: e.event_type as string,
-    created_at: e.created_at as string,
-    actor_name:
-      (get1((e as { actor: unknown }).actor) as { full_name?: string } | null)?.full_name ?? null,
-    payload: (e.payload ?? {}) as Record<string, unknown>,
-  }));
 
   const paymentsNorm = (paymentsRaw ?? []).map((p) => ({
     id: p.id as string,
@@ -326,7 +308,6 @@ export default async function VisitDetailPage({
       pricing={pricingNorm}
       payments={paymentsNorm}
       paymentBalance={paymentBalance}
-      events={eventsNorm}
       viewer={{ role: me.role as VisitTimelineProps["viewer"]["role"] }}
       machines={
         (machines ?? []) as {

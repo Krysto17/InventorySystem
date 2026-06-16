@@ -34,7 +34,7 @@ export default async function ReceivingHomePage() {
                     <div className="font-medium text-sm">{v.supplier?.name ?? "—"}</div>
                     <div className="text-xs text-gray-500">
                       {v.declared_material_type?.name ?? "—"} · {v.entry_path} ·{" "}
-                      {v.vehicle_plate ?? "no plate"} · {formatTimestamp(v.created_at)}
+                      {formatTimestamp(v.created_at)}
                     </div>
                   </Link>
                 </li>

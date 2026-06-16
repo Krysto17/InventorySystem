@@ -30,7 +30,6 @@ export function ProcessingReportPdf({ data, docId }: { data: PdfVisitData; docId
           <View style={shared.section}>
             <Text style={shared.sectionTitle}>Visit</Text>
             <Row label="Material"   value={data.material_type_name ?? "—"} />
-            <Row label="Vehicle"    value={data.vehicle_plate ?? "—"} />
             <Row label="Site"       value={data.site_name ?? "—"} />
             <Row label="Intake"     value={formatTs(data.created_at)} />
           </View>

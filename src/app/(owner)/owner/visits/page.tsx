@@ -16,7 +16,7 @@ export default async function OwnerVisitsPage({
 
   let q = supabase
     .from("visits")
-    .select(`id, created_at, state, vehicle_plate,
+    .select(`id, created_at, state,
              site:sites(name),
              supplier:suppliers(name, phone),
              declared_material_type:material_types(name)`)

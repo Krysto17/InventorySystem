@@ -7,7 +7,6 @@ export type PdfVisitData = {
   id: string;
   state: string;
   entry_path: string;
-  vehicle_plate: string | null;
   created_at: string;
   closed_at: string | null;
   site_name: string | null;
@@ -97,7 +96,7 @@ export async function fetchVisitPdfData(visitId: string): Promise<PdfVisitData |
   const { data: v } = await supabase
     .from("visits")
     .select(`
-      id, state, entry_path, vehicle_plate, created_at, closed_at, processing_deducted,
+      id, state, entry_path, created_at, closed_at, processing_deducted,
       site:sites(name),
       supplier:suppliers(name, phone),
       declared_material_type:material_types(name),
@@ -158,7 +157,6 @@ export async function fetchVisitPdfData(visitId: string): Promise<PdfVisitData |
     id: v.id as string,
     state: v.state as string,
     entry_path: v.entry_path as string,
-    vehicle_plate: str(v.vehicle_plate),
     created_at: v.created_at as string,
     closed_at: str(v.closed_at),
     processing_deducted: !!(v as { processing_deducted?: boolean }).processing_deducted,
@@ -348,7 +346,6 @@ export type PdfUtilityData = {
   site_name: string | null;
   supplier_name: string | null;
   supplier_code: string | null;
-  vehicle_plate: string | null;
   created_at: string;
   machines: { machine_name: string; charge_basis: string; measurement: number; rate: number; line_cost: number }[];
   charges: { kind: string; description: string | null; amount: number }[];
@@ -362,7 +359,7 @@ export async function fetchUtilityInvoiceData(visitId: string): Promise<PdfUtili
   const { data: v } = await supabase
     .from("visits")
     .select(`
-      id, created_at, vehicle_plate,
+      id, created_at,
       site:sites(name),
       supplier:suppliers(name, supplier_code),
       processing:processing_records(
@@ -405,12 +402,90 @@ export async function fetchUtilityInvoiceData(visitId: string): Promise<PdfUtili
     site_name: g1<{ name: string }>(v.site)?.name ?? null,
     supplier_name: supplier?.name ?? null,
     supplier_code: supplier?.supplier_code ?? null,
-    vehicle_plate: str(v.vehicle_plate),
     created_at: v.created_at as string,
     machines,
     charges,
     processing_fee_total: processingFeeTotal,
     utility_total: utilityTotal,
     grand_total: processingFeeTotal + utilityTotal,
+  };
+}
+
+// ─── Supply invoice (batch settlement) ───────────────────────────────────────
+
+export type PdfSupplyInvoiceItem = {
+  material_name: string | null;
+  weight_kg: number;
+  unit_price: number | null;
+  amount: number;
+};
+
+export type PdfSupplyInvoiceData = {
+  visit_id: string;
+  site_name: string | null;
+  supplier_name: string | null;
+  supplier_code: string | null;
+  created_at: string;
+  status: string | null;
+  items: PdfSupplyInvoiceItem[];
+  materials_total: number;
+  light_bill_total: number;
+  advance_deducted: number;
+  net_balance: number;
+  remaining_debt: number;
+};
+
+export async function fetchSupplyInvoiceData(visitId: string): Promise<PdfSupplyInvoiceData | null> {
+  const supabase = await createClient();
+  const { data: v } = await supabase
+    .from("visits")
+    .select(`id, created_at, supplier_id, site:sites(name), supplier:suppliers(name, supplier_code)`)
+    .eq("id", visitId)
+    .maybeSingle();
+  if (!v) return null;
+
+  const [{ data: lines }, { data: charges }, { data: deds }, { data: debt }, { data: settlement }] =
+    await Promise.all([
+      supabase.from("visit_materials")
+        .select("weight_kg, unit_price, purchase_amount, material:material_types(name)")
+        .eq("visit_id", visitId).order("created_at", { ascending: true }),
+      supabase.from("utility_charges").select("amount").eq("visit_id", visitId),
+      supabase.from("advance_deductions").select("amount").eq("ref_visit_id", visitId),
+      supabase.rpc("supplier_outstanding_debt", { _supplier_id: v.supplier_id }),
+      supabase.from("batch_settlements")
+        .select("status, materials_total, light_bill_total, advance_deducted, net_balance, remaining_debt")
+        .eq("visit_id", visitId).maybeSingle(),
+    ]);
+
+  const items: PdfSupplyInvoiceItem[] = ((lines as unknown[]) ?? []).map((l) => {
+    const row = l as { weight_kg: unknown; unit_price: unknown; purchase_amount: unknown; material: unknown };
+    return {
+      material_name: g1<{ name: string }>(row.material)?.name ?? null,
+      weight_kg: num(row.weight_kg),
+      unit_price: row.unit_price != null ? num(row.unit_price) : null,
+      amount: num(row.purchase_amount),
+    };
+  });
+
+  // Prefer the submitted settlement's snapshot; otherwise compute live.
+  const materials = settlement ? num(settlement.materials_total) : items.reduce((a, i) => a + i.amount, 0);
+  const light = settlement ? num(settlement.light_bill_total) : (charges ?? []).reduce((a, c) => a + num(c.amount), 0);
+  const advance = settlement ? num(settlement.advance_deducted) : (deds ?? []).reduce((a, d) => a + num(d.amount), 0);
+  const net = settlement ? num(settlement.net_balance) : materials - light - advance;
+  const remaining = settlement ? num(settlement.remaining_debt) : num(debt);
+
+  return {
+    visit_id: v.id as string,
+    site_name: g1<{ name: string }>(v.site)?.name ?? null,
+    supplier_name: g1<{ name: string }>(v.supplier)?.name ?? null,
+    supplier_code: g1<{ supplier_code: string }>(v.supplier)?.supplier_code ?? null,
+    created_at: v.created_at as string,
+    status: (settlement?.status as string | undefined) ?? null,
+    items,
+    materials_total: materials,
+    light_bill_total: light,
+    advance_deducted: advance,
+    net_balance: net,
+    remaining_debt: remaining,
   };
 }

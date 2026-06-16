@@ -44,7 +44,6 @@ export function FullDossierPdf({ data, docId }: { data: PdfVisitData; docId: str
             <Row label="Phone"          value={data.supplier_phone ?? "—"} />
             <Row label="Material"       value={data.material_type_name ?? "—"} />
             <Row label="Entry path"     value={data.entry_path} />
-            <Row label="Vehicle plate"  value={data.vehicle_plate ?? "—"} />
             <Row label="Opened"         value={formatTs(data.created_at)} />
             <Row label="Recorded by"    value={data.created_by_name ?? "—"} />
           </View>
