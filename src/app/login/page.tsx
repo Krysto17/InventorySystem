@@ -12,7 +12,6 @@ export default function LoginPage() {
           <div className="text-xl font-extrabold tracking-tight text-ink">
             Magnetic<span className="text-ore">Joezion</span>
           </div>
-          <div className="mono text-[10px] text-ink-2">INVENTORY · LEDGER</div>
         </div>
 
         <form action={action} className="flex flex-col gap-4 p-6">
