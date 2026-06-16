@@ -6,7 +6,7 @@ import { getProfile } from "@/lib/auth/get-profile";
 
 export async function createCostPriceRun(formData: FormData): Promise<void> {
   const me = await getProfile();
-  if (!me || !["manager", "accounting", "owner"].includes(me.role)) return;
+  if (!me || !["manager", "owner"].includes(me.role)) return;
 
   const label = String(formData.get("label") ?? "").trim();
   const lotIds = formData.getAll("lot_ids").map(String).filter(Boolean);

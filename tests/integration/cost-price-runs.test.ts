@@ -64,14 +64,20 @@ describe("cost-price runs", () => {
     expect(l!.status).toBe("available");
   });
 
-  it("accountant at another site can READ runs (cross-site reporting) but not create for site A", async () => {
+  it("accountant has NO cost-price access (blueprint: Manager-only) — cannot read or create", async () => {
     const { data } = await acct.client.from("cost_price_runs").select("id");
-    expect(data!.length).toBeGreaterThan(0);
+    expect(data ?? []).toHaveLength(0);
 
     const { error } = await acct.client.from("cost_price_runs").insert({
-      site_id: siteAId, label: "Cross-site hack", created_by: acct.userId,
+      site_id: siteAId, label: "Acct hack", created_by: acct.userId,
     });
     expect(error).not.toBeNull();
+  });
+
+  it("manager can read cost-price runs", async () => {
+    const { data, error } = await mgr.client.from("cost_price_runs").select("id");
+    expect(error).toBeNull();
+    expect(data!.length).toBeGreaterThan(0);
   });
 
   it("processing cannot create runs", async () => {

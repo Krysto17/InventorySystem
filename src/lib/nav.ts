@@ -50,7 +50,6 @@ const NAV: Record<Role, NavItem[]> = {
   accounting: [
     { label: "Settlements", href: "/accounting", icon: "accounting" },
     { label: "Reports", href: "/accounting/reports", icon: "reports" },
-    { label: "Cost price", href: "/accounting/cost-price", icon: "pricing" },
   ],
   inventory: [
     { label: "Stock", href: "/inventory", icon: "inventory" },
