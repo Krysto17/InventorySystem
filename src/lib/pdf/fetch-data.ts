@@ -394,8 +394,14 @@ export async function fetchUtilityInvoiceData(visitId: string): Promise<PdfUtili
     return { kind: String(row.kind), description: str(row.description), amount: num(row.amount) };
   });
 
-  const processingFeeTotal = machines.reduce((s, m) => s + m.line_cost, 0);
-  const utilityTotal = charges.reduce((s, c) => s + c.amount, 0);
+  const machineFeeTotal = machines.reduce((s, m) => s + m.line_cost, 0);
+  const chargesTotal = charges.reduce((s, c) => s + c.amount, 0);
+
+  // The processing fee IS the utility charge on the visit (auto-billed from the
+  // machine usage). Total due = the processing fee — not machine-fee + charges,
+  // which would double-count the same money. Fall back to the machine total
+  // only when no charge has been recorded yet.
+  const processingFee = chargesTotal > 0 ? chargesTotal : machineFeeTotal;
 
   return {
     visit_id: v.id as string,
@@ -405,9 +411,9 @@ export async function fetchUtilityInvoiceData(visitId: string): Promise<PdfUtili
     created_at: v.created_at as string,
     machines,
     charges,
-    processing_fee_total: processingFeeTotal,
-    utility_total: utilityTotal,
-    grand_total: processingFeeTotal + utilityTotal,
+    processing_fee_total: processingFee,
+    utility_total: chargesTotal,
+    grand_total: processingFee,
   };
 }
 

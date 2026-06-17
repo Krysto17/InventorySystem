@@ -35,19 +35,19 @@ export async function UtilityChargesCard({
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Utility charges</h2>
+          <h2 className="text-sm font-semibold">Processing fees</h2>
           <Badge variant="yellow">{ngn(total)}</Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {(charges?.length ?? 0) === 0 ? (
-          <p className="text-sm text-zinc-500">No utility charges recorded.</p>
+          <p className="text-sm text-zinc-500">No processing fees recorded.</p>
         ) : (
           <ul className="divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
             {(charges ?? []).map((c) => (
               <li key={c.id as string} className="flex items-center justify-between py-2">
                 <span>
-                  {c.kind === "light_bill" ? "Light bill" : "Other"}
+                  {c.kind === "light_bill" ? "Processing fee" : "Other"}
                   {c.description != null && <span className="text-zinc-500"> · {c.description as string}</span>}
                 </span>
                 <span className="font-medium">{ngn(Number(c.amount))}</span>
@@ -62,7 +62,7 @@ export async function UtilityChargesCard({
           rel="noreferrer"
           className="inline-block rounded border px-3 py-1 text-xs hover:bg-zinc-50"
         >
-          Download utility invoice PDF
+          Download processing invoice
         </a>
 
         {canAdd && (
@@ -71,7 +71,7 @@ export async function UtilityChargesCard({
             <label className="text-xs font-medium">
               Kind
               <select name="kind" defaultValue="light_bill" className="mt-1 block rounded border px-2 py-1 text-sm">
-                <option value="light_bill">Light bill</option>
+                <option value="light_bill">Processing fee</option>
                 <option value="other">Other</option>
               </select>
             </label>

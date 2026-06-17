@@ -39,11 +39,13 @@ describe("batch settlement (integration + RLS)", () => {
     monaziteId = m!.id as string;
   });
 
-  it("approved advances build a supplier debt; partial deduction leaves a remainder", async () => {
+  it("paid advances build a supplier debt; partial deduction leaves a remainder", async () => {
     const { data: a } = await adminClient().from("advances")
       .insert({ supplier_id: supplierId, site_id: siteId, purpose: "Float", amount_naira: 50000 })
       .select("id").single();
+    // Only paid advances count: owner approves → accountant pays.
     await adminClient().from("advances").update({ approval_status: "approved" }).eq("id", a!.id);
+    await adminClient().from("advances").update({ approval_status: "paid" }).eq("id", a!.id);
 
     // Manager deducts 20,000 of the 50,000 debt against a batch
     const v = await newVisit();
@@ -98,5 +100,35 @@ describe("batch settlement (integration + RLS)", () => {
       visit_id: v2, site_id: siteId, net_balance: 1, submitted_by: recv.userId,
     });
     expect(error).not.toBeNull();
+  });
+
+  it("paying a settlement takes the supply into stock and marks the visit stocked", async () => {
+    const { data: m } = await adminClient().from("material_types").select("id").eq("name", "Monazite").single();
+    const { data: v } = await adminClient().from("visits").insert({
+      site_id: siteId, supplier_id: supplierId, declared_material_type_id: m!.id,
+      entry_path: "processed", state: "pricing", created_by: mgr.userId,
+    }).select("id").single();
+    const { data: line } = await adminClient().from("visit_materials").insert({
+      visit_id: v!.id, material_type_id: m!.id, weight_kg: 100, unit_price: 50, recorded_by: mgr.userId,
+    }).select("id").single();
+
+    const row = await settlementRow(v!.id, 5000, 5000, 0, 0, 0);
+    await owner.client.from("batch_settlements").update({ status: "approved" }).eq("id", row.id);
+    await acct.client.from("batch_settlements").update({ status: "paid" }).eq("id", row.id);
+
+    // Visit advanced to stocked
+    const { data: st } = await adminClient().from("visits").select("state").eq("id", v!.id).single();
+    expect(st!.state).toBe("stocked");
+
+    // A stock lot + a ledger 'in' movement were created for the line
+    const { data: lots } = await adminClient().from("stock_lots")
+      .select("weight_kg, cost_price_per_kg").eq("ref_visit_material_id", line!.id);
+    expect(lots!.length).toBe(1);
+    expect(Number(lots![0].weight_kg)).toBe(100);
+    expect(Number(lots![0].cost_price_per_kg)).toBe(50);
+
+    const { data: mv } = await adminClient().from("stock_movements")
+      .select("direction, reason, weight").eq("ref_visit_id", v!.id);
+    expect(mv!.some((r) => r.direction === "in" && r.reason === "purchase_intake")).toBe(true);
   });
 });

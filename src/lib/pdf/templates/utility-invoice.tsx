@@ -8,10 +8,10 @@ import { formatTs, formatNgn } from "../format";
 export function UtilityInvoicePdf({ data, docId }: { data: PdfUtilityData; docId: string }) {
   const generatedAt = new Date().toISOString();
   return (
-    <Document title={`Utility Invoice — ${data.visit_id.slice(0, 8)}`}>
+    <Document title={`Processing Invoice — ${data.visit_id.slice(0, 8)}`}>
       <Page size="A4" style={shared.page}>
-        <BrandHeader siteName={data.site_name} docType="Utility Invoice" />
-        <Text style={shared.docTitle}>Utility / Processing Invoice</Text>
+        <BrandHeader siteName={data.site_name} docType="Processing Invoice" />
+        <Text style={shared.docTitle}>Processing Invoice</Text>
         <Text style={shared.docSubtitle}>
           Visit {data.visit_id} · {formatTs(data.created_at)}
         </Text>
@@ -50,7 +50,7 @@ export function UtilityInvoicePdf({ data, docId }: { data: PdfUtilityData; docId
 
           {data.charges.length > 0 && (
             <View style={shared.section}>
-              <Text style={shared.sectionTitle}>Utility charges</Text>
+              <Text style={shared.sectionTitle}>Processing fees</Text>
               <View style={shared.table}>
                 <View style={shared.tableHeader}>
                   <Text style={[shared.tableHeaderCell, { flex: 1 }]}>Kind</Text>
@@ -59,7 +59,7 @@ export function UtilityInvoicePdf({ data, docId }: { data: PdfUtilityData; docId
                 </View>
                 {data.charges.map((c, i) => (
                   <View style={shared.tableRow} key={i}>
-                    <Text style={{ flex: 1 }}>{c.kind === "light_bill" ? "Light bill" : "Other"}</Text>
+                    <Text style={{ flex: 1 }}>{c.kind === "light_bill" ? "Processing fee" : "Other"}</Text>
                     <Text style={{ flex: 2 }}>{c.description ?? "—"}</Text>
                     <Text style={{ flex: 1, textAlign: "right" }}>{formatNgn(c.amount)}</Text>
                   </View>
@@ -69,11 +69,8 @@ export function UtilityInvoicePdf({ data, docId }: { data: PdfUtilityData; docId
           )}
 
           <View style={shared.highlight}>
-            <View style={shared.row}><Text style={shared.label}>Processing fee</Text><Text style={shared.value}>{formatNgn(data.processing_fee_total)}</Text></View>
-            <View style={shared.row}><Text style={shared.label}>Utility charges</Text><Text style={shared.value}>{formatNgn(data.utility_total)}</Text></View>
-            <Text style={[shared.bold, { fontSize: 14, marginTop: 4 }]}>
-              Total due: {formatNgn(data.grand_total)}
-            </Text>
+            <Text style={shared.label}>Total due (processing fee)</Text>
+            <Text style={[shared.bold, { fontSize: 16, marginTop: 2 }]}>{formatNgn(data.grand_total)}</Text>
           </View>
         </View>
 

@@ -42,7 +42,7 @@ export default async function OwnerApprovalsPage() {
   }
   const onHandRows = [...onHand.entries()].filter(([, kg]) => kg > 0.0005).sort((a, b) => a[0].localeCompare(b[0]));
   const lightBillsDeducted = (settledLightBills ?? []).reduce((s, r) => s + Number(r.light_bill_total), 0);
-  const advancesOut = (advances ?? []).filter((a) => a.approval_status === "approved").reduce((s, a) => s + Number(a.amount_naira), 0);
+  const advancesOut = (advances ?? []).filter((a) => a.approval_status === "paid").reduce((s, a) => s + Number(a.amount_naira), 0);
 
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
@@ -54,7 +54,7 @@ export default async function OwnerApprovalsPage() {
       {/* Overview */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
-          <CardHeader><h2 className="text-sm font-semibold">Light bills deducted</h2></CardHeader>
+          <CardHeader><h2 className="text-sm font-semibold">Processing fees deducted</h2></CardHeader>
           <CardContent><div className="mono text-2xl font-bold text-ink">{ngn(lightBillsDeducted)}</div></CardContent>
         </Card>
         <Card>
@@ -107,7 +107,7 @@ export default async function OwnerApprovalsPage() {
                         <span className="text-ink-2"> · net {ngn(Number(s.net_balance))} · {formatTimestamp(s.created_at as string)}</span>
                       </div>
                       <span className="text-xs text-ink-2">
-                        materials {ngn(Number(s.materials_total))} − light {ngn(Number(s.light_bill_total))} − advance {ngn(Number(s.advance_deducted))}
+                        materials {ngn(Number(s.materials_total))} − processing fee {ngn(Number(s.light_bill_total))} − advance {ngn(Number(s.advance_deducted))}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">

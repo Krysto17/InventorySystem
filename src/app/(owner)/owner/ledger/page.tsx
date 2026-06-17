@@ -22,14 +22,14 @@ export default async function OwnerLedgerPage({
       supabase.from("advances").select("supplier_id, amount_naira, approval_status"),
       supabase.from("advance_deductions").select("supplier_id, amount"),
       supabase.from("utility_charges").select("amount, kind, visit:visits!inner(site:sites(name))").eq("kind", "light_bill"),
-      supabase.from("consumables").select("amount_naira, site:sites(name)"),
+      supabase.from("consumables").select("amount_naira, site:sites(name)").eq("approval_status", "paid"),
     ]);
 
   // ── Advance ledger per supplier ──────────────────────────────────────────
-  const given = new Map<string, number>();   // approved + paid advances
+  const given = new Map<string, number>();   // paid advances only
   const recovered = new Map<string, number>(); // deductions
   for (const a of advances ?? []) {
-    if (a.approval_status === "approved" || a.approval_status === "paid") {
+    if (a.approval_status === "paid") {
       given.set(a.supplier_id as string, (given.get(a.supplier_id as string) ?? 0) + Number(a.amount_naira));
     }
   }
@@ -110,10 +110,10 @@ export default async function OwnerLedgerPage({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card>
-          <CardHeader><h2 className="text-sm font-semibold">Light bills per site</h2></CardHeader>
+          <CardHeader><h2 className="text-sm font-semibold">Processing fees per site</h2></CardHeader>
           <CardContent className="p-0">
             {lightBySite.size === 0 ? (
-              <p className="px-4 py-3 text-sm text-ink-2">No light bills.</p>
+              <p className="px-4 py-3 text-sm text-ink-2">No processing fees.</p>
             ) : (
               <ul className="divide-y divide-line text-sm">
                 {[...lightBySite.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([site, total]) => (

@@ -98,7 +98,7 @@ export async function BatchSettlementCard({
         {/* Breakdown */}
         <div className="space-y-1 border-t border-line pt-3 text-sm">
           <Row label="Materials total" value={ngn(materials)} />
-          <Row label="Light bill / processing fee" value={`− ${ngn(light)}`} />
+          <Row label="Processing fee" value={`− ${ngn(light)}`} />
           <Row label="Advance deducted" value={`− ${ngn(advance)}`} />
           <div className="flex items-center justify-between border-t border-line pt-1 font-semibold">
             <span>Net balance payable</span><span>{ngn(net)}</span>

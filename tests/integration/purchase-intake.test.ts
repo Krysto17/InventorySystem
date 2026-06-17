@@ -102,8 +102,9 @@ describe("purchase intake flow", () => {
     expect(error).toBeNull();
   });
 
-  it("cannot insert purchase_intake for a visit not in awaiting_stock_intake", async () => {
-    // Visit is already stocked — state machine blocks backward transition
+  it("cannot insert purchase_intake for a visit at an early stage", async () => {
+    // pricing/in_accounting → stocked is now legal (settlement-paid auto-stock),
+    // so use an early state where → stocked is still illegal.
     const { data: v } = await adminClient()
       .from("visits")
       .insert({
@@ -111,7 +112,7 @@ describe("purchase intake flow", () => {
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
         entry_path: "processed",
-        state: "in_accounting",
+        state: "in_receiving",
         created_by: inv.userId,
       })
       .select("id")

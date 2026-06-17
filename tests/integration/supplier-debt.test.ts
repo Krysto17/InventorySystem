@@ -31,17 +31,21 @@ describe("supplier debt ledger (advances + deductions)", () => {
   it("walks multiple advances + partial deductions with a running balance", async () => {
     expect(await debt()).toBe(0);
 
-    // Two advances; only approved ones count toward debt.
+    // Only PAID advances count toward debt (owner approves → accountant pays).
+    const payAdvance = async (id: string) => {
+      await adminClient().from("advances").update({ approval_status: "approved" }).eq("id", id);
+      await adminClient().from("advances").update({ approval_status: "paid" }).eq("id", id);
+    };
     const { data: a1 } = await adminClient().from("advances").insert({
       supplier_id: supplierId, site_id: siteAId, purpose: "Float 1", amount_naira: 30000,
     }).select("id").single();
-    await adminClient().from("advances").update({ approval_status: "approved" }).eq("id", a1!.id);
+    await payAdvance(a1!.id);
     const { data: a2 } = await adminClient().from("advances").insert({
       supplier_id: supplierId, site_id: siteAId, purpose: "Float 2", amount_naira: 20000,
     }).select("id").single();
-    expect(await debt()).toBe(30000); // a2 still pending
+    expect(await debt()).toBe(30000); // a2 still pending (not paid)
 
-    await adminClient().from("advances").update({ approval_status: "approved" }).eq("id", a2!.id);
+    await payAdvance(a2!.id);
     expect(await debt()).toBe(50000);
 
     // Manager deducts part from a payout → remainder carries forward.
