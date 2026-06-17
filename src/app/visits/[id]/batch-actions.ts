@@ -52,14 +52,13 @@ export async function updateMaterialLine(formData: FormData): Promise<void> {
   if (visitId) revalidatePath(`/visits/${visitId}`);
 }
 
-// Receiving signals the batch is fully weighed and confirms the entries are
-// correct → advance to QC.
+// Receiving's material lines are saved as drafts while the visit is in
+// receiving (editable any time); this finally sends the batch on to QC.
 export async function advanceToQc(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me) return;
   const visitId = String(formData.get("visit_id") ?? "");
-  // The clerk must tick the confirmation that all entries are correct.
-  if (!visitId || formData.get("confirm") == null) return;
+  if (!visitId) return;
   const supabase = await createClient();
   await supabase.rpc("advance_visit_to_qc", { p_visit_id: visitId });
   revalidatePath(`/visits/${visitId}`);
