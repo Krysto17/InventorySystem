@@ -32,12 +32,34 @@ export async function addMaterialLine(formData: FormData): Promise<void> {
   revalidatePath(`/visits/${visitId}`);
 }
 
-// Receiving signals the batch is fully weighed → advance to QC.
+// Receiving edits a line's weight / magnetic / comment before sending to QC.
+export async function updateMaterialLine(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me) return;
+  if (me.role !== "receiving" && me.role !== "owner") return;
+
+  const visitId = String(formData.get("visit_id") ?? "");
+  const lineId = String(formData.get("visit_material_id") ?? "");
+  const weight = Number(formData.get("weight_kg"));
+  if (!lineId || !(weight >= 0)) return;
+  const magnetic = String(formData.get("magnetic_analysis") ?? "").trim() || null;
+  const comment = String(formData.get("receiving_comment") ?? "").trim() || null;
+
+  const supabase = await createClient();
+  await supabase.from("visit_materials")
+    .update({ weight_kg: weight, magnetic_analysis: magnetic, receiving_comment: comment })
+    .eq("id", lineId);
+  if (visitId) revalidatePath(`/visits/${visitId}`);
+}
+
+// Receiving signals the batch is fully weighed and confirms the entries are
+// correct → advance to QC.
 export async function advanceToQc(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me) return;
   const visitId = String(formData.get("visit_id") ?? "");
-  if (!visitId) return;
+  // The clerk must tick the confirmation that all entries are correct.
+  if (!visitId || formData.get("confirm") == null) return;
   const supabase = await createClient();
   await supabase.rpc("advance_visit_to_qc", { p_visit_id: visitId });
   revalidatePath(`/visits/${visitId}`);
@@ -55,10 +77,16 @@ export async function recordXrf(formData: FormData): Promise<void> {
   const visitId = String(formData.get("visit_id") ?? "");
   const lineId = String(formData.get("visit_material_id") ?? "");
   const result = String(formData.get("result") ?? "").trim() || null;
-  const submitted = String(formData.get("submitted") ?? "") === "true";
+  let submitted = String(formData.get("submitted") ?? "") === "true";
   const weightRaw = String(formData.get("weight_kg") ?? "").trim();
   const weightKg = weightRaw === "" ? null : Number(weightRaw);
   if (!lineId) return;
+
+  // Submitting requires the XRF result to be entered and the QC analyst to
+  // confirm the entries are correct; otherwise it is kept as a draft.
+  if (submitted && (!result || formData.get("confirm") == null)) {
+    submitted = false;
+  }
 
   const supabase = await createClient();
   // Upsert one XRF record per line (visit_material_id is unique).

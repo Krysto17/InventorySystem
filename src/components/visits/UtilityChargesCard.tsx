@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { addUtilityCharge } from "@/app/visits/[id]/finance-actions";
+import { addUtilityCharge, adjustUtilityCharge } from "@/app/visits/[id]/finance-actions";
 import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
 import { isVisitOpen } from "@/lib/visits/state-machine";
@@ -26,6 +26,8 @@ export async function UtilityChargesCard({
 
   const canAdd =
     ["processing", "manager", "owner"].includes(viewerRole) && isVisitOpen(visitState);
+  const canDownload = ["processing", "manager", "owner"].includes(viewerRole);
+  const canDiscount = ["manager", "owner"].includes(viewerRole) && isVisitOpen(visitState);
 
   if ((charges?.length ?? 0) === 0 && !canAdd) return null;
 
@@ -45,25 +47,39 @@ export async function UtilityChargesCard({
         ) : (
           <ul className="divide-y divide-zinc-200 text-sm dark:divide-zinc-800">
             {(charges ?? []).map((c) => (
-              <li key={c.id as string} className="flex items-center justify-between py-2">
+              <li key={c.id as string} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <span>
                   {c.kind === "light_bill" ? "Processing fee" : "Other"}
                   {c.description != null && <span className="text-zinc-500"> · {c.description as string}</span>}
                 </span>
-                <span className="font-medium">{ngn(Number(c.amount))}</span>
+                <span className="flex items-center gap-2">
+                  <span className="font-medium">{ngn(Number(c.amount))}</span>
+                  {canDiscount && (
+                    <form action={adjustUtilityCharge} className="flex items-end gap-1">
+                      <input type="hidden" name="visit_id" value={visitId} />
+                      <input type="hidden" name="charge_id" value={c.id as string} />
+                      <input type="number" name="amount" min="0.01" step="0.01" defaultValue={Number(c.amount)}
+                        title="Discount / adjust fee"
+                        className="w-24 rounded border px-1.5 py-0.5 text-xs" />
+                      <button type="submit" className="rounded border px-2 py-0.5 text-[11px] hover:bg-zinc-50">Apply</button>
+                    </form>
+                  )}
+                </span>
               </li>
             ))}
           </ul>
         )}
 
-        <a
-          href={`/api/pdf/utility/${visitId}`}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-block rounded border px-3 py-1 text-xs hover:bg-zinc-50"
-        >
-          Download processing invoice
-        </a>
+        {canDownload && (
+          <a
+            href={`/api/pdf/utility/${visitId}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-block rounded border px-3 py-1 text-xs hover:bg-zinc-50"
+          >
+            Download processing invoice
+          </a>
+        )}
 
         {canAdd && (
           <form action={addUtilityCharge} className="flex flex-wrap items-end gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">

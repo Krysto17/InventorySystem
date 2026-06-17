@@ -15,7 +15,7 @@ async function mySiteId(): Promise<string | null> {
 // Inventory registers a stock lot (supplier + material + weight + cost price).
 export async function createStockLot(formData: FormData): Promise<void> {
   const me = await getProfile();
-  if (!me || (me.role !== "inventory" && me.role !== "manager" && me.role !== "owner")) return;
+  if (!me || (me.role !== "inventory" && me.role !== "owner")) return;
 
   const siteId = await mySiteId();
   if (!siteId) return;
@@ -40,7 +40,7 @@ export async function createStockLot(formData: FormData): Promise<void> {
 // Inventory creates a pending lot sale from selected available lots.
 export async function createLotSale(formData: FormData): Promise<void> {
   const me = await getProfile();
-  if (!me || (me.role !== "inventory" && me.role !== "manager" && me.role !== "owner")) return;
+  if (!me || (me.role !== "inventory" && me.role !== "owner")) return;
 
   const buyerName = String(formData.get("buyer_name") ?? "").trim();
   const buyerPhone = String(formData.get("buyer_phone") ?? "").trim() || null;

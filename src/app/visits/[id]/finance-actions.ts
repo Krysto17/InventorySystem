@@ -23,6 +23,23 @@ export async function addUtilityCharge(formData: FormData): Promise<void> {
   revalidatePath(`/visits/${visitId}`);
 }
 
+// Manager (or owner) discounts/adjusts a supplier's processing fee on an open
+// visit by setting a new (lower) amount. The DB policy enforces role + site +
+// open; all downstream totals already sum this amount.
+export async function adjustUtilityCharge(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || !["manager", "owner"].includes(me.role)) return;
+
+  const visitId = String(formData.get("visit_id") ?? "");
+  const chargeId = String(formData.get("charge_id") ?? "");
+  const amount = Number(formData.get("amount"));
+  if (!chargeId || !(amount > 0)) return;
+
+  const supabase = await createClient();
+  await supabase.from("utility_charges").update({ amount }).eq("id", chargeId);
+  if (visitId) revalidatePath(`/visits/${visitId}`);
+}
+
 // ─── Advance deductions (Phase 11 A) ─────────────────────────────────────────
 
 export async function recordDeduction(formData: FormData): Promise<void> {

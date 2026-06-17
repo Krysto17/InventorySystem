@@ -58,7 +58,7 @@ export async function GET(
 
   // ── Bulk sale receipt ────────────────────────────────────────────────────
   if (type === "bulk-sale") {
-    if (me.role !== "inventory" && me.role !== "manager" && me.role !== "owner") return forbidden();
+    if (me.role !== "inventory" && me.role !== "owner") return forbidden();
 
     const data = await fetchBulkSalePdfData(id);
     if (!data) return notFound("Bulk sale not found");
@@ -80,8 +80,9 @@ export async function GET(
     return pdfResponse(buffer, `supply-invoice-${id.slice(0, 8)}.pdf`);
   }
 
-  // ── Utility / processing invoice (Phase 11) ───────────────────────────────
+  // ── Processing invoice (processing + manager only) ────────────────────────
   if (type === "utility") {
+    if (!["processing", "manager", "owner"].includes(me.role)) return forbidden();
     const data = await fetchUtilityInvoiceData(id);
     if (!data) return notFound("Visit not found");
 
@@ -92,7 +93,7 @@ export async function GET(
 
   // ── Lot-tracked bulk sale breakdown (Phase 9) ─────────────────────────────
   if (type === "lot-sale") {
-    if (me.role !== "inventory" && me.role !== "manager" && me.role !== "owner") return forbidden();
+    if (me.role !== "inventory" && me.role !== "owner") return forbidden();
 
     const data = await fetchLotSalePdfData(id);
     if (!data) return notFound("Lot sale not found");

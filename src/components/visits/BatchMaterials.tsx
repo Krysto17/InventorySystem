@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { addMaterialLine, advanceToQc, recordXrf, setLinePrice, finalizeLinePrice } from "@/app/visits/[id]/batch-actions";
+import { addMaterialLine, updateMaterialLine, advanceToQc, recordXrf, setLinePrice, finalizeLinePrice } from "@/app/visits/[id]/batch-actions";
 import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
 
@@ -108,6 +108,30 @@ export async function BatchMaterials({
                   <div className="text-xs text-zinc-500">Note: {l.receiving_comment}</div>
                 )}
 
+                {/* Receiving: correct a line's entries before sending to QC */}
+                {canReceive && (
+                  <form action={updateMaterialLine} className="mt-2 grid grid-cols-2 gap-2">
+                    <input type="hidden" name="visit_id" value={visitId} />
+                    <input type="hidden" name="visit_material_id" value={l.id} />
+                    <label className="text-[11px] font-medium">
+                      Weight (kg)
+                      <input type="number" name="weight_kg" step="0.001" min="0" defaultValue={l.weight_kg}
+                        className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+                    </label>
+                    <label className="text-[11px] font-medium">
+                      Magnetic analysis
+                      <input type="text" name="magnetic_analysis" defaultValue={l.magnetic_analysis ?? ""}
+                        className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+                    </label>
+                    <label className="col-span-2 text-[11px] font-medium">
+                      Comment
+                      <input type="text" name="receiving_comment" defaultValue={l.receiving_comment ?? ""}
+                        className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+                    </label>
+                    <button type="submit" className="col-span-2 rounded border px-3 py-1 text-xs hover:bg-zinc-50">Save correction</button>
+                  </form>
+                )}
+
                 {/* XRF result — only owner / manager / qc can see it */}
                 {canSeeXrf && l.xrf && (
                   <div className="mt-2 rounded bg-zinc-50 p-2 text-xs dark:bg-zinc-800/50">
@@ -119,7 +143,8 @@ export async function BatchMaterials({
                   </div>
                 )}
 
-                {/* QC: record / submit XRF for this line */}
+                {/* QC: record / submit XRF for this line. Submitting requires a
+                    result + confirmation; Save draft bypasses validation. */}
                 {canQc && l.requires_analysis && (
                   <form action={recordXrf} className="mt-2 space-y-2">
                     <input type="hidden" name="visit_id" value={visitId} />
@@ -127,6 +152,7 @@ export async function BatchMaterials({
                     <textarea
                       name="result"
                       rows={2}
+                      required
                       defaultValue={l.xrf?.result ?? ""}
                       placeholder="Type XRF analysis result…"
                       className="block w-full rounded border px-2 py-1 text-sm"
@@ -142,8 +168,12 @@ export async function BatchMaterials({
                         className="mt-1 block w-40 rounded border px-2 py-1 text-sm"
                       />
                     </label>
+                    <label className="flex items-center gap-2 text-xs">
+                      <input type="checkbox" name="confirm" required />
+                      I confirm the XRF entries for this line are correct
+                    </label>
                     <div className="flex gap-2">
-                      <button name="submitted" value="false" type="submit" className="rounded border px-3 py-1 text-xs hover:bg-zinc-50">
+                      <button name="submitted" value="false" type="submit" formNoValidate className="rounded border px-3 py-1 text-xs hover:bg-zinc-50">
                         Save draft
                       </button>
                       <button name="submitted" value="true" type="submit" className="rounded bg-black px-3 py-1 text-xs text-white">
@@ -246,12 +276,16 @@ export async function BatchMaterials({
             </form>
 
             {lines.length > 0 && (
-              <form action={advanceToQc}>
+              <form action={advanceToQc} className="space-y-2">
                 <input type="hidden" name="visit_id" value={visitId} />
+                <label className="flex items-center gap-2 text-xs font-medium">
+                  <input type="checkbox" name="confirm" required />
+                  I confirm all material entries above are correct
+                </label>
                 <button type="submit" className="w-full rounded bg-black px-3 py-2 text-sm text-white">
                   {lines.some((l) => l.requires_analysis)
-                    ? "Done weighing — send to QC →"
-                    : "Done weighing — send to pricing (no analysis needed) →"}
+                    ? "Confirm & send to QC →"
+                    : "Confirm & send to pricing (no analysis needed) →"}
                 </button>
               </form>
             )}
