@@ -8,6 +8,7 @@ import type { VisitState } from "@/lib/visits/state-machine";
 type Line = {
   id: string;
   weight_kg: number;
+  material_type_id: string;
   magnetic_analysis: string | null;
   receiving_comment: string | null;
   requires_analysis: boolean;
@@ -34,7 +35,7 @@ export async function BatchMaterials({
   const { data: rawLines } = await supabase
     .from("visit_materials")
     .select(`
-      id, weight_kg, magnetic_analysis, receiving_comment, requires_analysis,
+      id, weight_kg, material_type_id, magnetic_analysis, receiving_comment, requires_analysis,
       unit_price, purchase_amount, price_finalized,
       material:material_types(name),
       xrf:xrf_records(result, submitted, weight_kg, mismatch)
@@ -45,6 +46,7 @@ export async function BatchMaterials({
   const lines: Line[] = (rawLines ?? []).map((l) => ({
     id: l.id as string,
     weight_kg: Number(l.weight_kg),
+    material_type_id: l.material_type_id as string,
     magnetic_analysis: l.magnetic_analysis as string | null,
     receiving_comment: l.receiving_comment as string | null,
     requires_analysis: Boolean(l.requires_analysis),
@@ -113,6 +115,15 @@ export async function BatchMaterials({
                   <form action={updateMaterialLine} className="mt-2 grid grid-cols-2 gap-2">
                     <input type="hidden" name="visit_id" value={visitId} />
                     <input type="hidden" name="visit_material_id" value={l.id} />
+                    <label className="col-span-2 text-[11px] font-medium">
+                      Material type
+                      <select name="material_type_id" defaultValue={l.material_type_id}
+                        className="mt-1 block w-full rounded border px-2 py-1 text-sm">
+                        {(materialTypes ?? []).map((m) => (
+                          <option key={m.id as string} value={m.id as string}>{m.name as string}</option>
+                        ))}
+                      </select>
+                    </label>
                     <label className="text-[11px] font-medium">
                       Weight (kg)
                       <input type="number" name="weight_kg" step="0.001" min="0" defaultValue={l.weight_kg}

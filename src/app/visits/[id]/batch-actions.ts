@@ -42,13 +42,17 @@ export async function updateMaterialLine(formData: FormData): Promise<void> {
   const lineId = String(formData.get("visit_material_id") ?? "");
   const weight = Number(formData.get("weight_kg"));
   if (!lineId || !(weight >= 0)) return;
+  const materialTypeId = String(formData.get("material_type_id") ?? "").trim();
   const magnetic = String(formData.get("magnetic_analysis") ?? "").trim() || null;
   const comment = String(formData.get("receiving_comment") ?? "").trim() || null;
 
+  const patch: Record<string, unknown> = {
+    weight_kg: weight, magnetic_analysis: magnetic, receiving_comment: comment,
+  };
+  if (materialTypeId) patch.material_type_id = materialTypeId;
+
   const supabase = await createClient();
-  await supabase.from("visit_materials")
-    .update({ weight_kg: weight, magnetic_analysis: magnetic, receiving_comment: comment })
-    .eq("id", lineId);
+  await supabase.from("visit_materials").update(patch).eq("id", lineId);
   if (visitId) revalidatePath(`/visits/${visitId}`);
 }
 

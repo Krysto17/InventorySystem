@@ -51,6 +51,24 @@ export async function submitBatchSettlement(formData: FormData): Promise<void> {
   revalidatePath(`/visits/${visitId}`);
 }
 
+// Manager records the supplier's bank/account details before submitting the
+// batch settlement. Saved on the global supplier record.
+export async function updateSupplierAccount(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || (me.role !== "manager" && me.role !== "owner")) return;
+  const supplierId = String(formData.get("supplier_id") ?? "");
+  const visitId = String(formData.get("visit_id") ?? "");
+  if (!supplierId) return;
+
+  const supabase = await createClient();
+  await supabase.from("suppliers").update({
+    account_name: String(formData.get("account_name") ?? "").trim() || null,
+    account_number: String(formData.get("account_number") ?? "").trim() || null,
+    bank_name: String(formData.get("bank_name") ?? "").trim() || null,
+  }).eq("id", supplierId);
+  if (visitId) revalidatePath(`/visits/${visitId}`);
+}
+
 // Owner approves/rejects; accountant marks paid. The DB trigger enforces which
 // role may take each transition.
 export async function setSettlementStatus(formData: FormData): Promise<void> {

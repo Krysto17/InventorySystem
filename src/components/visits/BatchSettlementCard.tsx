@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { recordDeduction } from "@/app/visits/[id]/finance-actions";
-import { submitBatchSettlement, setSettlementStatus } from "@/app/visits/[id]/settlement-actions";
+import { submitBatchSettlement, setSettlementStatus, updateSupplierAccount } from "@/app/visits/[id]/settlement-actions";
 import type { Role } from "@/lib/auth/roles";
 
 const g1 = <T,>(v: unknown): T | null =>
@@ -41,6 +41,9 @@ export async function BatchSettlementCard({
       supabase.from("batch_settlements").select("*").eq("visit_id", visitId).maybeSingle(),
     ]);
 
+  const { data: supplier } = await supabase
+    .from("suppliers").select("account_name, account_number, bank_name").eq("id", supplierId).maybeSingle();
+
   const materials = (lines ?? []).reduce((s, l) => s + Number(l.purchase_amount ?? 0), 0);
   const light = (charges ?? []).reduce((s, c) => s + Number(c.amount), 0);
   const advance = (deds ?? []).reduce((s, d) => s + Number(d.amount), 0);
@@ -57,7 +60,6 @@ export async function BatchSettlementCard({
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host") ?? "localhost:3000"}`;
   const invoiceUrl = `${origin}/api/pdf/supply-invoice/${visitId}`;
-  const waText = encodeURIComponent(`Supply invoice — net payable ${ngn(net)}.\nView: ${invoiceUrl}`);
 
   return (
     <Card>
@@ -128,6 +130,24 @@ export async function BatchSettlementCard({
         )}
 
         {/* Manager: submit / resubmit for owner approval */}
+        {/* Manager: supplier account details (captured before submitting) */}
+        {(isManager || isOwner) && !locked && (
+          <form action={updateSupplierAccount} className="space-y-2 border-t border-line pt-3">
+            <input type="hidden" name="visit_id" value={visitId} />
+            <input type="hidden" name="supplier_id" value={supplierId} />
+            <div className="text-xs font-medium text-ink-2">Supplier account details</div>
+            <div className="grid grid-cols-3 gap-2">
+              <input name="account_name" placeholder="Account name" defaultValue={(supplier?.account_name as string | null) ?? ""}
+                className="rounded border px-2 py-1 text-sm" />
+              <input name="account_number" placeholder="Account number" defaultValue={(supplier?.account_number as string | null) ?? ""}
+                className="rounded border px-2 py-1 text-sm" />
+              <input name="bank_name" placeholder="Bank" defaultValue={(supplier?.bank_name as string | null) ?? ""}
+                className="rounded border px-2 py-1 text-sm" />
+            </div>
+            <button type="submit" className="rounded border px-3 py-1 text-xs hover:bg-paper">Save account details</button>
+          </form>
+        )}
+
         {isManager && !locked && (
           <form action={submitBatchSettlement} className="border-t border-line pt-3">
             <input type="hidden" name="visit_id" value={visitId} />
@@ -173,8 +193,6 @@ export async function BatchSettlementCard({
           <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
             <a href={invoiceUrl} target="_blank" rel="noreferrer"
               className="rounded border px-3 py-1 text-xs hover:bg-paper">Download supply invoice</a>
-            <a href={`https://wa.me/?text=${waText}`} target="_blank" rel="noreferrer"
-              className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Share via WhatsApp</a>
           </div>
         )}
 
