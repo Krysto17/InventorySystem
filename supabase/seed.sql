@@ -26,7 +26,8 @@ begin
       ('qc1',    'Quality One',      'qc',         dong),
       ('mgr1',   'Manager One',      'manager',    dong),
       ('acct1',  'Accountant One',   'accounting', dong),
-      ('inv1',   'Inventory One',    'inventory',  dong)
+      ('inv1',   'Inventory One',    'inventory',  dong),
+      ('sec1',   'Security One',     'security',   dong)
     ) as t(username, full_name, role, site_id)
   loop
     mail := rec.username || '@' || dom;

@@ -1,0 +1,104 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Stamp } from "@/components/ui/stamp";
+import { formatTimestamp } from "@/lib/visits/format";
+import { issueGatePass, cancelGatePass } from "./actions";
+
+const g1 = <T,>(v: unknown): T | null =>
+  Array.isArray(v) ? ((v[0] ?? null) as T | null) : ((v ?? null) as T | null);
+
+const STATUS_VARIANT: Record<string, "default" | "green" | "yellow" | "red"> = {
+  issued: "yellow", acknowledged: "green", cancelled: "red",
+};
+
+export default async function ManagerGatePassesPage() {
+  const supabase = await createClient();
+  const [{ data: passes }, { data: suppliers }, { data: materialTypes }] = await Promise.all([
+    supabase.from("gate_passes")
+      .select("id, pass_code, material_owner, reason, bags, weight_kg, status, issued_at, material:material_types(name), supplier:suppliers(name)")
+      .order("issued_at", { ascending: false }).limit(30),
+    supabase.from("suppliers").select("id, name").order("name").limit(200),
+    supabase.from("material_types").select("id, name").order("name"),
+  ]);
+
+  return (
+    <main className="p-6 max-w-3xl mx-auto space-y-6">
+      <div className="flex items-center gap-4">
+        <Link href="/manager" className="text-sm text-gray-500 hover:underline">← Pricing queue</Link>
+        <h1 className="text-2xl font-bold">Gate passes</h1>
+      </div>
+
+      <Card>
+        <CardHeader><h2 className="text-sm font-semibold">Issue a gate pass (outgoing material)</h2></CardHeader>
+        <CardContent>
+          <form action={issueGatePass} className="grid grid-cols-2 gap-3">
+            <label className="text-xs font-medium">Supplier
+              <select name="supplier_id" defaultValue="" className="mt-1 block w-full rounded border px-2 py-1 text-sm">
+                <option value="">— (or type owner below)</option>
+                {(suppliers ?? []).map((s) => <option key={s.id as string} value={s.id as string}>{s.name as string}</option>)}
+              </select>
+            </label>
+            <label className="text-xs font-medium">Material owner (free text)
+              <input type="text" name="material_owner" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+            </label>
+            <label className="text-xs font-medium">Material type
+              <select name="material_type_id" defaultValue="" className="mt-1 block w-full rounded border px-2 py-1 text-sm">
+                <option value="">—</option>
+                {(materialTypes ?? []).map((m) => <option key={m.id as string} value={m.id as string}>{m.name as string}</option>)}
+              </select>
+            </label>
+            <label className="text-xs font-medium">Bags
+              <input type="number" name="bags" min="0" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+            </label>
+            <label className="text-xs font-medium">Weight (kg)
+              <input type="number" name="weight_kg" min="0" step="0.001" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+            </label>
+            <label className="text-xs font-medium">Reason
+              <input type="text" name="reason" required className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+            </label>
+            <button type="submit" className="col-span-2 rounded bg-ore px-4 py-1.5 text-sm font-semibold text-white hover:bg-ore-strong">
+              Issue gate pass
+            </button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><h2 className="text-sm font-semibold">Gate passes ({passes?.length ?? 0})</h2></CardHeader>
+        <CardContent className="p-0">
+          {(passes?.length ?? 0) === 0 ? (
+            <p className="px-4 py-3 text-sm text-ink-2">No gate passes yet.</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {(passes ?? []).map((p) => {
+                const mat = g1<{ name: string }>((p as { material: unknown }).material);
+                const sup = g1<{ name: string }>((p as { supplier: unknown }).supplier);
+                const st = p.status as string;
+                return (
+                  <li key={p.id as string} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Stamp>{p.pass_code as string}</Stamp>
+                      <span>{sup?.name ?? p.material_owner ?? "—"} · {mat?.name ?? "—"} · {p.reason as string}</span>
+                      <span className="text-ink-2">{formatTimestamp(p.issued_at as string)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={STATUS_VARIANT[st] ?? "default"}>{st}</Badge>
+                      {st === "issued" && (
+                        <form action={cancelGatePass}>
+                          <input type="hidden" name="pass_id" value={p.id as string} />
+                          <button type="submit" className="rounded border px-2.5 py-0.5 text-xs">Cancel</button>
+                        </form>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </main>
+  );
+}
