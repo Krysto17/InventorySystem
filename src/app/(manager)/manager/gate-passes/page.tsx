@@ -15,12 +15,15 @@ const STATUS_VARIANT: Record<string, "default" | "green" | "yellow" | "red"> = {
 
 export default async function ManagerGatePassesPage() {
   const supabase = await createClient();
-  const [{ data: passes }, { data: suppliers }, { data: materialTypes }] = await Promise.all([
+  const [{ data: passes }, { data: suppliers }, { data: materialTypes }, { data: lots }] = await Promise.all([
     supabase.from("gate_passes")
       .select("id, pass_code, material_owner, reason, bags, weight_kg, status, issued_at, material:material_types(name), supplier:suppliers(name)")
       .order("issued_at", { ascending: false }).limit(30),
     supabase.from("suppliers").select("id, name").order("name").limit(200),
     supabase.from("material_types").select("id, name").order("name"),
+    supabase.from("stock_lots")
+      .select("id, weight_kg, material:material_types(name), supplier:suppliers(name)")
+      .eq("status", "available").order("created_at", { ascending: false }).limit(200),
   ]);
 
   return (
@@ -34,6 +37,20 @@ export default async function ManagerGatePassesPage() {
         <CardHeader><h2 className="text-sm font-semibold">Issue a gate pass (outgoing material)</h2></CardHeader>
         <CardContent>
           <form action={issueGatePass} className="grid grid-cols-2 gap-3">
+            <label className="col-span-2 text-xs font-medium">Release from stock lot (material leaves stock when the gate acknowledges)
+              <select name="stock_lot_id" defaultValue="" className="mt-1 block w-full rounded border px-2 py-1 text-sm">
+                <option value="">— not from a tracked lot —</option>
+                {(lots ?? []).map((l) => {
+                  const mat = g1<{ name: string }>((l as { material: unknown }).material);
+                  const sup = g1<{ name: string }>((l as { supplier: unknown }).supplier);
+                  return (
+                    <option key={l.id as string} value={l.id as string}>
+                      {mat?.name ?? "—"} · {l.weight_kg as number} kg{sup?.name ? ` · ${sup.name}` : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
             <label className="text-xs font-medium">Supplier
               <select name="supplier_id" defaultValue="" className="mt-1 block w-full rounded border px-2 py-1 text-sm">
                 <option value="">— (or type owner below)</option>

@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { ROLE_HOME, ROLES } from "@/lib/auth/roles";
 
 describe("roles", () => {
-  it("defines all roles (qc P9; auditor/director = owner P10; security re-added)", () => {
+  it("defines all roles (qc P9; auditor/director = owner P10; gate restored as pipeline entry)", () => {
     expect(ROLES).toEqual([
-      "processing", "receiving", "qc", "manager", "accounting", "inventory", "security", "owner",
+      "processing", "receiving", "qc", "manager", "accounting", "inventory", "gate", "owner",
     ]);
   });
 

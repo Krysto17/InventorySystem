@@ -9,7 +9,7 @@ export type NavIcon =
   | "qc"
   | "pricing"
   | "reports"
-  | "security"
+  | "gate"
   | "accounting"
   | "inventory"
   | "bulkSales"
@@ -41,7 +41,7 @@ const NAV: Record<Role, NavItem[]> = {
   ],
   manager: [
     { label: "Pricing queue", href: "/manager", icon: "pricing" },
-    { label: "Gate passes", href: "/manager/gate-passes", icon: "security" },
+    { label: "Gate passes", href: "/manager/gate-passes", icon: "gate" },
     { label: "Advances", href: "/manager/advances", icon: "accounting" },
     { label: "Expenses", href: "/inventory/consumables", icon: "consumables" },
     { label: "Reports", href: "/manager/reports", icon: "reports" },
@@ -58,8 +58,9 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Lot sales", href: "/inventory/lot-sales", icon: "bulkSales" },
     { label: "Consumables", href: "/inventory/consumables", icon: "consumables" },
   ],
-  security: [
-    { label: "Gate", href: "/security", icon: "security" },
+  gate: [
+    { label: "Gate", href: "/gate", icon: "gate" },
+    { label: "New intake", href: "/gate/intake", icon: "intake" },
   ],
   owner: [
     { label: "Dashboard", href: "/owner", icon: "dashboard" },

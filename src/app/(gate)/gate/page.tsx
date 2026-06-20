@@ -1,16 +1,20 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
-import { recordGateLog, acknowledgeGatePass } from "./actions";
+import { recordGateLog, acknowledgeGatePass, sendVisitIn } from "./actions";
 
 const g1 = <T,>(v: unknown): T | null =>
   Array.isArray(v) ? ((v[0] ?? null) as T | null) : ((v ?? null) as T | null);
 
-export default async function SecurityHomePage() {
+export default async function GateHomePage() {
   const supabase = await createClient();
-  const [{ data: issued }, { data: logs }, { data: passOptions }] = await Promise.all([
+  const [{ data: atGate }, { data: issued }, { data: logs }, { data: passOptions }] = await Promise.all([
+    supabase.from("visits")
+      .select("id, vehicle_plate, entry_path, created_at, supplier:suppliers(name), material:material_types(name)")
+      .eq("state", "at_gate_in").order("created_at", { ascending: true }),
     supabase.from("gate_passes")
       .select("id, pass_code, material_owner, reason, bags, weight_kg, status, issued_at, material:material_types(name)")
       .eq("status", "issued").order("issued_at", { ascending: true }),
@@ -22,10 +26,52 @@ export default async function SecurityHomePage() {
 
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold">Gate — Security</h1>
-        <p className="text-sm text-gray-500">Register material movement; acknowledge issued gate passes before release.</p>
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Gate</h1>
+          <p className="text-sm text-gray-500">Log arrivals in, send them to the plant, and authorise outgoing material.</p>
+        </div>
+        <Link href="/gate/intake" className="rounded bg-ore px-4 py-2 text-sm font-semibold text-white hover:bg-ore-strong">
+          + New intake
+        </Link>
       </header>
+
+      {/* Arrivals dwelling at the gate */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold">At the gate (awaiting send-in)</h2>
+            <Badge variant={atGate?.length ? "yellow" : "default"}>{atGate?.length ?? 0}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {(atGate?.length ?? 0) === 0 ? (
+            <p className="px-4 py-3 text-sm text-ink-2">No supplier waiting at the gate.</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {(atGate ?? []).map((v) => {
+                const sup = g1<{ name: string }>((v as { supplier: unknown }).supplier);
+                const mat = g1<{ name: string }>((v as { material: unknown }).material);
+                return (
+                  <li key={v.id as string} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link href={`/visits/${v.id}`} className="font-medium hover:underline">{sup?.name ?? "—"}</Link>
+                      <span className="text-ink-2">{mat?.name ?? "—"}{v.vehicle_plate ? ` · ${v.vehicle_plate}` : ""}</span>
+                      <Badge variant="default">{v.entry_path as string}</Badge>
+                    </div>
+                    <form action={sendVisitIn}>
+                      <input type="hidden" name="visit_id" value={v.id as string} />
+                      <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">
+                        Send {v.entry_path === "unprocessed" ? "to plant" : "to receiving"}
+                      </button>
+                    </form>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Outgoing passes awaiting acknowledgement */}
       <Card>
@@ -46,7 +92,7 @@ export default async function SecurityHomePage() {
                   <li key={p.id as string} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
                     <div className="flex flex-wrap items-center gap-2">
                       <Stamp>{p.pass_code as string}</Stamp>
-                      <span>{p.material_owner ?? "—"} · {mat?.name ?? "—"}{p.bags != null ? ` · ${p.bags} bags` : ""}</span>
+                      <span>{p.material_owner ?? "—"} · {mat?.name ?? "—"}{p.weight_kg != null ? ` · ${p.weight_kg} kg` : ""}{p.bags != null ? ` · ${p.bags} bags` : ""}</span>
                       <span className="text-ink-2">· {p.reason as string}</span>
                     </div>
                     <form action={acknowledgeGatePass}>

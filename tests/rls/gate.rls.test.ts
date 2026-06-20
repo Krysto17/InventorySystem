@@ -1,15 +1,20 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
 
-// Gate passes (manager/owner issue → security acknowledge) + gate movement log.
-describe("gate passes + gate logs RLS", () => {
-  let siteAId: string, siteBId: string;
-  let mgrA: TestUser, secA: TestUser, secB: TestUser, invA: TestUser, owner: TestUser;
+// Gate role: Phase 1/2 pipeline intake + gate passes (manager/owner issue → gate
+// acknowledge) + movement log. Acknowledging a lot-backed pass removes the lot
+// from stock via a 'gate_release' stock movement.
+describe("gate intake + passes + stock release RLS", () => {
+  // Unique per-run suffix: this suite runs against a non-reset local DB, so
+  // fixed usernames would collide with leftover users from a previous run.
+  const rid = Date.now().toString(36);
+  let siteAId: string, siteBId: string, materialId: string, supplierId: string;
+  let mgrA: TestUser, gateA: TestUser, gateB: TestUser, invA: TestUser, owner: TestUser;
 
-  async function issuePass(siteId: string, issuedBy: string) {
+  async function issuePass(siteId: string, issuedBy: string, extra: Record<string, unknown> = {}) {
     const { data, error } = await adminClient()
       .from("gate_passes")
-      .insert({ site_id: siteId, reason: "Outgoing concentrate", issued_by: issuedBy })
+      .insert({ site_id: siteId, reason: "Outgoing concentrate", issued_by: issuedBy, ...extra })
       .select("id, pass_code, status")
       .single();
     if (error) throw error;
@@ -20,109 +25,144 @@ describe("gate passes + gate logs RLS", () => {
     const { data: sites } = await adminClient().from("sites").select("id").limit(2);
     siteAId = sites![0].id as string;
     siteBId = sites![1].id as string;
-    mgrA  = await makeUser({ username: "gp-mgr-a",  role: "manager",   siteId: siteAId });
-    secA  = await makeUser({ username: "gp-sec-a",  role: "security",  siteId: siteAId });
-    secB  = await makeUser({ username: "gp-sec-b",  role: "security",  siteId: siteBId });
-    invA  = await makeUser({ username: "gp-inv-a",  role: "inventory", siteId: siteAId });
-    owner = await makeUser({ username: "gp-owner",  role: "owner",     siteId: null });
+    const { data: mat } = await adminClient().from("material_types").select("id").limit(1).single();
+    materialId = mat!.id as string;
+    const { data: sup } = await adminClient()
+      .from("suppliers").insert({ name: "Gate Supplier", phone: "0700" }).select("id").single();
+    supplierId = sup!.id as string;
+
+    mgrA  = await makeUser({ username: `gi-mgr-a-${rid}`,  role: "manager",   siteId: siteAId });
+    gateA = await makeUser({ username: `gi-gate-a-${rid}`, role: "gate",      siteId: siteAId });
+    gateB = await makeUser({ username: `gi-gate-b-${rid}`, role: "gate",      siteId: siteBId });
+    invA  = await makeUser({ username: `gi-inv-a-${rid}`,  role: "inventory", siteId: siteAId });
+    owner = await makeUser({ username: `gi-owner-${rid}`,  role: "owner",     siteId: null });
   });
 
+  // ── Phase 1/2 intake ───────────────────────────────────────────────────────
+  it("gate at site A logs a visit in at_gate_in and sends it to processing", async () => {
+    const { data: visit, error } = await gateA.client.from("visits").insert({
+      site_id: siteAId,
+      supplier_id: supplierId,
+      declared_material_type_id: materialId,
+      entry_path: "unprocessed",
+      vehicle_plate: "ABC-123",
+      state: "at_gate_in",
+      created_by: gateA.userId,
+    }).select("id, state").single();
+    expect(error).toBeNull();
+    expect(visit!.state).toBe("at_gate_in");
+
+    const { error: sendErr } = await gateA.client
+      .from("visits").update({ state: "in_processing" }).eq("id", visit!.id);
+    expect(sendErr).toBeNull();
+    const { data: after } = await adminClient()
+      .from("visits").select("state").eq("id", visit!.id).single();
+    expect(after!.state).toBe("in_processing");
+  });
+
+  it("gate at site B cannot create a visit for site A", async () => {
+    const { error } = await gateB.client.from("visits").insert({
+      site_id: siteAId,
+      supplier_id: supplierId,
+      declared_material_type_id: materialId,
+      entry_path: "unprocessed",
+      state: "at_gate_in",
+      created_by: gateB.userId,
+    });
+    expect(error).not.toBeNull();
+  });
+
+  // ── Gate passes ─────────────────────────────────────────────────────────────
   it("auto-generates a GP- pass code on insert", async () => {
     const pass = await issuePass(siteAId, mgrA.userId);
     expect(pass.pass_code as string).toMatch(/^GP-[A-Z]{1,3}-\d{4}$/);
     expect(pass.status).toBe("issued");
   });
 
-  it("manager at site A can issue a gate pass for site A", async () => {
-    const { error } = await mgrA.client.from("gate_passes").insert({
-      site_id: siteAId,
-      reason: "Release to buyer",
-      issued_by: mgrA.userId,
+  it("manager issues a pass; gate cannot issue", async () => {
+    const ok = await mgrA.client.from("gate_passes").insert({
+      site_id: siteAId, reason: "Release to buyer", issued_by: mgrA.userId,
     });
-    expect(error).toBeNull();
+    expect(ok.error).toBeNull();
+
+    const bad = await gateA.client.from("gate_passes").insert({
+      site_id: siteAId, reason: "Gate should not issue", issued_by: gateA.userId,
+    });
+    expect(bad.error).not.toBeNull();
   });
 
-  it("security cannot issue a gate pass", async () => {
-    const { error } = await secA.client.from("gate_passes").insert({
-      site_id: siteAId,
-      reason: "Security should not issue",
-      issued_by: secA.userId,
-    });
-    expect(error).not.toBeNull();
-  });
-
-  it("security at site A acknowledges an issued pass; security at site B cannot", async () => {
+  it("gate at site A acknowledges an issued pass; gate at site B cannot", async () => {
     const pass = await issuePass(siteAId, mgrA.userId);
-    const cross = await secB.client
-      .from("gate_passes")
-      .update({ status: "acknowledged" })
-      .eq("id", pass.id);
-    // site-B security sees no site-A row → update affects nothing (no error, no change)
+    await gateB.client.from("gate_passes").update({ status: "acknowledged" }).eq("id", pass.id);
     const { data: stillIssued } = await adminClient()
       .from("gate_passes").select("status").eq("id", pass.id).single();
     expect(stillIssued!.status).toBe("issued");
 
-    const { error } = await secA.client
-      .from("gate_passes")
-      .update({ status: "acknowledged" })
-      .eq("id", pass.id);
+    const { error } = await gateA.client
+      .from("gate_passes").update({ status: "acknowledged" }).eq("id", pass.id);
     expect(error).toBeNull();
     const { data } = await adminClient()
       .from("gate_passes").select("status, acknowledged_at").eq("id", pass.id).single();
     expect(data!.status).toBe("acknowledged");
     expect(data!.acknowledged_at).not.toBeNull();
-    void cross;
   });
 
-  it("manager can cancel an issued pass; security cannot cancel", async () => {
+  it("manager can cancel an issued pass; gate cannot cancel", async () => {
     const pass = await issuePass(siteAId, mgrA.userId);
-    const secTry = await secA.client
+    const gateTry = await gateA.client
       .from("gate_passes").update({ status: "cancelled" }).eq("id", pass.id);
-    expect(secTry.error).not.toBeNull();
+    expect(gateTry.error).not.toBeNull();
 
     const { error } = await mgrA.client
       .from("gate_passes").update({ status: "cancelled" }).eq("id", pass.id);
     expect(error).toBeNull();
   });
 
-  it("security at site A logs a movement for site A; inventory cannot log", async () => {
-    const { error: secErr } = await secA.client.from("gate_logs").insert({
-      site_id: siteAId,
-      direction: "in",
-      driver_name: "Sani",
-      bags: 12,
-      recorded_by: secA.userId,
+  // ── Stock release on acknowledgement ────────────────────────────────────────
+  it("acknowledging a lot-backed pass writes a gate_release 'out' movement", async () => {
+    // Seed an available lot + its 'in' movement so there's stock to release.
+    const { data: lot } = await adminClient().from("stock_lots").insert({
+      site_id: siteAId, material_type_id: materialId, supplier_id: supplierId,
+      weight_kg: 100, cost_price_per_kg: 50, recorded_by: owner.userId,
+    }).select("id").single();
+    await adminClient().from("stock_movements").insert({
+      site_id: siteAId, material_type_id: materialId, weight: 100,
+      direction: "in", recorded_by: owner.userId, reason: "purchase_intake",
     });
-    expect(secErr).toBeNull();
+
+    const pass = await issuePass(siteAId, mgrA.userId, { stock_lot_id: lot!.id, weight_kg: 40 });
+    const { error } = await gateA.client
+      .from("gate_passes").update({ status: "acknowledged" }).eq("id", pass.id);
+    expect(error).toBeNull();
+
+    const { data: outRows } = await adminClient()
+      .from("stock_movements")
+      .select("weight, direction, reason")
+      .eq("site_id", siteAId).eq("material_type_id", materialId).eq("reason", "gate_release");
+    expect((outRows ?? []).some((r) => Number(r.weight) === 40 && r.direction === "out")).toBe(true);
+  });
+
+  it("gate at site A logs a movement; inventory cannot", async () => {
+    const { error: gateErr } = await gateA.client.from("gate_logs").insert({
+      site_id: siteAId, direction: "in", driver_name: "Sani", bags: 12, recorded_by: gateA.userId,
+    });
+    expect(gateErr).toBeNull();
 
     const { error: invErr } = await invA.client.from("gate_logs").insert({
-      site_id: siteAId,
-      direction: "in",
-      recorded_by: invA.userId,
+      site_id: siteAId, direction: "in", recorded_by: invA.userId,
     });
     expect(invErr).not.toBeNull();
   });
 
-  it("security at site B cannot log a movement for site A", async () => {
-    const { error } = await secB.client.from("gate_logs").insert({
-      site_id: siteAId,
-      direction: "out",
-      recorded_by: secB.userId,
-    });
-    expect(error).not.toBeNull();
-  });
-
-  it("owner can read gate passes and logs across sites", async () => {
+  it("owner reads passes across sites; manager has cross-site read of gate logs", async () => {
     const pass = await issuePass(siteBId, owner.userId);
-    const { data } = await owner.client.from("gate_passes").select("id").eq("id", pass.id);
-    expect(data ?? []).toHaveLength(1);
-  });
+    const { data: p } = await owner.client.from("gate_passes").select("id").eq("id", pass.id);
+    expect(p ?? []).toHaveLength(1);
 
-  it("manager has cross-site read of gate logs (combined reports)", async () => {
     const { data: row } = await adminClient().from("gate_logs").insert({
       site_id: siteBId, direction: "out", recorded_by: owner.userId,
     }).select("id").single();
-    const { data } = await mgrA.client.from("gate_logs").select("id").eq("id", row!.id);
-    expect(data ?? []).toHaveLength(1);
+    const { data: l } = await mgrA.client.from("gate_logs").select("id").eq("id", row!.id);
+    expect(l ?? []).toHaveLength(1);
   });
 });

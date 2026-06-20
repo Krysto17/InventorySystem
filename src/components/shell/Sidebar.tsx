@@ -19,7 +19,7 @@ const ICONS: Record<NavIcon, React.ComponentType<{ size?: number }>> = {
   qc: Microscope,
   pricing: Tags,
   reports: BarChart3,
-  security: ShieldCheck,
+  gate: ShieldCheck,
   accounting: Wallet,
   inventory: Boxes,
   bulkSales: ShoppingCart,
@@ -38,7 +38,7 @@ const ROLE_LABEL: Record<Role, string> = {
   manager: "Manager",
   accounting: "Accounting",
   inventory: "Inventory",
-  security: "Security",
+  gate: "Gate",
   owner: "Owner",
 };
 
