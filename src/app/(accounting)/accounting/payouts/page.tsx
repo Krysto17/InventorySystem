@@ -17,7 +17,7 @@ export default async function AccountingPayoutsPage() {
 
   const [{ data: supplies }, { data: advances }, { data: expenses }] = await Promise.all([
     supabase.from("batch_settlements")
-      .select("id, visit_id, net_balance, created_at, visit:visits(supplier:suppliers(name))")
+      .select("id, visit_id, net_balance, created_at, visit:visits(supplier:suppliers(name, account_name, account_number, bank_name))")
       .eq("status", "approved").order("created_at", { ascending: true }),
     supabase.from("advances")
       .select("id, purpose, amount_naira, created_at, supplier:suppliers(name, supplier_code)")
@@ -45,12 +45,20 @@ export default async function AccountingPayoutsPage() {
           ) : (
             <ul className="divide-y divide-line">
               {(supplies ?? []).map((s) => {
-                const sup = g1<{ name: string }>(g1<{ supplier: unknown }>((s as { visit: unknown }).visit)?.supplier);
+                const sup = g1<{ name: string; account_name: string | null; account_number: string | null; bank_name: string | null }>(
+                  g1<{ supplier: unknown }>((s as { visit: unknown }).visit)?.supplier,
+                );
+                const hasAcct = sup?.account_name || sup?.account_number || sup?.bank_name;
                 return (
-                  <li key={s.id as string} className="flex items-center justify-between px-4 py-3 text-sm">
+                  <li key={s.id as string} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
                     <span>
                       <Link href={`/visits/${s.visit_id}`} className="font-medium underline">{sup?.name ?? "—"}</Link>
                       <span className="text-ink-2"> · {ngn(Number(s.net_balance))} · {formatTimestamp(s.created_at as string)}</span>
+                      <span className="block text-xs text-ink-2">
+                        {hasAcct
+                          ? <>{sup?.account_name ?? "—"} · <span className="mono">{sup?.account_number ?? "—"}</span> · {sup?.bank_name ?? "—"}</>
+                          : "No account details on file"}
+                      </span>
                     </span>
                     <form action={markSettlementPaid}>
                       <input type="hidden" name="settlement_id" value={s.id as string} />

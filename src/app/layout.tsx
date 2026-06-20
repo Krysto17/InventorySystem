@@ -3,7 +3,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/shell/ThemeProvider";
 import { AppShell } from "@/components/shell/AppShell";
 import { getProfile } from "@/lib/auth/get-profile";
-import { createClient } from "@/lib/supabase/server";
+import { roleNotifications } from "@/lib/notifications";
 
 // Industrial-ledger type system: Archivo (sans) + IBM Plex Mono (IDs, figures),
 // loaded at runtime via <link> (see <head> below) with a system-font fallback,
@@ -15,23 +15,13 @@ export const metadata: Metadata = {
   description: "Magnetic Joezion Nig. Ltd — material tracking and inventory system",
 };
 
-// Owner-only badge count: pending bulk sales awaiting approval.
-async function ownerNotifications(): Promise<number> {
-  const supabase = await createClient();
-  const { count } = await supabase
-    .from("bulk_sales")
-    .select("id", { count: "exact", head: true })
-    .eq("approval_status", "pending");
-  return count ?? 0;
-}
-
 export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   const profile = await getProfile();
-  const notifications = profile?.role === "owner" ? await ownerNotifications() : 0;
+  const notificationItems = profile ? await roleNotifications(profile.role) : [];
 
   return (
     <html
@@ -55,7 +45,7 @@ export default async function RootLayout({
                 ? { role: profile.role, fullName: profile.full_name, username: profile.username }
                 : null
             }
-            notifications={notifications}
+            notificationItems={notificationItems}
           >
             {children}
           </AppShell>

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
 import { issueGatePass, cancelGatePass } from "./actions";
+import { GateMovementsCard } from "@/components/gate/GateMovementsCard";
 
 const g1 = <T,>(v: unknown): T | null =>
   Array.isArray(v) ? ((v[0] ?? null) as T | null) : ((v ?? null) as T | null);
@@ -116,6 +117,8 @@ export default async function ManagerGatePassesPage() {
           )}
         </CardContent>
       </Card>
+
+      <GateMovementsCard showSite />
     </main>
   );
 }

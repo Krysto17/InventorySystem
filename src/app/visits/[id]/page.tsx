@@ -77,6 +77,14 @@ export default async function VisitDetailPage({
     .select("id, name, charge_basis, rate")
     .eq("active", true);
 
+  // Owner-finalised price → green "Director OK" node in the chain.
+  const { count: finalizedCount } = await supabase
+    .from("visit_materials")
+    .select("id", { count: "exact", head: true })
+    .eq("visit_id", id)
+    .eq("price_finalized", true);
+  const priceApproved = (finalizedCount ?? 0) > 0;
+
   const { data: paymentsRaw } = await supabase
     .from("payments")
     .select(`
@@ -271,7 +279,7 @@ export default async function VisitDetailPage({
             {STATE_LABELS[visitNorm.state] ?? visitNorm.state}
           </Badge>
         </div>
-        <ApprovalChain state={visitNorm.state} entryPath={visitNorm.entry_path} />
+        <ApprovalChain state={visitNorm.state} entryPath={visitNorm.entry_path} priceApproved={priceApproved} />
       </header>
       <PdfDownloadBar
         visitId={visitNorm.id}

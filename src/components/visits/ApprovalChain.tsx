@@ -35,13 +35,21 @@ function Link({ done }: { done: boolean }) {
 export function ApprovalChain({
   state,
   entryPath,
+  priceApproved = false,
 }: {
   state: VisitState;
   entryPath?: "unprocessed" | "processed";
+  priceApproved?: boolean;
 }) {
   const exited = state === "exited";
   // No-agreement off-ramp: completed up to pricing, then an Exited terminal.
   const nodes: { label: string; kind: "done" | "now" | "next" | "skip" | "reject" }[] = [];
+
+  // The "Director OK" node: green once the owner finalises the price; pending
+  // while pricing is in progress; upcoming before that.
+  const pricingIdx = ORDER.findIndex((n) => n.state === "pricing");
+  const directorKind = (currentIdx: number): "done" | "now" | "next" =>
+    priceApproved ? "done" : currentIdx >= pricingIdx ? "now" : "next";
 
   if (exited) {
     for (const n of ORDER) {
@@ -51,6 +59,7 @@ export function ApprovalChain({
         // never reached
       } else {
         nodes.push({ label: n.label, kind: "done" });
+        if (n.state === "pricing") nodes.push({ label: "Director OK", kind: priceApproved ? "done" : "skip" });
       }
     }
     nodes.push({ label: "Exited", kind: "reject" });
@@ -66,6 +75,7 @@ export function ApprovalChain({
       } else {
         nodes.push({ label: n.label, kind: "next" });
       }
+      if (n.state === "pricing") nodes.push({ label: "Director OK", kind: directorKind(currentIdx) });
     });
   }
 

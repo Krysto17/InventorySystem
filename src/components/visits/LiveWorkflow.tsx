@@ -25,6 +25,14 @@ export async function LiveWorkflow({ limit = 6 }: { limit?: number }) {
     .order("created_at", { ascending: false })
     .limit(limit);
 
+  // Which of these visits have an owner-finalised price (drives the green
+  // "Director OK" node in the chain).
+  const visitIds = (visits ?? []).map((v) => v.id as string);
+  const { data: finalized } = visitIds.length
+    ? await supabase.from("visit_materials").select("visit_id").in("visit_id", visitIds).eq("price_finalized", true)
+    : { data: [] as { visit_id: string }[] };
+  const priceApprovedSet = new Set((finalized ?? []).map((r) => r.visit_id as string));
+
   return (
     <Card>
       <CardHeader className="flex items-center justify-between">
@@ -57,7 +65,11 @@ export async function LiveWorkflow({ limit = 6 }: { limit?: number }) {
                       <Badge variant={stateVariant(state)}>{STATE_LABELS[state] ?? state}</Badge>
                     </div>
                     <div className="mt-2">
-                      <ApprovalChain state={state} entryPath={v.entry_path as "unprocessed" | "processed"} />
+                      <ApprovalChain
+                        state={state}
+                        entryPath={v.entry_path as "unprocessed" | "processed"}
+                        priceApproved={priceApprovedSet.has(v.id as string)}
+                      />
                     </div>
                   </Link>
                 </li>

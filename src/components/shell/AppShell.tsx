@@ -5,16 +5,17 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import type { Role } from "@/lib/auth/roles";
+import type { NotificationItem } from "@/lib/notifications";
 
 const BARE_PREFIXES = ["/login", "/set-password"];
 
 type Props = {
   profile: { role: Role; fullName: string; username: string } | null;
-  notifications: number;
+  notificationItems: NotificationItem[];
   children: React.ReactNode;
 };
 
-export function AppShell({ profile, notifications, children }: Props) {
+export function AppShell({ profile, notificationItems, children }: Props) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -37,7 +38,7 @@ export function AppShell({ profile, notifications, children }: Props) {
       <div className="flex min-w-0 flex-1 flex-col md:pl-60">
         <Header
           role={profile.role}
-          notifications={notifications}
+          notificationItems={notificationItems}
           onMenuClick={() => setOpen(true)}
         />
         <main className="flex-1">{children}</main>

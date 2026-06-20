@@ -148,6 +148,25 @@ export async function BatchSettlementCard({
           </form>
         )}
 
+        {/* Accountant (and everyone once the batch is locked) sees the supplier's
+            bank details read-only — needed to pay the supplier. */}
+        {(isAccounting || (locked && !isManager && !isOwner)) && (
+          <div className="space-y-1 border-t border-line pt-3 text-sm">
+            <div className="text-xs font-medium text-ink-2">Supplier account details</div>
+            {supplier?.account_name || supplier?.account_number || supplier?.bank_name ? (
+              <div className="text-ink">
+                {(supplier?.account_name as string | null) ?? "—"}
+                {" · "}
+                <span className="mono">{(supplier?.account_number as string | null) ?? "—"}</span>
+                {" · "}
+                {(supplier?.bank_name as string | null) ?? "—"}
+              </div>
+            ) : (
+              <p className="text-ink-2">No account details on file yet.</p>
+            )}
+          </div>
+        )}
+
         {isManager && !locked && (
           <form action={submitBatchSettlement} className="border-t border-line pt-3">
             <input type="hidden" name="visit_id" value={visitId} />
