@@ -27,7 +27,7 @@ export default async function ManagerCostPricePage() {
     supabase
       .from("cost_price_runs")
       .select(`
-        id, label, batch_code, sold, total_weight_kg, total_cost_price, avg_cost_price_per_kg, created_at,
+        id, label, batch_code, sold, approval_status, total_weight_kg, total_cost_price, avg_cost_price_per_kg, created_at,
         material:material_types(name),
         items:cost_price_run_lots(
           stock_lot:stock_lots(weight_kg, cost_price_per_kg, material:material_types(name), supplier:suppliers(name))
@@ -88,7 +88,13 @@ export default async function ManagerCostPricePage() {
                       {r.batch_code != null && <Stamp>{r.batch_code as string}</Stamp>}
                       <span className="text-sm font-medium">{r.label as string}</span>
                       {runMat?.name && <span className="mono text-[11px] uppercase tracking-[0.05em] text-ore">{runMat.name}</span>}
-                      <Badge variant={r.sold ? "paid" : "default"}>{r.sold ? "Sold" : "Computation"}</Badge>
+                      {(() => {
+                        const st = r.approval_status as string | null;
+                        if (st === "approved") return <Badge variant="paid">Sold</Badge>;
+                        if (st === "pending") return <Badge variant="yellow">Awaiting owner approval</Badge>;
+                        if (st === "rejected") return <Badge variant="red">Rejected</Badge>;
+                        return <Badge variant="default">Computation</Badge>;
+                      })()}
                     </div>
                     <Badge variant="purple">
                       {r.avg_cost_price_per_kg != null ? `${ngn(Number(r.avg_cost_price_per_kg))}/kg` : "—"}

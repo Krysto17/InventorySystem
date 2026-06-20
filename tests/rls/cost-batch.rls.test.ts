@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
 
-// Manager-formed mixing batches: forming a SOLD batch removes each lot from
-// stock (flip to sold + 'mixed_batch' ledger 'out') and records weighted cost.
-describe("cost-price mixing batch sells stock", () => {
+// Manager-formed mixing batches: the manager submits a PENDING batch (lots stay
+// in stock), the OWNER approves to remove each lot (flip to sold + 'mixed_batch'
+// ledger 'out'); the weighted cost is recorded on attach.
+describe("cost-price mixing batch sells stock on owner approval", () => {
   const rid = Date.now().toString(36);
   let siteAId: string, materialId: string, supplierId: string;
   let mgr: TestUser, inv: TestUser, owner: TestUser;
@@ -33,70 +34,83 @@ describe("cost-price mixing batch sells stock", () => {
     owner = await makeUser({ username: `cb-owner-${rid}`, role: "owner",     siteId: null });
   });
 
-  it("forming a sold batch flips lots to sold, writes mixed_batch out, computes avg", async () => {
-    const lot1 = await makeLot(100, 50);
-    const lot2 = await makeLot(200, 80);
-
-    const { data: run, error: runErr } = await mgr.client.from("cost_price_runs").insert({
+  async function pendingBatch(lotIds: string[]) {
+    const { data: run } = await mgr.client.from("cost_price_runs").insert({
       site_id: siteAId, label: "Mixed monazite", material_type_id: materialId,
-      sold: true, sold_at: new Date().toISOString(), created_by: mgr.userId,
+      approval_status: "pending", created_by: mgr.userId,
     }).select("id").single();
-    expect(runErr).toBeNull();
-
-    for (const lotId of [lot1, lot2]) {
+    for (const lotId of lotIds) {
       const { error } = await mgr.client.from("cost_price_run_lots")
         .insert({ run_id: run!.id, stock_lot_id: lotId });
       expect(error).toBeNull();
     }
+    return run!.id as string;
+  }
 
-    const { data: lots } = await adminClient()
-      .from("stock_lots").select("status").in("id", [lot1, lot2]);
-    expect((lots ?? []).every((l) => l.status === "sold")).toBe(true);
+  it("a pending batch leaves lots in stock and records the weighted average", async () => {
+    const lot1 = await makeLot(100, 50);
+    const lot2 = await makeLot(200, 80);
+    const runId = await pendingBatch([lot1, lot2]);
 
-    const { data: outs } = await adminClient()
-      .from("stock_movements").select("weight, direction, reason")
-      .eq("reason", "mixed_batch").in("weight", [100, 200]);
-    expect((outs ?? []).filter((o) => o.direction === "out").length).toBeGreaterThanOrEqual(2);
+    const { data: lots } = await adminClient().from("stock_lots").select("status").in("id", [lot1, lot2]);
+    expect((lots ?? []).every((l) => l.status === "available")).toBe(true); // not sold yet
 
     const { data: runRow } = await adminClient()
-      .from("cost_price_runs").select("avg_cost_price_per_kg, total_weight_kg").eq("id", run!.id).single();
+      .from("cost_price_runs").select("avg_cost_price_per_kg, total_weight_kg").eq("id", runId).single();
     expect(Number(runRow!.total_weight_kg)).toBe(300);
     expect(Number(runRow!.avg_cost_price_per_kg)).toBe(70); // (100*50 + 200*80)/300
   });
 
-  it("a non-sold computation leaves lots available", async () => {
+  it("owner approval removes the lots from stock (sold + mixed_batch out); manager cannot approve", async () => {
+    const lot1 = await makeLot(100, 50);
+    const lot2 = await makeLot(200, 80);
+    const runId = await pendingBatch([lot1, lot2]);
+
+    // Manager cannot approve their own batch.
+    const mgrTry = await mgr.client.from("cost_price_runs")
+      .update({ approval_status: "approved" }).eq("id", runId);
+    const { data: stillPending } = await adminClient()
+      .from("cost_price_runs").select("approval_status").eq("id", runId).single();
+    expect(stillPending!.approval_status).toBe("pending");
+    void mgrTry;
+
+    const { error } = await owner.client.from("cost_price_runs")
+      .update({ approval_status: "approved", approved_by: owner.userId, sold: true, sold_at: new Date().toISOString() })
+      .eq("id", runId);
+    expect(error).toBeNull();
+
+    const { data: lots } = await adminClient().from("stock_lots").select("status").in("id", [lot1, lot2]);
+    expect((lots ?? []).every((l) => l.status === "sold")).toBe(true);
+
+    const { data: outs } = await adminClient()
+      .from("stock_movements").select("direction, reason").eq("reason", "mixed_batch").in("weight", [100, 200]);
+    expect((outs ?? []).filter((o) => o.direction === "out").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("rejecting a batch leaves the lots in stock", async () => {
+    const lot = await makeLot(50, 40);
+    const runId = await pendingBatch([lot]);
+    const { error } = await owner.client.from("cost_price_runs")
+      .update({ approval_status: "rejected", approved_by: owner.userId }).eq("id", runId);
+    expect(error).toBeNull();
+    const { data: l } = await adminClient().from("stock_lots").select("status").eq("id", lot).single();
+    expect(l!.status).toBe("available");
+  });
+
+  it("a non-sell computation (null status) leaves lots available", async () => {
     const lot = await makeLot(50, 40);
     const { data: run } = await mgr.client.from("cost_price_runs").insert({
-      site_id: siteAId, label: "Just a calc", sold: false, created_by: mgr.userId,
+      site_id: siteAId, label: "Just a calc", created_by: mgr.userId,
     }).select("id").single();
     await mgr.client.from("cost_price_run_lots").insert({ run_id: run!.id, stock_lot_id: lot });
     const { data: l } = await adminClient().from("stock_lots").select("status").eq("id", lot).single();
     expect(l!.status).toBe("available");
   });
 
-  it("attaching an already-sold lot is rejected", async () => {
-    const lot = await makeLot(10, 10);
-    const { data: run1 } = await mgr.client.from("cost_price_runs").insert({
-      site_id: siteAId, label: "first", sold: true, sold_at: new Date().toISOString(), created_by: mgr.userId,
-    }).select("id").single();
-    await mgr.client.from("cost_price_run_lots").insert({ run_id: run1!.id, stock_lot_id: lot });
-
-    const { data: run2 } = await mgr.client.from("cost_price_runs").insert({
-      site_id: siteAId, label: "second", sold: true, sold_at: new Date().toISOString(), created_by: mgr.userId,
-    }).select("id").single();
-    const { error } = await mgr.client.from("cost_price_run_lots").insert({ run_id: run2!.id, stock_lot_id: lot });
-    expect(error).not.toBeNull();
-  });
-
   it("inventory cannot create a cost-price run", async () => {
     const { error } = await inv.client.from("cost_price_runs").insert({
-      site_id: siteAId, label: "nope", sold: true, created_by: inv.userId,
+      site_id: siteAId, label: "nope", approval_status: "pending", created_by: inv.userId,
     });
     expect(error).not.toBeNull();
-  });
-
-  it("owner sees sold batches across sites", async () => {
-    const { data } = await owner.client.from("cost_price_runs").select("id").eq("sold", true).limit(1);
-    expect((data ?? []).length).toBeGreaterThanOrEqual(1);
   });
 });

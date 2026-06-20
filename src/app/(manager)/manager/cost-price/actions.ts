@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 
-// A plain saved computation (sells nothing) when `sell` is falsy; a committed
-// mixing batch (each lot flipped to sold + removed from stock) when `sell` is
-// "1". The selling itself runs in a SECURITY DEFINER trigger on lot attach.
+// A plain saved computation (sells nothing) when `sell` is falsy; a mixing batch
+// submitted for OWNER APPROVAL when `sell` is "1" — the lots stay in stock until
+// the owner approves (the approval trigger then removes them).
 export async function createCostPriceRun(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me || !["manager", "owner"].includes(me.role)) return;
@@ -37,8 +37,7 @@ export async function createCostPriceRun(formData: FormData): Promise<void> {
       site_id: siteId,
       label,
       material_type_id: (firstLot?.material_type_id as string | null) ?? null,
-      sold: sell,
-      sold_at: sell ? new Date().toISOString() : null,
+      approval_status: sell ? "pending" : null,
       created_by: me.id,
     })
     .select("id")
