@@ -41,12 +41,16 @@ describe("edit-after-close: non-owner blocked, owner allowed", () => {
       .insert({ visit_id: v!.id, weight: 50, recorded_by: recv.userId })
       .select("id")
       .single();
-    // Manager "no agreement" → visit transitions straight to exited.
+    // Manager "no agreement" → visit parks at awaiting_gate_exit; owner authorises
+    // and releases it to exited.
     await mgr.client.from("pricing").insert({
       visit_id: v!.id,
       agreement_status: "not_agreed",
       priced_by: mgr.userId,
     });
+    await owner.client.from("gate_exit_authorizations")
+      .insert({ visit_id: v!.id, authorized_by: owner.userId });
+    await owner.client.from("visits").update({ state: "exited" }).eq("id", v!.id);
 
     const { data: closed } = await adminClient()
       .from("visits")

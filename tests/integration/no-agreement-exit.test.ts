@@ -3,8 +3,16 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 
 describe("no-agreement exit path", () => {
   let siteId: string;
-  let proc: TestUser, recv: TestUser, mgr: TestUser;
+  let proc: TestUser, recv: TestUser, mgr: TestUser, gate: TestUser;
   let supplierId: string, materialTypeId: string, machineId: string;
+
+  // No-agreement now parks at awaiting_gate_exit: a manager/owner authorises the
+  // exit, then the gate releases the supplier (→ exited).
+  async function authoriseAndRelease(visitId: string) {
+    await mgr.client.from("gate_exit_authorizations")
+      .insert({ visit_id: visitId, authorized_by: mgr.userId });
+    await gate.client.from("visits").update({ state: "exited" }).eq("id", visitId);
+  }
 
   beforeAll(async () => {
     const { data: sites } = await adminClient().from("sites").select("id").limit(1);
@@ -12,6 +20,7 @@ describe("no-agreement exit path", () => {
     proc = await makeUser({ username: "nae-proc", role: "processing", siteId });
     recv = await makeUser({ username: "nae-recv", role: "receiving", siteId });
     mgr = await makeUser({ username: "nae-mgr", role: "manager", siteId });
+    gate = await makeUser({ username: "nae-gate", role: "gate", siteId });
     const { data: s } = await adminClient()
       .from("suppliers")
       .insert({ name: "NAE Supp", phone: "07011110001" })
@@ -58,13 +67,19 @@ describe("no-agreement exit path", () => {
       .from("analysis_records")
       .insert({ visit_id: v!.id, weight: 0.1, grade: "F", recorded_by: recv.userId });
 
-    // Manager records "no agreement" — visit transitions straight to exited.
+    // Manager records "no agreement" — visit parks at awaiting_gate_exit.
     await mgr.client.from("pricing").insert({
       visit_id: v!.id,
       agreement_status: "not_agreed",
       priced_by: mgr.userId,
     });
 
+    const { data: parked } = await adminClient()
+      .from("visits").select("state").eq("id", v!.id).single();
+    expect(parked?.state).toBe("awaiting_gate_exit");
+
+    // Manager authorises, gate releases → exited.
+    await authoriseAndRelease(v!.id);
     const { data: final } = await adminClient()
       .from("visits")
       .select("state, closed_at")
@@ -102,6 +117,7 @@ describe("no-agreement exit path", () => {
       agreement_status: "not_agreed",
       priced_by: mgr.userId,
     });
+    await authoriseAndRelease(v!.id);
 
     const { data: final } = await adminClient()
       .from("visits")

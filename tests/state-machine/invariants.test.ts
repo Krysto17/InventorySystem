@@ -41,7 +41,7 @@ describe("state-machine invariants", () => {
     expect(error?.message).toMatch(/analysis_records/);
   });
 
-  it("no-agreement path goes pricing → exited directly (no authorization needed)", async () => {
+  it("owner may override pricing → exited directly (no gate authorization needed)", async () => {
     const { data: v } = await proc.client
       .from("visits")
       .insert({
