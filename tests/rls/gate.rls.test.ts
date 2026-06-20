@@ -38,36 +38,15 @@ describe("gate intake + passes + stock release RLS", () => {
     owner = await makeUser({ username: `gi-owner-${rid}`,  role: "owner",     siteId: null });
   });
 
-  // ── Phase 1/2 intake ───────────────────────────────────────────────────────
-  it("gate at site A logs a visit in at_gate_in and sends it to processing", async () => {
-    const { data: visit, error } = await gateA.client.from("visits").insert({
+  // ── Intake belongs to processing, not the gate ──────────────────────────────
+  it("gate cannot create a visit (intake is the processing role's job)", async () => {
+    const { error } = await gateA.client.from("visits").insert({
       site_id: siteAId,
       supplier_id: supplierId,
       declared_material_type_id: materialId,
       entry_path: "unprocessed",
-      vehicle_plate: "ABC-123",
-      state: "at_gate_in",
+      state: "in_processing",
       created_by: gateA.userId,
-    }).select("id, state").single();
-    expect(error).toBeNull();
-    expect(visit!.state).toBe("at_gate_in");
-
-    const { error: sendErr } = await gateA.client
-      .from("visits").update({ state: "in_processing" }).eq("id", visit!.id);
-    expect(sendErr).toBeNull();
-    const { data: after } = await adminClient()
-      .from("visits").select("state").eq("id", visit!.id).single();
-    expect(after!.state).toBe("in_processing");
-  });
-
-  it("gate at site B cannot create a visit for site A", async () => {
-    const { error } = await gateB.client.from("visits").insert({
-      site_id: siteAId,
-      supplier_id: supplierId,
-      declared_material_type_id: materialId,
-      entry_path: "unprocessed",
-      state: "at_gate_in",
-      created_by: gateB.userId,
     });
     expect(error).not.toBeNull();
   });

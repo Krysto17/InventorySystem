@@ -60,7 +60,6 @@ const NAV: Record<Role, NavItem[]> = {
   ],
   gate: [
     { label: "Gate", href: "/gate", icon: "gate" },
-    { label: "New intake", href: "/gate/intake", icon: "intake" },
   ],
   owner: [
     { label: "Dashboard", href: "/owner", icon: "dashboard" },

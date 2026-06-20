@@ -35,11 +35,12 @@ describe("role-aware navigation", () => {
     );
   });
 
-  it("gate role is restored as the pipeline entry with its own screen", () => {
+  it("gate role has its own screen but no visit-intake (that's processing's job)", () => {
     expect((ROLES as readonly string[]).includes("gate")).toBe(true);
     const hrefs = navForRole("gate").map((n) => n.href);
     expect(hrefs).toContain("/gate");
-    expect(hrefs).toContain("/gate/intake");
+    expect(hrefs).not.toContain("/gate/intake");
+    expect(navForRole("processing").map((n) => n.href)).toContain("/processing/intake");
   });
 
   it("qc role exists with its own XRF queue (Phase 9)", () => {
