@@ -4,11 +4,15 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 
+// A plain saved computation (sells nothing) when `sell` is falsy; a committed
+// mixing batch (each lot flipped to sold + removed from stock) when `sell` is
+// "1". The selling itself runs in a SECURITY DEFINER trigger on lot attach.
 export async function createCostPriceRun(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me || !["manager", "owner"].includes(me.role)) return;
 
   const label = String(formData.get("label") ?? "").trim();
+  const sell = String(formData.get("sell") ?? "") === "1";
   const lotIds = formData.getAll("lot_ids").map(String).filter(Boolean);
   if (!label || lotIds.length === 0) return;
 
@@ -16,8 +20,8 @@ export async function createCostPriceRun(formData: FormData): Promise<void> {
   const { data: profile } = await supabase
     .from("profiles").select("site_id").eq("id", me.id).single();
 
-  // Anchor site + the material computed to the first selected lot. (A run is a
-  // weighted average for one material; the DB stamps a batch code + datestamp.)
+  // Anchor site + the material computed to the first selected lot. (The DB stamps
+  // a batch code + datestamp.)
   const { data: firstLot } = await supabase
     .from("stock_lots")
     .select("site_id, material_type_id")
@@ -33,6 +37,8 @@ export async function createCostPriceRun(formData: FormData): Promise<void> {
       site_id: siteId,
       label,
       material_type_id: (firstLot?.material_type_id as string | null) ?? null,
+      sold: sell,
+      sold_at: sell ? new Date().toISOString() : null,
       created_by: me.id,
     })
     .select("id")
@@ -43,5 +49,5 @@ export async function createCostPriceRun(formData: FormData): Promise<void> {
     await supabase.from("cost_price_run_lots").insert({ run_id: run.id, stock_lot_id: lotId });
   }
   revalidatePath("/manager/cost-price");
-  revalidatePath("/accounting/cost-price");
+  revalidatePath("/owner/cost-batches");
 }
