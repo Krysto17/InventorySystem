@@ -196,16 +196,16 @@ NO-AGREEMENT PATH:
 Repeat steps 1-12 as above, then:
 13. Manager marks "No agreement" → submit.
 14. State shows "awaiting_gate_exit".
-15. Log out, log in as owner1 → /owner.
-16. Cross-site awaiting-exit board shows the visit. Click it.
-17. On visit detail, "Authorize exit" form is visible. Add optional note, submit.
-18. Page refreshes; authorization shown with timestamp.
-19. Log out, log in as gate1 → /gate.
-20. "Awaiting release" section shows the visit. Click it.
-21. "Release supplier" button is now enabled. Click it.
-22. State shows "exited"; closed_at is set; audit trail shows the full no-agreement journey.
+15. As mgr1 (or owner1) open the visit → "No-agreement release gate" card shows an
+    "Authorise exit" form (a manager on the visit's site OR the owner may authorise).
+16. Add optional note, submit. Card now shows "Authorised by … " with a timestamp.
+17. Log out, log in as gate1 → /gate.
+18. "Awaiting release (no agreement)" section shows the visit with a "Release supplier"
+    button (before authorisation it shows "Awaiting manager/owner authorisation").
+19. Click "Release supplier".
+20. State shows "exited"; closed_at is set; audit trail shows the full no-agreement journey.
 
-PASS criteria: gate can't release without owner authorization; closed visit's records are read-only for non-owner; processing fee is still owed (visible on processing card) even though no purchase happened.
+PASS criteria: gate can't release without owner OR manager authorization; closed visit's records are read-only for non-owner; processing fee is still owed (visible on processing card) even though no purchase happened.
 
 EDIT POLICY:
 1. Log in as recv1 → open a visit currently in "pricing" state.

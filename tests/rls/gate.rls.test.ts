@@ -165,4 +165,42 @@ describe("gate intake + passes + stock release RLS", () => {
     const { data: l } = await mgrA.client.from("gate_logs").select("id").eq("id", row!.id);
     expect(l ?? []).toHaveLength(1);
   });
+
+  // ── No-agreement gate exit (manager OR owner authorises → gate releases) ─────
+  async function awaitingExitVisit(siteId: string) {
+    const { data } = await adminClient().from("visits").insert({
+      site_id: siteId, supplier_id: supplierId, declared_material_type_id: materialId,
+      entry_path: "unprocessed", state: "awaiting_gate_exit", created_by: owner.userId,
+    }).select("id").single();
+    return data!.id as string;
+  }
+
+  it("gate cannot release before authorisation; manager authorises; then gate releases", async () => {
+    const visitId = await awaitingExitVisit(siteAId);
+
+    const early = await gateA.client.from("visits").update({ state: "exited" }).eq("id", visitId);
+    expect(early.error).not.toBeNull(); // blocked: no authorisation yet
+
+    const invTry = await invA.client.from("gate_exit_authorizations")
+      .insert({ visit_id: visitId, authorized_by: invA.userId });
+    expect(invTry.error).not.toBeNull(); // inventory cannot authorise
+
+    const mgrOk = await mgrA.client.from("gate_exit_authorizations")
+      .insert({ visit_id: visitId, authorized_by: mgrA.userId });
+    expect(mgrOk.error).toBeNull(); // manager (own site) authorises
+
+    const rel = await gateA.client.from("visits").update({ state: "exited" }).eq("id", visitId);
+    expect(rel.error).toBeNull();
+    const { data: after } = await adminClient()
+      .from("visits").select("state, closed_at").eq("id", visitId).single();
+    expect(after!.state).toBe("exited");
+    expect(after!.closed_at).not.toBeNull();
+  });
+
+  it("owner can authorise a no-agreement exit on any site", async () => {
+    const visitId = await awaitingExitVisit(siteBId);
+    const { error } = await owner.client.from("gate_exit_authorizations")
+      .insert({ visit_id: visitId, authorized_by: owner.userId });
+    expect(error).toBeNull();
+  });
 });

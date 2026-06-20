@@ -10,6 +10,7 @@ import { BatchMaterials } from "@/components/visits/BatchMaterials";
 import { UtilityChargesCard } from "@/components/visits/UtilityChargesCard";
 import { SupplierFinanceCard } from "@/components/visits/SupplierFinanceCard";
 import { BatchSettlementCard } from "@/components/visits/BatchSettlementCard";
+import { GateExitCard } from "@/components/visits/GateExitCard";
 import { PdfDownloadBar } from "@/components/visits/PdfDownloadBar";
 import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
@@ -281,6 +282,11 @@ export default async function VisitDetailPage({
         hasPricing={pricingNorm !== null && pricingNorm.agreement_status !== "pending"}
         hasPayments={paymentsNorm.length > 0}
       />
+    <GateExitCard
+      visitId={visitNorm.id}
+      visitState={visitNorm.state}
+      viewerRole={me.role as Role}
+    />
     <BatchMaterials
       visitId={visitNorm.id}
       visitState={visitNorm.state}
