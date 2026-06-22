@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { ROLE_HOME, type Role } from "@/lib/auth/roles";
+// Relative (not "@/…") on purpose: Vercel's Edge bundler doesn't resolve
+// tsconfig path aliases for middleware, so an aliased import deploys as an
+// "unsupported module" even though `next build` resolves it fine locally.
+import { ROLE_HOME, type Role } from "./lib/auth/roles";
 
 const PUBLIC_PATHS = ["/login", "/set-password"];
 const SHARED_AUTHENTICATED_PREFIXES = ["/visits/"];
