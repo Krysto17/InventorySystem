@@ -68,3 +68,25 @@ export async function provisionUser(input: ProvisionInput, createdBy: string) {
 
   return { userId, username, tempPassword };
 }
+
+// Passwords are bcrypt-hashed in Supabase Auth and cannot be read back — a
+// forgotten password is RESET, not retrieved. The owner generates a new one-time
+// temp password (handed over WhatsApp); the user is forced to change it on next
+// login (must_change_password = true).
+export async function resetUserPassword(userId: string) {
+  const admin = createAdminClient();
+  const tempPassword = generateTempPassword();
+
+  const { error: authErr } = await admin.auth.admin.updateUserById(userId, {
+    password: tempPassword,
+  });
+  if (authErr) throw new Error(authErr.message);
+
+  const { error: profErr } = await admin
+    .from("profiles")
+    .update({ must_change_password: true })
+    .eq("id", userId);
+  if (profErr) throw new Error(profErr.message);
+
+  return { tempPassword };
+}
