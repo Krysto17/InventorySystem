@@ -13,4 +13,20 @@ describe("roles", () => {
       expect(ROLE_HOME[role]).toMatch(/^\/[a-z]+$/);
     }
   });
+
+  // src/middleware.ts inlines a copy of this map (Vercel's Edge bundler won't
+  // import a local module into middleware). Pin the values so the two can't
+  // silently drift — if this changes, update ROLE_HOME in src/middleware.ts too.
+  it("role home paths are pinned (middleware keeps an inlined copy)", () => {
+    expect(ROLE_HOME).toEqual({
+      processing: "/processing",
+      receiving: "/receiving",
+      qc: "/qc",
+      manager: "/manager",
+      accounting: "/accounting",
+      inventory: "/inventory",
+      gate: "/gate",
+      owner: "/owner",
+    });
+  });
 });

@@ -1,9 +1,21 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-// Relative (not "@/…") on purpose: Vercel's Edge bundler doesn't resolve
-// tsconfig path aliases for middleware, so an aliased import deploys as an
-// "unsupported module" even though `next build` resolves it fine locally.
-import { ROLE_HOME, type Role } from "./lib/auth/roles";
+
+// Role → landing route. Intentionally INLINED rather than imported from
+// src/lib/auth/roles.ts: Vercel's Edge bundler won't pull a local module into
+// the middleware bundle (it deploys as an "unsupported module"), even though
+// `next build` resolves the import fine locally. Keep in sync with ROLE_HOME in
+// src/lib/auth/roles.ts — tests/auth/roles.test.ts asserts they match.
+const ROLE_HOME: Record<string, string> = {
+  processing: "/processing",
+  receiving: "/receiving",
+  qc: "/qc",
+  manager: "/manager",
+  accounting: "/accounting",
+  inventory: "/inventory",
+  gate: "/gate",
+  owner: "/owner",
+};
 
 const PUBLIC_PATHS = ["/login", "/set-password"];
 const SHARED_AUTHENTICATED_PREFIXES = ["/visits/"];
@@ -68,7 +80,7 @@ export async function middleware(req: NextRequest) {
     return redirectWithSession(req, res, "/set-password");
   }
 
-  const home = ROLE_HOME[profile.role as Role];
+  const home = ROLE_HOME[profile.role as string] ?? "/login";
   const extraPrefixes = EXTRA_ROLE_PREFIXES[profile.role] ?? [];
   // Owner may visit any route; other roles are confined to their home subtree,
   // shared paths, or any extra subtree granted to their role.
