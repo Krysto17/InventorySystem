@@ -1,0 +1,45 @@
+# CI workflow — PARKED here because the GitHub token used to push lacks the
+# `workflow` scope (GitHub blocks pushing files under .github/workflows/ without
+# it). To enable CI: add the `workflow` scope to the token (GitHub → Settings →
+# Developer settings → Personal access tokens → edit → check `workflow`), then
+#   mkdir -p .github/workflows && git mv scripts/ci.yml.example .github/workflows/ci.yml
+# and push.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Start Supabase (local stack)
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase start
+
+      - name: Write env for build + tests
+        run: |
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$(supabase status -o env | grep '^API_URL=' | cut -d= -f2- | tr -d '\"')"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(supabase status -o env | grep '^ANON_KEY=' | cut -d= -f2- | tr -d '\"')"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$(supabase status -o env | grep '^SERVICE_ROLE_KEY=' | cut -d= -f2- | tr -d '\"')"
+          } > .env.local
+
+      - name: Type-check + build
+        run: npm run build
+
+      - name: Tests (unit + RLS + integration)
+        run: npm run test
