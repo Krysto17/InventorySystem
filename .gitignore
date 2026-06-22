@@ -40,3 +40,4 @@ supabase/.temp
 
 # playwright debug artifacts
 .playwright-mcp/
+.vercel

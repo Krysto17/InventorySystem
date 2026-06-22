@@ -96,6 +96,11 @@ export async function middleware(req: NextRequest) {
   return res;
 }
 
+// Run on the Node.js runtime, not Edge: @supabase/ssr pulls in Node-only code
+// (ws via realtime-js, which references __dirname) that crashes on the Edge
+// runtime with "ReferenceError: __dirname is not defined".
+export const runtime = "nodejs";
+
 export const config = {
   // Exclude /api — route handlers (e.g. /api/pdf) authenticate themselves and
   // must return JSON 401/403, not an HTML redirect to /login.
