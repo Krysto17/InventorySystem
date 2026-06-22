@@ -41,7 +41,7 @@ function redirectWithSession(req: NextRequest, res: NextResponse, to: string): N
   return redirected;
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const res = NextResponse.next();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -96,11 +96,10 @@ export async function middleware(req: NextRequest) {
   return res;
 }
 
-// Run on the Node.js runtime, not Edge: @supabase/ssr pulls in Node-only code
-// (ws via realtime-js, which references __dirname) that crashes on the Edge
-// runtime with "ReferenceError: __dirname is not defined".
-export const runtime = "nodejs";
-
+// NB: the Next 16 `proxy` convention ALWAYS runs on the Node.js runtime, which
+// is required here — @supabase/ssr pulls in Node-only code (ws via realtime-js,
+// which references __dirname) that crashes Edge with "__dirname is not defined".
+// (No `export const runtime` — route segment config isn't allowed in proxy.)
 export const config = {
   // Exclude /api — route handlers (e.g. /api/pdf) authenticate themselves and
   // must return JSON 401/403, not an HTML redirect to /login.
