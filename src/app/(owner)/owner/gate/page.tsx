@@ -6,8 +6,7 @@ import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
 import { GateMovementsCard } from "@/components/gate/GateMovementsCard";
 
-const g1 = <T,>(v: unknown): T | null =>
-  Array.isArray(v) ? ((v[0] ?? null) as T | null) : ((v ?? null) as T | null);
+import { one as g1 } from "@/lib/db/relation";
 
 const STATUS_VARIANT: Record<string, "default" | "green" | "yellow" | "red"> = {
   issued: "yellow", acknowledged: "green", cancelled: "red",

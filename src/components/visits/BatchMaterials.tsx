@@ -19,7 +19,7 @@ type Line = {
   xrf: { result: string | null; submitted: boolean; weight_kg: number | null; mismatch: boolean } | null;
 };
 
-const g1 = <T,>(v: T | T[] | null): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
+import { one as g1 } from "@/lib/db/relation";
 
 export async function BatchMaterials({
   visitId,

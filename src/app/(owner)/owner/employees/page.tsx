@@ -4,8 +4,7 @@ import { getProfile } from "@/lib/auth/get-profile";
 import { AddEmployeeForm } from "./form";
 import { EmployeeRow, type EmployeeRowData } from "./EmployeeRow";
 
-const g1 = <T,>(v: unknown): T | null =>
-  Array.isArray(v) ? ((v[0] ?? null) as T | null) : ((v ?? null) as T | null);
+import { one as g1 } from "@/lib/db/relation";
 
 export default async function EmployeesPage() {
   const supabase = await createClient();

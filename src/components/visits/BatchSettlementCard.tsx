@@ -6,8 +6,7 @@ import { recordDeduction } from "@/app/visits/[id]/finance-actions";
 import { submitBatchSettlement, setSettlementStatus, updateSupplierAccount } from "@/app/visits/[id]/settlement-actions";
 import type { Role } from "@/lib/auth/roles";
 
-const g1 = <T,>(v: unknown): T | null =>
-  Array.isArray(v) ? ((v[0] ?? null) as T | null) : ((v ?? null) as T | null);
+import { one as g1 } from "@/lib/db/relation";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 const STATUS_VARIANT: Record<string, "default" | "green" | "yellow" | "red" | "blue" | "paid"> = {

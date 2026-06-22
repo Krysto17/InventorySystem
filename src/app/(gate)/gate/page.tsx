@@ -7,8 +7,7 @@ import { formatTimestamp } from "@/lib/visits/format";
 import { recordGateLog, acknowledgeGatePass } from "./actions";
 import { releaseSupplier } from "@/app/visits/[id]/gate-exit-actions";
 
-const g1 = <T,>(v: unknown): T | null =>
-  Array.isArray(v) ? ((v[0] ?? null) as T | null) : ((v ?? null) as T | null);
+import { one as g1 } from "@/lib/db/relation";
 
 export default async function GateHomePage() {
   const supabase = await createClient();

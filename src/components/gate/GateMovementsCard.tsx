@@ -4,8 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
 
-const g1 = <T,>(v: unknown): T | null =>
-  Array.isArray(v) ? ((v[0] ?? null) as T | null) : ((v ?? null) as T | null);
+import { one as g1 } from "@/lib/db/relation";
 
 // All gate movements (in/out). Owner + manager have cross-site read, so they see
 // every site; the gate sees its own. `showSite` adds the site column for the

@@ -4,8 +4,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 // Phase 10 (C): combined + per-site reporting for manager / accountant / owner.
 // Read-only — cross-site visibility is granted by RLS (has_cross_site_read).
 
-const g1 = <T,>(v: unknown): T | null =>
-  (Array.isArray(v) ? ((v[0] ?? null) as T | null) : ((v ?? null) as T | null));
+import { one as g1 } from "@/lib/db/relation";
 
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 

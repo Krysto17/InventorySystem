@@ -6,8 +6,7 @@ import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
 import { authorizeGateExit, releaseSupplier } from "@/app/visits/[id]/gate-exit-actions";
 
-const g1 = <T,>(v: unknown): T | null =>
-  Array.isArray(v) ? ((v[0] ?? null) as T | null) : ((v ?? null) as T | null);
+import { one as g1 } from "@/lib/db/relation";
 
 // No-agreement release gate: a manager/owner authorises, then the gate releases.
 // Only renders while the visit is parked at awaiting_gate_exit.

@@ -12,6 +12,7 @@ import { SupplierFinanceCard } from "@/components/visits/SupplierFinanceCard";
 import { BatchSettlementCard } from "@/components/visits/BatchSettlementCard";
 import { GateExitCard } from "@/components/visits/GateExitCard";
 import { PdfDownloadBar } from "@/components/visits/PdfDownloadBar";
+import { one as get1 } from "@/lib/db/relation";
 import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
 
@@ -103,10 +104,6 @@ export default async function VisitDetailPage({
     .eq("ref_visit_id", id)
     .eq("reason", "purchase_intake")
     .maybeSingle();
-
-  // Flatten Supabase array-relation shapes (joins return arrays even for unique relations)
-  const get1 = <T,>(v: T | T[] | null): T | null =>
-    Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
 
   const visitNorm = {
     id: visit.id as string,
