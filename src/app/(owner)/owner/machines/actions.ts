@@ -31,6 +31,6 @@ export async function updateMachine(formData: FormData): Promise<void> {
   const activeRaw = formData.get("active");
   if (activeRaw != null) patch.active = activeRaw === "true";
   const supabase = await createClient();
-  await supabase.from("machines").update(patch).eq("id", id);
+  await supabase.from("machines").update(patch as never).eq("id", id);
   revalidatePath("/owner/machines");
 }

@@ -47,9 +47,8 @@ export default async function GateHomePage() {
             <ul className="divide-y divide-line">
               {(awaitingExit ?? []).map((v) => {
                 const sup = g1<{ name: string }>((v as { supplier: unknown }).supplier);
-                const authed = Array.isArray((v as { auth: unknown[] }).auth)
-                  ? (v as { auth: unknown[] }).auth.length > 0
-                  : (v as { auth: unknown }).auth != null;
+                const authRel = (v as { auth: unknown }).auth;
+                const authed = Array.isArray(authRel) ? authRel.length > 0 : authRel != null;
                 return (
                   <li key={v.id as string} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
                     <Link href={`/visits/${v.id}`} className="font-medium hover:underline">{sup?.name ?? "—"}</Link>

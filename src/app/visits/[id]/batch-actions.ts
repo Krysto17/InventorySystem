@@ -52,7 +52,7 @@ export async function updateMaterialLine(formData: FormData): Promise<void> {
   if (materialTypeId) patch.material_type_id = materialTypeId;
 
   const supabase = await createClient();
-  await supabase.from("visit_materials").update(patch).eq("id", lineId);
+  await supabase.from("visit_materials").update(patch as never).eq("id", lineId);
   if (visitId) revalidatePath(`/visits/${visitId}`);
 }
 

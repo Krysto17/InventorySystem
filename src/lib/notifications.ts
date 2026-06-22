@@ -12,8 +12,8 @@ export async function roleNotifications(role: Role): Promise<NotificationItem[]>
 
   // Run a head/count query with an equality filter, RLS-scoped to the viewer.
   const countWhere = async (table: string, column: string, value: string): Promise<number> => {
-    const { count } = await supabase
-      .from(table)
+    // Dynamic table/column count — opt out of the typed-table overload.
+    const { count } = await (supabase.from(table as never) as ReturnType<typeof supabase.from>)
       .select("id", { count: "exact", head: true })
       .eq(column, value);
     return count ?? 0;

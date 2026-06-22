@@ -38,7 +38,7 @@ export async function submitAnalysis(
     visit_id: visitId,
     weight,
     sample_id: sampleId,
-    xrf_result: xrf,
+    xrf_result: xrf as never, // parsed JSON → jsonb column
     purity,
     grade,
     qc_observations: qc,
@@ -81,7 +81,7 @@ export async function updateAnalysis(
   if (qc != null) patch.qc_observations = String(qc).trim() || null;
 
   const supabase = await createClient();
-  const { error } = await supabase.from("analysis_records").update(patch).eq("id", recordId);
+  const { error } = await supabase.from("analysis_records").update(patch as never).eq("id", recordId);
   if (error) return { error: error.message };
   return {};
 }

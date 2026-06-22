@@ -84,6 +84,6 @@ export async function setSettlementStatus(formData: FormData): Promise<void> {
   if (status === "rejected") {
     patch.rejection_note = String(formData.get("rejection_note") ?? "").trim() || "Rejected by owner";
   }
-  await supabase.from("batch_settlements").update(patch).eq("id", id);
+  await supabase.from("batch_settlements").update(patch as never).eq("id", id);
   if (visitId) revalidatePath(`/visits/${visitId}`);
 }

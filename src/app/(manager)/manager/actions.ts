@@ -48,7 +48,7 @@ export async function submitPricing(
       payment_terms: terms,
     };
     if (me.role === "owner") patch.overridden_by = me.id;
-    const { error } = await supabase.from("pricing").update(patch).eq("id", recordId);
+    const { error } = await supabase.from("pricing").update(patch as never).eq("id", recordId);
     if (error) return { error: error.message };
   } else {
     const { error } = await supabase.from("pricing").insert({

@@ -64,7 +64,8 @@ export async function createVisit(
   const { data: visit, error: vErr } = await supabase
     .from("visits")
     .insert({
-      site_id: me.site_id,
+      // Non-owner creators always have a site (enforced at provisioning).
+      site_id: me.site_id as string,
       supplier_id: supplierId,
       declared_material_type_id: materialTypeId,
       entry_path: entryPath,
@@ -98,7 +99,7 @@ export async function updateVisitOrigin(
   const sup = v("supplier_id"); if (sup) patch.supplier_id = sup;
 
   const supabase = await createClient();
-  const { error } = await supabase.from("visits").update(patch).eq("id", visitId);
+  const { error } = await supabase.from("visits").update(patch as never).eq("id", visitId);
   if (error) return { error: error.message };
   revalidatePath(`/visits/${visitId}`);
   return {};
