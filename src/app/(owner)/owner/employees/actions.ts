@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getProfile } from "@/lib/auth/get-profile";
-import { provisionUser, resetUserPassword } from "@/lib/provisioning/provision-user";
+import { provisionUser, setUserStatus } from "@/lib/provisioning/provision-user";
 import { ROLES, type Role } from "@/lib/auth/roles";
 
 export async function addEmployee(_prev: unknown, formData: FormData) {
@@ -35,22 +35,23 @@ export async function addEmployee(_prev: unknown, formData: FormData) {
   }
 }
 
-// Reset a forgotten password: the owner generates a fresh one-time temp password
-// (shown once, to be handed over WhatsApp). Passwords can never be read back.
-export async function resetEmployeePassword(_prev: unknown, formData: FormData) {
+// Enable or disable an employee account. A disabled account can't sign in and is
+// bounced to /login if already in a session. The owner cannot disable themselves.
+export async function setEmployeeStatus(_prev: unknown, formData: FormData) {
   const me = await getProfile();
   if (!me || me.role !== "owner") return { error: "Not authorized" };
 
   const userId = String(formData.get("userId") ?? "");
+  const status = String(formData.get("status") ?? "");
   if (!userId) return { error: "Missing user" };
+  if (status !== "active" && status !== "disabled") return { error: "Invalid status" };
+  if (userId === me.id) return { error: "You cannot disable your own account" };
 
   try {
-    const { tempPassword } = await resetUserPassword(userId);
+    await setUserStatus(userId, status);
     revalidatePath("/owner/employees");
-    return {
-      ok: `New temp password: ${tempPassword} — send via WhatsApp; they must change it on next login.`,
-    };
+    return { ok: status === "disabled" ? "Account disabled." : "Account enabled." };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Failed to reset password" };
+    return { error: e instanceof Error ? e.message : "Failed to update account" };
   }
 }

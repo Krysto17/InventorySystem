@@ -69,24 +69,11 @@ export async function provisionUser(input: ProvisionInput, createdBy: string) {
   return { userId, username, tempPassword };
 }
 
-// Passwords are bcrypt-hashed in Supabase Auth and cannot be read back — a
-// forgotten password is RESET, not retrieved. The owner generates a new one-time
-// temp password (handed over WhatsApp); the user is forced to change it on next
-// login (must_change_password = true).
-export async function resetUserPassword(userId: string) {
+// Enable/disable an account. `disabled` accounts keep their data but are bounced
+// to /login by middleware (profiles.status check) and refused at sign-in. Writes
+// to profiles.status are service-role only, hence the admin client.
+export async function setUserStatus(userId: string, status: "active" | "disabled") {
   const admin = createAdminClient();
-  const tempPassword = generateTempPassword();
-
-  const { error: authErr } = await admin.auth.admin.updateUserById(userId, {
-    password: tempPassword,
-  });
-  if (authErr) throw new Error(authErr.message);
-
-  const { error: profErr } = await admin
-    .from("profiles")
-    .update({ must_change_password: true })
-    .eq("id", userId);
-  if (profErr) throw new Error(profErr.message);
-
-  return { tempPassword };
+  const { error } = await admin.from("profiles").update({ status }).eq("id", userId);
+  if (error) throw new Error(error.message);
 }

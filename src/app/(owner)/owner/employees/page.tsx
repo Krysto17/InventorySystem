@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { ROLES } from "@/lib/auth/roles";
+import { getProfile } from "@/lib/auth/get-profile";
 import { AddEmployeeForm } from "./form";
 import { EmployeeRow, type EmployeeRowData } from "./EmployeeRow";
 
@@ -8,11 +9,12 @@ const g1 = <T,>(v: unknown): T | null =>
 
 export default async function EmployeesPage() {
   const supabase = await createClient();
+  const me = await getProfile();
   const [{ data: sites }, { data: people }] = await Promise.all([
     supabase.from("sites").select("id, name").order("name"),
     supabase
       .from("profiles")
-      .select("id, full_name, username, role, must_change_password, site:sites(name)")
+      .select("id, full_name, username, role, status, site:sites(name)")
       .order("role"),
   ]);
 
@@ -22,7 +24,7 @@ export default async function EmployeesPage() {
     username: p.username as string,
     role: p.role as string,
     site: g1<{ name: string }>((p as { site: unknown }).site)?.name ?? null,
-    must_change_password: !!(p as { must_change_password?: boolean }).must_change_password,
+    status: ((p as { status?: string }).status as "active" | "disabled") ?? "active",
   }));
 
   return (
@@ -35,11 +37,11 @@ export default async function EmployeesPage() {
       <section>
         <h2 className="mb-1 text-xl font-semibold">Employees ({employees.length})</h2>
         <p className="mb-3 text-sm text-zinc-500">
-          Forgot a password? Reset it here — passwords can&apos;t be looked up, only replaced. A new
-          one-time temp password is shown once; send it over WhatsApp and the user changes it on next login.
+          Disable an account to block sign-in without deleting it (their records stay intact);
+          re-enable any time. A disabled user in an active session is signed out on their next action.
         </p>
         <ul className="divide-y divide-line rounded border">
-          {employees.map((e) => <EmployeeRow key={e.id} e={e} />)}
+          {employees.map((e) => <EmployeeRow key={e.id} e={e} isSelf={e.id === me?.id} />)}
         </ul>
       </section>
     </main>

@@ -27,6 +27,10 @@ export async function signIn(_prev: unknown, formData: FormData) {
 
   const profile = await getProfile();
   if (!profile) return { error: "No profile found for this account" };
+  if (profile.status !== "active") {
+    await supabase.auth.signOut();
+    return { error: "This account has been disabled. Contact the owner." };
+  }
   if (profile.must_change_password) redirect("/set-password");
   redirect(ROLE_HOME[profile.role]);
 }
