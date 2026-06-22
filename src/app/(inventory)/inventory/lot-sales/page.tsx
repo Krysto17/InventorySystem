@@ -122,7 +122,7 @@ export default async function LotSalesPage() {
                   </div>
                   <span className={`text-xs px-2 py-0.5 rounded ${badge}`}>{status}</span>
                 </div>
-                <table className="w-full text-sm mt-3">
+                <div className="overflow-x-auto"><table className="w-full text-sm mt-3">
                   <thead className="text-left text-xs text-gray-500">
                     <tr><th className="py-1">Supplier</th><th className="py-1 text-right">Weight (kg)</th><th className="py-1 text-right">Price ₦</th><th className="py-1 text-right">Total ₦</th></tr>
                   </thead>
@@ -142,7 +142,7 @@ export default async function LotSalesPage() {
                       );
                     })}
                   </tbody>
-                </table>
+                </table></div>
                 {s.avg_cost_price_per_kg != null && (
                   <div className="mt-2 text-sm">
                     Avg cost: <strong>{ngn(Number(s.avg_cost_price_per_kg))}/kg</strong>{" "}

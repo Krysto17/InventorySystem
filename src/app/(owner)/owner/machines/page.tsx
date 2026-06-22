@@ -45,7 +45,7 @@ export default async function MachinesPage() {
         </button>
       </form>
 
-      <table className="w-full border rounded text-sm">
+      <div className="overflow-x-auto"><table className="w-full border rounded text-sm">
         <thead className="bg-gray-50">
           <tr>
             <th className="p-2 text-left">Site</th>
@@ -84,7 +84,7 @@ export default async function MachinesPage() {
             );
           })}
         </tbody>
-      </table>
+      </table></div>
     </main>
   );
 }

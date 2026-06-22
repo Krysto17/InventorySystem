@@ -72,7 +72,7 @@ export async function CrossSiteReports() {
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">Per-site summary (all sites)</h2></CardHeader>
         <CardContent className="p-0">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead className="bg-zinc-50 text-left text-xs text-zinc-500 dark:bg-zinc-800/50">
               <tr>
                 <th className="px-4 py-2">Site</th>
@@ -100,7 +100,7 @@ export async function CrossSiteReports() {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         </CardContent>
       </Card>
 
@@ -110,7 +110,7 @@ export async function CrossSiteReports() {
           {stockRows.length === 0 ? (
             <p className="px-4 py-3 text-sm text-zinc-500">No stock on the ledger.</p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead className="bg-zinc-50 text-left text-xs text-zinc-500 dark:bg-zinc-800/50">
                 <tr>
                   <th className="px-4 py-2">Site</th>
@@ -127,7 +127,7 @@ export async function CrossSiteReports() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </CardContent>
       </Card>

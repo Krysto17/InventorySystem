@@ -112,7 +112,7 @@ export default async function InventoryPage() {
           {stockRows.length === 0 ? (
             <p className="px-4 py-3 text-sm text-gray-500">No stock on hand.</p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-gray-500 border-b">
                   <th className="text-left px-4 py-2">Material</th>
@@ -129,7 +129,7 @@ export default async function InventoryPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </CardContent>
       </Card>

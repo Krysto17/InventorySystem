@@ -4,7 +4,7 @@
 
 > **For the manager:** You don't need to be a developer to drive this. Almost every step here is run by a Claude Code agent — you read each phase, copy the relevant section into Claude, and Claude does the work. You stay in the driver's seat for **business decisions** (what materials, what grades, when to override pricing, etc.). Git, Supabase, and Next.js are the agent's job, not yours. When this document gives you a shell command, copy it exactly as written. When it uses a term you don't know, search this file for "Glossary" — it's at the very end.
 
-**System purpose:** Role-based data-monitoring web app for a family-run tin / raw-metals processing and purchasing business with **three sites**. Tracks the full lifecycle of every supplier visit (gate → processing → analysis → pricing → payment → stock) plus outbound bulk sales of stored stock. Owner needs full cross-site oversight; every subprocess exports a branded PDF.
+**System purpose:** Role-based data-monitoring web app for a family-run tin / raw-metals processing and purchasing business with **three sites**. Tracks the full lifecycle of every supplier visit (processing intake → receiving → QC analysis → pricing → payment → stock) plus outbound bulk/lot sales of stored stock, with a gate that authorises and logs material movement. Owner needs full cross-site oversight; every subprocess exports a branded PDF. *(See "Current state" above for the authoritative role/pipeline summary.)*
 
 **Stack (hard constraints):**
 - **Next.js 16 (App Router) + TypeScript + Tailwind v4**, deployed on **Vercel**. TypeScript/JavaScript only.
@@ -16,6 +16,30 @@
 **Authoritative design spec:** `docs/superpowers/specs/2026-05-27-mining-inventory-system-design.md` (system-wide) + `docs/superpowers/specs/2026-05-29-phase-2-visit-workflow-design.md` (Phase 2).
 
 **Business rules already captured** are inlined in the "Critical business rules" section near the end of this file. (They were originally saved as Claude project memories on the original author's laptop; that storage is local-only and doesn't transfer with the repo, so the same content is duplicated here for handoff.)
+
+---
+
+## ⚠️ Current state — read this first (supersedes stale phase details)
+
+The phase write-ups below are the historical build narrative. A few decisions were **later reversed or extended**, so where a phase contradicts this section, **this section wins**. Current schema is **54 migrations** (`0001`–`0054`); the full Vitest suite passes (238) and the production build is clean.
+
+**Roles (8, single source of truth `src/lib/auth/roles.ts`):** `processing` · `receiving` · `qc` · `manager` · `accounting` · `inventory` · `gate` · `owner`. (`qc` was added in Phase 9. The blueprint's Auditor/Director/System-Owner are all the `owner`.)
+
+**The gate was removed in Phase 7, then brought back — but with a different job.** It is **no longer the pipeline entry**. Current truth:
+- **`processing` creates visits** (`/processing/intake`); the visit pipeline is `in_processing → in_receiving → in_qc → pricing → in_accounting → … → stocked`.
+- The **`gate` role** does: **gate passes** (manager/owner issue an outgoing pass against an available stock lot → gate acknowledges → that lot leaves stock via a `gate_release` ledger movement), a **gate movement log** (in/out), and the **no-agreement release**: a visit with no price agreement parks at `awaiting_gate_exit`; a **manager OR the owner authorises** the exit; then the gate releases it (→ `exited`). `at_gate_in` exists in the schema but is unused (orphan, like the old enum value).
+- **Owner + manager** see all gate movements (`/owner/gate`, `/manager/gate-passes`); RLS gives them cross-site read.
+
+**Built after the original phase plan (migrations 0046–0054):**
+- **Manager mixing batches + cost price** (`/manager/cost-price`): search/sort available lots (by material, monazite magnetic, cost price), hand-pick lots, form a batch. A sell batch is **owner-approved** (`/owner/cost-batches`); on approval the lots leave stock (`mixed_batch` movement). Director reviews all sold batches.
+- **Owner finance breakdown** (`/owner/finance`): expenses / advances / processing fees filtered by date, site, machine, with weekly/monthly buckets.
+- **Accountant sees supplier bank details** (settlement card + payouts page).
+- **Owner enable/disable employees** (`/owner/employees`); disabled accounts can't sign in. Password **reset** is out-of-band via `scripts/reset-password.mjs` or the Supabase dashboard (passwords are hashed, never retrievable).
+- **Realtime notifications** — the header bell ("awaiting your action") updates without a reload via Supabase channels (`supabase_realtime` publication, migration 0054). Per-role queues in `src/lib/notifications.ts`.
+- **Typed Supabase client** — `src/lib/supabase/database.types.ts` generated; clients are `<Database>`-typed.
+- **CI** — `.github/workflows/ci.yml` runs build + the full suite on PRs.
+
+**Known maintenance backlog:** finish retiring ad-hoc `as unknown` casts now that selects are typed; squash migrations to a single baseline after the next deploy; the orphan `at_gate_in` state can be dropped in a future migration.
 
 ---
 
@@ -59,7 +83,7 @@ If you skip brainstorming for a phase, you'll skip the moments where the owner c
 - Key source: `src/middleware.ts`, `src/lib/auth/roles.ts`, `src/lib/auth/get-profile.ts`, `src/lib/supabase/{server,client,admin}.ts`, `src/lib/provisioning/`, `src/app/(owner)/owner/employees/`, `src/app/login/`, `src/app/set-password/`
 
 **What's been verified (don't re-do):**
-- 7 roles: `gate`, `processing`, `receiving`, `manager`, `accounting`, `inventory`, `owner`
+- Originally 7 roles incl. `gate`. **Current: 8 roles** — `qc` added (Phase 9), `gate` removed in Phase 7 then restored with a new job (see "Current state"). Authoritative list: `src/lib/auth/roles.ts`.
 - Email-free username login → synthetic `<username>@magneticjoezion.local`
 - `must_change_password` flag enforces first-login password reset
 - RLS column-level grant on `profiles.must_change_password` (privilege-escalation fix)
@@ -582,9 +606,11 @@ PRE: Phases 1-5 done. A fully-completed visit (gate intake → stocked) exists w
 
 ---
 
-# Phase 7 — Gate Role Removal ✅ DONE
+# Phase 7 — Gate Role Removal ✅ DONE  ⟲ LATER REVERSED
 
-**Goal:** Remove the `gate` role and all gate-specific processes from the system. Visits enter the pipeline directly at processing; no gate intake stage exists.
+> **⚠️ Superseded:** the `gate` role was later **restored** (migrations 0047–0050) with a new job — gate passes, a movement log, and no-agreement release authorised by **manager or owner**. It is *not* the pipeline entry; `processing` still creates visits. The historical removal below is kept for context only. See "Current state — read this first" at the top.
+
+**Goal (historical):** Remove the `gate` role and all gate-specific processes from the system. Visits enter the pipeline directly at processing; no gate intake stage exists.
 
 **Status:** `DONE`. Migration 0017, processing-owned visit creation, removed gate route/PDF/exit-authorization flow, and full test suite (35 files, 140 tests) committed on `phase-7-gate-removal`. The `processing` role now creates visits via `/processing/intake`. No-agreement visits go `pricing → exited` directly.
 

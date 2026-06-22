@@ -72,7 +72,7 @@ export async function BatchSettlementCard({
       <CardContent className="space-y-4">
         {/* Materials */}
         <div>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead className="text-left text-xs text-ink-2">
               <tr>
                 <th className="py-1">Material</th>
@@ -94,7 +94,7 @@ export async function BatchSettlementCard({
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         </div>
 
         {/* Breakdown */}

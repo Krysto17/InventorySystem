@@ -165,7 +165,7 @@ export default async function OwnerFinancePage({
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">{gran === "month" ? "Monthly" : "Weekly"} breakdown</h2></CardHeader>
         <CardContent className="p-0">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead className="border-b border-line text-left text-xs text-zinc-500">
               <tr><th className="px-4 py-2">Period</th><th className="px-4 py-2 text-right">Expenses</th><th className="px-4 py-2 text-right">Advances</th><th className="px-4 py-2 text-right">Processing</th><th className="px-4 py-2 text-right">Total</th></tr>
             </thead>
@@ -182,7 +182,7 @@ export default async function OwnerFinancePage({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </CardContent>
       </Card>
 
@@ -190,7 +190,7 @@ export default async function OwnerFinancePage({
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">Processing fees by machine</h2></CardHeader>
         <CardContent className="p-0">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead className="border-b border-line text-left text-xs text-zinc-500">
               <tr><th className="px-4 py-2">Machine</th><th className="px-4 py-2">Site</th><th className="px-4 py-2 text-right">Runs</th><th className="px-4 py-2 text-right">Total fee</th></tr>
             </thead>
@@ -206,7 +206,7 @@ export default async function OwnerFinancePage({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </CardContent>
       </Card>
     </main>

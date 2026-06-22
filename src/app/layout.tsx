@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/shell/ThemeProvider";
 import { AppShell } from "@/components/shell/AppShell";
@@ -13,6 +13,11 @@ import { roleNotifications } from "@/lib/notifications";
 export const metadata: Metadata = {
   title: "Magnetic Joezion — Inventory",
   description: "Magnetic Joezion Nig. Ltd — material tracking and inventory system",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default async function RootLayout({

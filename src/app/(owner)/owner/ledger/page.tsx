@@ -81,7 +81,7 @@ export default async function OwnerLedgerPage({
           {ledger.length === 0 ? (
             <p className="text-sm text-ink-2">No advances match.</p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead className="text-left text-xs text-ink-2">
                 <tr>
                   <th className="py-1">Supplier</th>
@@ -103,7 +103,7 @@ export default async function OwnerLedgerPage({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </CardContent>
       </Card>

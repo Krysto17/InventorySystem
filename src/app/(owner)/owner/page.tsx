@@ -355,7 +355,7 @@ export default async function OwnerDashboard({
             {machineRows.length === 0 ? (
               <p className="text-sm text-zinc-500">No processing data in this period.</p>
             ) : (
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-zinc-200 text-xs text-zinc-500 dark:border-zinc-800">
                     <th className="py-1 text-left">Machine</th>
@@ -372,7 +372,7 @@ export default async function OwnerDashboard({
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             )}
           </CardContent>
         </Card>
