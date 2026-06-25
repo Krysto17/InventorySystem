@@ -7,6 +7,29 @@ import { getProfile } from "@/lib/auth/get-profile";
 
 export type ProcessingState = { error?: string };
 
+// Processing records a material line (e.g. iron weight + comment) while the
+// visit is in processing. A supplier/visit can have several lines.
+export async function addProcessingMaterialLine(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || (me.role !== "processing" && me.role !== "owner")) return;
+
+  const visitId = String(formData.get("visit_id") ?? "");
+  const materialTypeId = String(formData.get("material_type_id") ?? "");
+  const weight = Number(formData.get("weight_kg"));
+  if (!visitId || !materialTypeId || !(weight >= 0)) return;
+  const comment = String(formData.get("receiving_comment") ?? "").trim() || null;
+
+  const supabase = await createClient();
+  await supabase.from("visit_materials").insert({
+    visit_id: visitId,
+    material_type_id: materialTypeId,
+    weight_kg: weight,
+    receiving_comment: comment,
+    recorded_by: me.id,
+  });
+  revalidatePath(`/visits/${visitId}`);
+}
+
 type UsageLine = { machine_id: string; measurement: number };
 
 // ─── Visit creation (replaces the old gate intake; processing owns it now) ────

@@ -73,6 +73,12 @@ export default async function VisitDetailPage({
     .maybeSingle();
 
 
+  const { data: materialTypes } = await supabase
+    .from("material_types")
+    .select("id, name")
+    .eq("active", true)
+    .order("name");
+
   const { data: machines } = await supabase
     .from("machines")
     .select("id, name, charge_basis, rate")
@@ -328,6 +334,7 @@ export default async function VisitDetailPage({
           rate: number;
         }[]
       }
+      materialTypes={(materialTypes ?? []) as { id: string; name: string }[]}
       stockMovement={stockMovementNorm}
     />
     </div>

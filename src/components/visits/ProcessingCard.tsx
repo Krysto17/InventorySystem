@@ -1,9 +1,10 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { submitProcessing, type ProcessingState } from "@/app/(processing)/processing/actions";
+import { submitProcessing, addProcessingMaterialLine, type ProcessingState } from "@/app/(processing)/processing/actions";
 
 type Machine = { id: string; name: string; charge_basis: "weight" | "bag" | "hour" | "minute"; rate: number };
+type MaterialType = { id: string; name: string };
 type UsageDraft = { machine_id: string; measurement: string };
 
 const initial: ProcessingState = {};
@@ -11,9 +12,11 @@ const initial: ProcessingState = {};
 export function ProcessingCard({
   visitId,
   machines,
+  materialTypes,
 }: {
   visitId: string;
   machines: Machine[];
+  materialTypes: MaterialType[];
 }) {
   const [state, action, pending] = useActionState(submitProcessing, initial);
   const [lines, setLines] = useState<UsageDraft[]>([{ machine_id: "", measurement: "" }]);
@@ -22,7 +25,11 @@ export function ProcessingCard({
     setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, [key]: val } : l)));
   }
 
+  // Default the material select to Iron when present (New-Site processing).
+  const defaultMaterial = materialTypes.find((m) => m.name === "Iron")?.id ?? materialTypes[0]?.id ?? "";
+
   return (
+    <div className="space-y-4">
     <form action={action} className="space-y-3">
       <input type="hidden" name="visit_id" value={visitId} />
       <div className="space-y-2">
@@ -85,5 +92,26 @@ export function ProcessingCard({
         {pending ? "Saving..." : "Submit processing"}
       </button>
     </form>
+
+    {/* Material entry (e.g. iron weight) — a supplier can have several lines.
+        Comments are visible to the General manager. */}
+    <form action={addProcessingMaterialLine} className="space-y-2 rounded border border-line p-3">
+      <div className="text-xs font-semibold text-ink-2">Add material (weight)</div>
+      <input type="hidden" name="visit_id" value={visitId} />
+      <div className="flex flex-wrap gap-2">
+        <select name="material_type_id" defaultValue={defaultMaterial} required
+          className="rounded border px-2 py-1 text-sm">
+          {materialTypes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+        <input name="weight_kg" type="number" step="0.001" min="0" required placeholder="weight (kg)"
+          className="w-32 rounded border px-2 py-1 text-sm" />
+      </div>
+      <input name="receiving_comment" type="text" placeholder="Comment (optional)"
+        className="block w-full rounded border px-2 py-1 text-sm" />
+      <button type="submit" className="rounded border px-3 py-1 text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800">
+        + Add material
+      </button>
+    </form>
+    </div>
   );
 }

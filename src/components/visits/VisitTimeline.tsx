@@ -65,11 +65,12 @@ export type VisitTimelineProps = {
       | "owner";
   };
   machines: Machine[];
+  materialTypes: { id: string; name: string }[];
   stockMovement: Parameters<typeof StockIntakeCard>[0]["stockMovement"];
 };
 
 export function VisitTimeline(props: VisitTimelineProps) {
-  const { visit, processing, analysis, pricing, payments, paymentBalance, viewer, machines, stockMovement } = props;
+  const { visit, processing, analysis, pricing, payments, paymentBalance, viewer, machines, materialTypes, stockMovement } = props;
   const isOwner = viewer.role === "owner";
 
   return (
@@ -133,7 +134,7 @@ export function VisitTimeline(props: VisitTimelineProps) {
             </>
           ) : visit.state === "in_processing" &&
             (viewer.role === "processing" || isOwner) ? (
-            <ProcessingCard visitId={visit.id} machines={machines} />
+            <ProcessingCard visitId={visit.id} machines={machines} materialTypes={materialTypes} />
           ) : (
             <p className="text-sm text-gray-600">Pending processing.</p>
           )}
