@@ -6,6 +6,7 @@ import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
 import { issueGatePass, cancelGatePass } from "./actions";
 import { GateMovementsCard } from "@/components/gate/GateMovementsCard";
+import { requireGeneralManager } from "@/lib/auth/require-general-manager";
 
 import { one as g1 } from "@/lib/db/relation";
 
@@ -14,6 +15,7 @@ const STATUS_VARIANT: Record<string, "default" | "green" | "yellow" | "red"> = {
 };
 
 export default async function ManagerGatePassesPage() {
+  await requireGeneralManager();
   const supabase = await createClient();
   const [{ data: passes }, { data: suppliers }, { data: materialTypes }, { data: lots }] = await Promise.all([
     supabase.from("gate_passes")

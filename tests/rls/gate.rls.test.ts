@@ -22,9 +22,11 @@ describe("gate intake + passes + stock release RLS", () => {
   }
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient().from("sites").select("id").limit(2);
-    siteAId = sites![0].id as string;
-    siteBId = sites![1].id as string;
+    // Gate passes / cross-site gate-log reads belong to the GENERAL manager =
+    // the New-Site manager, so site A = New-Site and mgrA is that manager.
+    const { data: sites } = await adminClient().from("sites").select("id, name");
+    siteAId = sites!.find((s) => s.name === "New-Site")!.id as string;
+    siteBId = sites!.find((s) => s.name !== "New-Site")!.id as string;
     const { data: mat } = await adminClient().from("material_types").select("id").limit(1).single();
     materialId = mat!.id as string;
     const { data: sup } = await adminClient()

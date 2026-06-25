@@ -22,8 +22,9 @@ describe("cost-price mixing batch sells stock on owner approval", () => {
   }
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient().from("sites").select("id").limit(1);
-    siteAId = sites![0].id as string;
+    // Cost-price runs belong to the GENERAL manager = the New-Site manager.
+    const { data: sites } = await adminClient().from("sites").select("id, name");
+    siteAId = sites!.find((s) => s.name === "New-Site")!.id as string;
     const { data: mat } = await adminClient().from("material_types").select("id").limit(1).single();
     materialId = mat!.id as string;
     const { data: sup } = await adminClient()

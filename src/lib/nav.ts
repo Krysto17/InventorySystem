@@ -24,6 +24,9 @@ export type NavItem = {
   label: string;
   href: string;
   icon: NavIcon;
+  // Manager items visible only to the General (New-Site) manager — hidden from
+  // site managers (Old-Site / Dong).
+  generalOnly?: boolean;
 };
 
 // Per-role navigation. Owner sees the full cross-site set; every other role
@@ -41,11 +44,12 @@ const NAV: Record<Role, NavItem[]> = {
   ],
   manager: [
     { label: "Pricing queue", href: "/manager", icon: "pricing" },
-    { label: "Gate passes", href: "/manager/gate-passes", icon: "gate" },
     { label: "Advances", href: "/manager/advances", icon: "accounting" },
     { label: "Expenses", href: "/inventory/consumables", icon: "consumables" },
-    { label: "Reports", href: "/manager/reports", icon: "reports" },
-    { label: "Cost price", href: "/manager/cost-price", icon: "pricing" },
+    // General (New-Site) manager only — site managers can't see these (#13).
+    { label: "Gate passes", href: "/manager/gate-passes", icon: "gate", generalOnly: true },
+    { label: "Reports", href: "/manager/reports", icon: "reports", generalOnly: true },
+    { label: "Cost price", href: "/manager/cost-price", icon: "pricing", generalOnly: true },
   ],
   accounting: [
     { label: "Settlements", href: "/accounting", icon: "accounting" },
@@ -76,8 +80,12 @@ const NAV: Record<Role, NavItem[]> = {
   ],
 };
 
-export function navForRole(role: Role): NavItem[] {
-  return NAV[role] ?? [];
+export function navForRole(role: Role, opts?: { isGeneralManager?: boolean }): NavItem[] {
+  const items = NAV[role] ?? [];
+  if (role === "manager" && !opts?.isGeneralManager) {
+    return items.filter((i) => !i.generalOnly);
+  }
+  return items;
 }
 
 // The home path's first segment, used to decide which nav item is "active".

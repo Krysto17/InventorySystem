@@ -5,11 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
 import { MixingBatchTool, type Lot } from "@/components/reports/MixingBatchTool";
+import { requireGeneralManager } from "@/lib/auth/require-general-manager";
 
 import { one as g1 } from "@/lib/db/relation";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 export default async function ManagerCostPricePage() {
+  await requireGeneralManager();
   const supabase = await createClient();
 
   const [{ data: lotsRaw }, { data: runs }] = await Promise.all([

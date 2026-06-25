@@ -46,13 +46,14 @@ type Props = {
   role: Role;
   fullName: string;
   username: string;
+  isGeneralManager: boolean;
   open: boolean;
   onClose: () => void;
 };
 
-export function Sidebar({ role, fullName, username, open, onClose }: Props) {
+export function Sidebar({ role, fullName, username, isGeneralManager, open, onClose }: Props) {
   const pathname = usePathname();
-  const items = navForRole(role);
+  const items = navForRole(role, { isGeneralManager });
 
   return (
     <>

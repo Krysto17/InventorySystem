@@ -18,7 +18,7 @@ const NOTIFY_TABLES = [
 ];
 
 type Props = {
-  profile: { role: Role; fullName: string; username: string } | null;
+  profile: { role: Role; fullName: string; username: string; isGeneralManager: boolean } | null;
   notificationItems: NotificationItem[];
   children: React.ReactNode;
 };
@@ -75,6 +75,7 @@ export function AppShell({ profile, notificationItems, children }: Props) {
         role={profile.role}
         fullName={profile.fullName}
         username={profile.username}
+        isGeneralManager={profile.isGeneralManager}
         open={open}
         onClose={() => setOpen(false)}
       />

@@ -47,7 +47,12 @@ export default async function RootLayout({
           <AppShell
             profile={
               profile
-                ? { role: profile.role, fullName: profile.full_name, username: profile.username }
+                ? {
+                    role: profile.role,
+                    fullName: profile.full_name,
+                    username: profile.username,
+                    isGeneralManager: profile.is_general_manager,
+                  }
                 : null
             }
             notificationItems={notificationItems}

@@ -5,17 +5,20 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 // writes remain site-scoped; other roles stay site-scoped for reads too.
 describe("cross-site read RLS (manager + accountant)", () => {
   let siteAId: string, siteBId: string;
-  let mgrA: TestUser, acctA: TestUser, procA: TestUser, invA: TestUser;
+  let mgrA: TestUser, acctA: TestUser, procA: TestUser, invA: TestUser, siteMgrB: TestUser;
   let supplierId: string, materialTypeId: string, visitBId: string;
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient().from("sites").select("id").limit(2);
-    siteAId = sites![0].id as string;
-    siteBId = sites![1].id as string;
-    mgrA  = await makeUser({ username: "xsr-mgr-a",  role: "manager",    siteId: siteAId });
+    const { data: sites } = await adminClient().from("sites").select("id, name");
+    // Cross-site read now belongs to the GENERAL manager = the New-Site manager.
+    siteAId = sites!.find((s) => s.name === "New-Site")!.id as string; // general mgr's site
+    siteBId = sites!.find((s) => s.name !== "New-Site")!.id as string; // another site
+    mgrA  = await makeUser({ username: "xsr-mgr-a",  role: "manager",    siteId: siteAId }); // general
     acctA = await makeUser({ username: "xsr-acct-a", role: "accounting", siteId: siteAId });
     procA = await makeUser({ username: "xsr-proc-a", role: "processing", siteId: siteAId });
     invA  = await makeUser({ username: "xsr-inv-a",  role: "inventory",  siteId: siteAId });
+    // A SITE manager (not New-Site) — should NOT have cross-site read.
+    siteMgrB = await makeUser({ username: "xsr-sitemgr-b", role: "manager", siteId: siteBId });
 
     const { data: s } = await adminClient().from("suppliers").insert({ name: "XSR Supplier" }).select("id").single();
     supplierId = s!.id as string;
@@ -57,6 +60,14 @@ describe("cross-site read RLS (manager + accountant)", () => {
     expect(visits.data!.length).toBeGreaterThan(0);
     const stock = await acctA.client.from("stock_movements").select("id").eq("site_id", siteBId);
     expect(stock.data!.length).toBeGreaterThan(0);
+  });
+
+  it("a SITE manager (not New-Site) does NOT have cross-site read", async () => {
+    // siteMgrB is at siteB (its own site); New-Site (siteA) data must be invisible.
+    const visits = await siteMgrB.client.from("visits").select("id").eq("site_id", siteAId);
+    expect(visits.data ?? []).toHaveLength(0);
+    const adv = await siteMgrB.client.from("advances").select("id").eq("site_id", siteAId);
+    expect(adv.data ?? []).toHaveLength(0);
   });
 
   it("processing + inventory remain site-scoped for reads", async () => {

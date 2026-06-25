@@ -50,6 +50,19 @@ describe("role-aware navigation", () => {
     expect(hrefs.every((h) => !h.startsWith("/owner"))).toBe(true);
   });
 
+  it("site managers don't see gate passes / cost-price / reports; the general manager does", () => {
+    const site = navForRole("manager", { isGeneralManager: false }).map((n) => n.href);
+    expect(site).not.toContain("/manager/gate-passes");
+    expect(site).not.toContain("/manager/cost-price");
+    expect(site).not.toContain("/manager/reports");
+    expect(site).toContain("/manager"); // pricing queue stays
+
+    const general = navForRole("manager", { isGeneralManager: true }).map((n) => n.href);
+    expect(general).toContain("/manager/gate-passes");
+    expect(general).toContain("/manager/cost-price");
+    expect(general).toContain("/manager/reports");
+  });
+
   describe("isActivePath", () => {
     it("matches exact path", () => {
       expect(isActivePath("/owner", "/owner")).toBe(true);

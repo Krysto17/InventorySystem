@@ -11,12 +11,14 @@ do $$
 declare
   dom  text := 'magneticjoezion.local';
   pw   text := extensions.crypt('test-password-123', extensions.gen_salt('bf'));
-  dong uuid;
+  dong    uuid;
+  newsite uuid;
   rec  record;
   uid  uuid;
   mail text;
 begin
-  select id into dong from public.sites where name = 'Dong' limit 1;
+  select id into dong    from public.sites where name = 'Dong' limit 1;
+  select id into newsite from public.sites where name = 'New-Site' limit 1;
 
   for rec in
     select * from (values
@@ -24,7 +26,8 @@ begin
       ('proc1',  'Processing One',   'processing', dong),
       ('recv1',  'Receiving One',    'receiving',  dong),
       ('qc1',    'Quality One',      'qc',         dong),
-      ('mgr1',   'Manager One',      'manager',    dong),
+      ('mgr1',   'Manager One',      'manager',    dong),         -- Dong site manager
+      ('gmgr1',  'General Manager',  'manager',    newsite),      -- New-Site = general manager
       ('acct1',  'Accountant One',   'accounting', dong),
       ('inv1',   'Inventory One',    'inventory',  dong),
       ('gate1',  'Gate One',         'gate',       dong)
