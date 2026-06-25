@@ -324,7 +324,7 @@ export default async function VisitDetailPage({
         (machines ?? []) as {
           id: string;
           name: string;
-          charge_basis: "weight" | "bag" | "hour";
+          charge_basis: "weight" | "bag" | "hour" | "minute";
           rate: number;
         }[]
       }

@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { submitProcessing, type ProcessingState } from "@/app/(processing)/processing/actions";
 
-type Machine = { id: string; name: string; charge_basis: "weight" | "bag" | "hour"; rate: number };
+type Machine = { id: string; name: string; charge_basis: "weight" | "bag" | "hour" | "minute"; rate: number };
 type UsageDraft = { machine_id: string; measurement: string };
 
 const initial: ProcessingState = {};

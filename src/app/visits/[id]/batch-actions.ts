@@ -56,6 +56,21 @@ export async function updateMaterialLine(formData: FormData): Promise<void> {
   if (visitId) revalidatePath(`/visits/${visitId}`);
 }
 
+// Receiving deletes a draft material line while the visit is in receiving.
+export async function deleteMaterialLine(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me) return;
+  if (me.role !== "receiving" && me.role !== "owner") return;
+
+  const visitId = String(formData.get("visit_id") ?? "");
+  const lineId = String(formData.get("visit_material_id") ?? "");
+  if (!lineId) return;
+
+  const supabase = await createClient();
+  await supabase.from("visit_materials").delete().eq("id", lineId);
+  if (visitId) revalidatePath(`/visits/${visitId}`);
+}
+
 // Receiving's material lines are saved as drafts while the visit is in
 // receiving (editable any time); this finally sends the batch on to QC.
 export async function advanceToQc(formData: FormData): Promise<void> {

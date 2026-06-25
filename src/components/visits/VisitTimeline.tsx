@@ -7,7 +7,7 @@ import { StockIntakeCard } from "./StockIntakeCard";
 import { STATE_LABELS, type VisitState } from "@/lib/visits/state-machine";
 import { formatNaira, formatTimestamp, formatWeight } from "@/lib/visits/format";
 
-type Machine = { id: string; name: string; charge_basis: "weight" | "bag" | "hour"; rate: number };
+type Machine = { id: string; name: string; charge_basis: "weight" | "bag" | "hour" | "minute"; rate: number };
 
 export type VisitTimelineProps = {
   visit: {

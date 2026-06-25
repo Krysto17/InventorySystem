@@ -107,4 +107,30 @@ describe("visit_materials RLS (batch line items)", () => {
     const { data } = await owner.client.from("visit_materials").select("id").eq("visit_id", v);
     expect(data!.length).toBeGreaterThan(0);
   });
+
+  // ── #1: receiving deletes a draft line while in receiving ────────────────────
+  it("receiving deletes its own-site line while in_receiving", async () => {
+    const v = await newVisit(siteAId);
+    const lineId = await addLine(v);
+    const { error } = await recvA.client.from("visit_materials").delete().eq("id", lineId);
+    expect(error).toBeNull();
+    const { data } = await adminClient().from("visit_materials").select("id").eq("id", lineId);
+    expect(data ?? []).toHaveLength(0);
+  });
+
+  it("receiving at site B cannot delete a site A line", async () => {
+    const v = await newVisit(siteAId);
+    const lineId = await addLine(v);
+    await recvB.client.from("visit_materials").delete().eq("id", lineId);
+    const { data } = await adminClient().from("visit_materials").select("id").eq("id", lineId);
+    expect(data ?? []).toHaveLength(1); // RLS blocked → still there
+  });
+
+  it("receiving cannot delete a line once the batch left receiving (in_qc)", async () => {
+    const v = await newVisit(siteAId, "in_qc");
+    const lineId = await addLine(v);
+    await recvA.client.from("visit_materials").delete().eq("id", lineId);
+    const { data } = await adminClient().from("visit_materials").select("id").eq("id", lineId);
+    expect(data ?? []).toHaveLength(1); // not in_receiving → blocked
+  });
 });

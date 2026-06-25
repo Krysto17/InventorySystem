@@ -30,6 +30,7 @@ export default async function MachinesPage() {
           <option value="weight">weight (kg)</option>
           <option value="bag">bag</option>
           <option value="hour">hour</option>
+          <option value="minute">minute</option>
         </select>
         <input
           name="rate"

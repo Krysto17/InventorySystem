@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { addMaterialLine, updateMaterialLine, advanceToQc, recordXrf, setLinePrice, finalizeLinePrice } from "@/app/visits/[id]/batch-actions";
+import { addMaterialLine, updateMaterialLine, deleteMaterialLine, advanceToQc, recordXrf, setLinePrice, finalizeLinePrice } from "@/app/visits/[id]/batch-actions";
 import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
 
@@ -140,6 +140,15 @@ export async function BatchMaterials({
                         className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
                     </label>
                     <button type="submit" className="col-span-2 rounded border px-3 py-1 text-xs hover:bg-zinc-50">Save correction</button>
+                  </form>
+                )}
+                {canReceive && (
+                  <form action={deleteMaterialLine} className="mt-1">
+                    <input type="hidden" name="visit_id" value={visitId} />
+                    <input type="hidden" name="visit_material_id" value={l.id} />
+                    <button type="submit" className="rounded border border-reject px-3 py-1 text-xs text-reject hover:bg-reject-soft">
+                      Delete line
+                    </button>
                   </form>
                 )}
 
