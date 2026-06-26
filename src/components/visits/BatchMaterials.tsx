@@ -1,8 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { addMaterialLine, updateMaterialLine, deleteMaterialLine, submitToManager, recordXrf, setLinePrice, finalizeLinePrice } from "@/app/visits/[id]/batch-actions";
+import { recordXrf, setLinePrice, finalizeLinePrice } from "@/app/visits/[id]/batch-actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { ReceivingLines, type RxLine } from "@/components/visits/ReceivingLines";
 import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
 
@@ -73,6 +74,18 @@ export async function BatchMaterials({
   const totalWeight = lines.reduce((s, l) => s + l.weight_kg, 0);
   const totalPurchase = lines.reduce((s, l) => s + (l.purchase_amount ?? 0), 0);
 
+  // The receiving stage (add/edit/delete draft lines) is handled client-side
+  // with optimistic updates so rapid entry feels instant.
+  const rxLines: RxLine[] = lines.map((l) => ({
+    id: l.id,
+    weight_kg: l.weight_kg,
+    material_type_id: l.material_type_id,
+    magnetic_analysis: l.magnetic_analysis,
+    receiving_comment: l.receiving_comment,
+    requires_analysis: l.requires_analysis,
+    materialName: l.material?.name ?? null,
+  }));
+
   return (
     <Card>
       <CardHeader>
@@ -82,6 +95,14 @@ export async function BatchMaterials({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {canReceive ? (
+          <ReceivingLines
+            visitId={visitId}
+            initialLines={rxLines}
+            materialTypes={(materialTypes ?? []) as { id: string; name: string }[]}
+          />
+        ) : (
+        <>
         {lines.length === 0 ? (
           <p className="text-sm text-zinc-500">No material lines recorded yet.</p>
         ) : (
@@ -109,48 +130,6 @@ export async function BatchMaterials({
                 )}
                 {l.receiving_comment && (
                   <div className="text-xs text-zinc-500">Note: {l.receiving_comment}</div>
-                )}
-
-                {/* Receiving: correct a line's entries before sending to QC */}
-                {canReceive && (
-                  <form action={updateMaterialLine} className="mt-2 grid grid-cols-2 gap-2">
-                    <input type="hidden" name="visit_id" value={visitId} />
-                    <input type="hidden" name="visit_material_id" value={l.id} />
-                    <label className="col-span-2 text-[11px] font-medium">
-                      Material type
-                      <select name="material_type_id" defaultValue={l.material_type_id}
-                        className="mt-1 block w-full rounded border px-2 py-1 text-sm">
-                        {(materialTypes ?? []).map((m) => (
-                          <option key={m.id as string} value={m.id as string}>{m.name as string}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="text-[11px] font-medium">
-                      Weight (kg)
-                      <input type="number" name="weight_kg" step="0.001" min="0" defaultValue={l.weight_kg}
-                        className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
-                    </label>
-                    <label className="text-[11px] font-medium">
-                      Magnetic analysis
-                      <input type="text" name="magnetic_analysis" defaultValue={l.magnetic_analysis ?? ""}
-                        className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
-                    </label>
-                    <label className="col-span-2 text-[11px] font-medium">
-                      Comment
-                      <input type="text" name="receiving_comment" defaultValue={l.receiving_comment ?? ""}
-                        className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
-                    </label>
-                    <SubmitButton pendingText="Saving…" className="col-span-2 rounded border px-3 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50">Save correction</SubmitButton>
-                  </form>
-                )}
-                {canReceive && (
-                  <form action={deleteMaterialLine} className="mt-1">
-                    <input type="hidden" name="visit_id" value={visitId} />
-                    <input type="hidden" name="visit_material_id" value={l.id} />
-                    <SubmitButton pendingText="Deleting…" className="rounded border border-reject px-3 py-1 text-xs text-reject hover:bg-reject-soft disabled:opacity-50">
-                      Delete line
-                    </SubmitButton>
-                  </form>
                 )}
 
                 {/* XRF result — only owner / manager / qc can see it */}
@@ -260,55 +239,7 @@ export async function BatchMaterials({
             Batch purchase total: <span className="font-semibold">₦{totalPurchase.toLocaleString()}</span>
           </div>
         )}
-
-        {/* Receiving: add lines + advance to QC */}
-        {canReceive && (
-          <div className="space-y-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
-            <form action={addMaterialLine} className="grid grid-cols-2 gap-2">
-              <input type="hidden" name="visit_id" value={visitId} />
-              <label className="col-span-2 text-xs font-medium">
-                Material
-                <select name="material_type_id" required defaultValue="" className="mt-1 block w-full rounded border px-2 py-1 text-sm">
-                  <option value="" disabled>Select material…</option>
-                  {(materialTypes ?? []).map((m) => (
-                    <option key={m.id as string} value={m.id as string}>{m.name as string}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-xs font-medium">
-                Weight (kg)
-                <input type="number" name="weight_kg" step="0.001" min="0" required className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
-              </label>
-              <label className="text-xs font-medium">
-                Magnetic analysis <span className="font-normal text-zinc-400">(Monazite only)</span>
-                <input type="text" name="magnetic_analysis" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
-              </label>
-              <label className="col-span-2 text-xs font-medium">
-                Comment
-                <input type="text" name="receiving_comment" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
-              </label>
-              <label className="col-span-2 flex items-center gap-2 text-xs font-medium">
-                <input type="checkbox" name="requires_analysis" defaultChecked />
-                Requires chemical (XRF) analysis
-              </label>
-              <SubmitButton pendingText="Adding…" className="col-span-2 rounded border px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-50">
-                + Add material line
-              </SubmitButton>
-            </form>
-
-            {lines.length > 0 && (
-              <form action={submitToManager} className="space-y-2">
-                <input type="hidden" name="visit_id" value={visitId} />
-                <p className="text-xs text-zinc-500">
-                  Material lines are saved as drafts — add or edit them above until
-                  you submit the batch to the manager for approval.
-                </p>
-                <SubmitButton pendingText="Submitting…" className="w-full rounded bg-black px-3 py-2 text-sm text-white disabled:opacity-50">
-                  Submit to manager →
-                </SubmitButton>
-              </form>
-            )}
-          </div>
+        </>
         )}
       </CardContent>
     </Card>
