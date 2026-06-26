@@ -21,10 +21,12 @@ describe("visits state machine — transitions", () => {
     materialTypeId = m!.id as string;
   });
 
-  // Visits start directly at the pipeline state — no gate stage.
+  // Visits start directly at the pipeline state — no gate stage. Intake is split
+  // by path (#3): processing creates unprocessed, owner creates either path.
   async function newVisit(entryPath: "unprocessed" | "processed") {
     const initialState = entryPath === "unprocessed" ? "in_processing" : "in_receiving";
-    const { data, error } = await proc.client
+    const creator = entryPath === "unprocessed" ? proc : owner;
+    const { data, error } = await creator.client
       .from("visits")
       .insert({
         site_id: siteId,
@@ -32,7 +34,7 @@ describe("visits state machine — transitions", () => {
         declared_material_type_id: materialTypeId,
         entry_path: entryPath,
         state: initialState,
-        created_by: proc.userId,
+        created_by: creator.userId,
       })
       .select("id")
       .single();

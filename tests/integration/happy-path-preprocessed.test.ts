@@ -23,7 +23,7 @@ describe("happy path: processed → agreed → in_accounting (no processing stag
   });
 
   it("skips processing entirely", async () => {
-    const { data: v } = await proc.client
+    const { data: v } = await recv.client
       .from("visits")
       .insert({
         site_id: siteId,
@@ -31,7 +31,7 @@ describe("happy path: processed → agreed → in_accounting (no processing stag
         declared_material_type_id: materialTypeId,
         entry_path: "processed",
         state: "in_receiving",
-        created_by: proc.userId,
+        created_by: recv.userId,
       })
       .select("id")
       .single();

@@ -97,7 +97,7 @@ describe("no-agreement exit path", () => {
   });
 
   it("processed: nothing owed when exiting without agreement", async () => {
-    const { data: v } = await proc.client
+    const { data: v } = await recv.client
       .from("visits")
       .insert({
         site_id: siteId,
@@ -105,7 +105,7 @@ describe("no-agreement exit path", () => {
         declared_material_type_id: materialTypeId,
         entry_path: "processed",
         state: "in_receiving",
-        created_by: proc.userId,
+        created_by: recv.userId,
       })
       .select("id")
       .single();
