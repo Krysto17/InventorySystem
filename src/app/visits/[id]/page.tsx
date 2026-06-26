@@ -307,7 +307,12 @@ export default async function VisitDetailPage({
             {STATE_LABELS[visitNorm.state] ?? visitNorm.state}
           </Badge>
         </div>
-        <ApprovalChain state={visitNorm.state} entryPath={visitNorm.entry_path} priceApproved={priceApproved} />
+        <ApprovalChain
+          state={visitNorm.state}
+          entryPath={visitNorm.entry_path}
+          priceApproved={priceApproved}
+          managerSubmitted={pricingNorm !== null}
+        />
         {canDeleteBatch && (
           <div className="flex justify-end">
             <DeleteBatchButton visitId={visitNorm.id} />
