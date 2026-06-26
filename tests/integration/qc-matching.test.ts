@@ -5,8 +5,14 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 // per-line analysis exemption, supplier identity codes.
 describe("QC matching + analysis rules (integration)", () => {
   let siteId: string;
-  let recv: TestUser, qc: TestUser;
+  let recv: TestUser, qc: TestUser, mgr: TestUser;
   let supplierId: string, monaziteId: string, zirconId: string;
+
+  // Flow now: receiving submits → site manager approves → QC/pricing.
+  async function advance(visitId: string) {
+    await recv.client.rpc("submit_visit_to_manager", { p_visit_id: visitId });
+    return mgr.client.rpc("approve_visit_by_manager", { p_visit_id: visitId });
+  }
 
   async function newVisit(state = "in_receiving") {
     const { data: v } = await adminClient().from("visits").insert({
@@ -22,6 +28,7 @@ describe("QC matching + analysis rules (integration)", () => {
     siteId = site!.id as string;
     recv = await makeUser({ username: "qcm-recv", role: "receiving", siteId });
     qc   = await makeUser({ username: "qcm-qc",   role: "qc",        siteId });
+    mgr  = await makeUser({ username: "qcm-mgr",  role: "manager",   siteId });
     const { data: s } = await adminClient().from("suppliers").insert({ name: "QCM Supplier" }).select("id").single();
     supplierId = s!.id as string;
     const { data: mz } = await adminClient().from("material_types").select("id").eq("name", "Monazite").single();
@@ -71,7 +78,7 @@ describe("QC matching + analysis rules (integration)", () => {
       visit_id: v, material_type_id: zirconId, weight_kg: 40,
       requires_analysis: false, recorded_by: recv.userId,
     });
-    const { error } = await recv.client.rpc("advance_visit_to_qc", { p_visit_id: v });
+    const { error } = await advance(v);
     expect(error).toBeNull();
     const { data: st } = await adminClient().from("visits").select("state").eq("id", v).single();
     expect(st!.state).toBe("pricing");
@@ -86,7 +93,7 @@ describe("QC matching + analysis rules (integration)", () => {
       visit_id: v, material_type_id: zirconId, weight_kg: 30,
       requires_analysis: false, recorded_by: recv.userId,
     });
-    await recv.client.rpc("advance_visit_to_qc", { p_visit_id: v });
+    await advance(v);
     let { data: st } = await adminClient().from("visits").select("state").eq("id", v).single();
     expect(st!.state).toBe("in_qc");
 

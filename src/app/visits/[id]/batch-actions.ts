@@ -72,16 +72,31 @@ export async function deleteMaterialLine(formData: FormData): Promise<void> {
 }
 
 // Receiving's material lines are saved as drafts while the visit is in
-// receiving (editable any time); this finally sends the batch on to QC.
-export async function advanceToQc(formData: FormData): Promise<void> {
+// receiving (editable any time); this submits the batch to the SITE manager.
+export async function submitToManager(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me) return;
   const visitId = String(formData.get("visit_id") ?? "");
   if (!visitId) return;
   const supabase = await createClient();
-  await supabase.rpc("advance_visit_to_qc", { p_visit_id: visitId });
+  await supabase.rpc("submit_visit_to_manager", { p_visit_id: visitId });
   revalidatePath(`/visits/${visitId}`);
   revalidatePath("/receiving");
+  revalidatePath("/manager");
+}
+
+// The (site) manager approves a batch → QC if any line needs analysis, else
+// straight to pricing (exempt materials skip QC, #8).
+export async function approveBatch(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me) return;
+  if (me.role !== "manager" && me.role !== "owner") return;
+  const visitId = String(formData.get("visit_id") ?? "");
+  if (!visitId) return;
+  const supabase = await createClient();
+  await supabase.rpc("approve_visit_by_manager", { p_visit_id: visitId });
+  revalidatePath(`/visits/${visitId}`);
+  revalidatePath("/manager");
   revalidatePath("/qc");
 }
 

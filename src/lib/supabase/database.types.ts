@@ -1857,7 +1857,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      advance_visit_to_qc: { Args: { p_visit_id: string }; Returns: undefined }
+      submit_visit_to_manager: { Args: { p_visit_id: string }; Returns: undefined }
+      approve_visit_by_manager: { Args: { p_visit_id: string }; Returns: undefined }
       current_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]

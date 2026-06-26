@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { addMaterialLine, updateMaterialLine, deleteMaterialLine, advanceToQc, recordXrf, setLinePrice, finalizeLinePrice } from "@/app/visits/[id]/batch-actions";
+import { addMaterialLine, updateMaterialLine, deleteMaterialLine, submitToManager, recordXrf, setLinePrice, finalizeLinePrice } from "@/app/visits/[id]/batch-actions";
 import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
 
@@ -296,16 +296,14 @@ export async function BatchMaterials({
             </form>
 
             {lines.length > 0 && (
-              <form action={advanceToQc} className="space-y-2">
+              <form action={submitToManager} className="space-y-2">
                 <input type="hidden" name="visit_id" value={visitId} />
                 <p className="text-xs text-zinc-500">
                   Material lines are saved as drafts — add or edit them above until
-                  you send the batch on.
+                  you submit the batch to the manager for approval.
                 </p>
                 <button type="submit" className="w-full rounded bg-black px-3 py-2 text-sm text-white">
-                  {lines.some((l) => l.requires_analysis)
-                    ? "Send to QC →"
-                    : "Send to pricing (no analysis needed) →"}
+                  Submit to manager →
                 </button>
               </form>
             )}

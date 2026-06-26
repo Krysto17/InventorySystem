@@ -1,6 +1,7 @@
 export const VISIT_STATES = [
   "in_processing",
   "in_receiving",
+  "awaiting_manager",
   "in_qc",
   "pricing",
   "awaiting_gate_exit",
@@ -16,6 +17,9 @@ export const TERMINAL_STATES: ReadonlySet<VisitState> = new Set(["exited", "stoc
 
 const FORWARD_TRANSITIONS: ReadonlyArray<readonly [VisitState, VisitState]> = [
   ["in_processing", "in_receiving"],
+  ["in_receiving", "awaiting_manager"],
+  ["awaiting_manager", "in_qc"],
+  ["awaiting_manager", "pricing"],
   ["in_receiving", "pricing"],
   ["pricing", "in_accounting"],
   ["pricing", "awaiting_gate_exit"],
@@ -36,6 +40,7 @@ export function isVisitOpen(state: VisitState): boolean {
 export const STATE_LABELS: Record<VisitState, string> = {
   in_processing: "Processing",
   in_receiving: "Receiving / magnetic analysis",
+  awaiting_manager: "Awaiting manager approval",
   in_qc: "QC / XRF analysis",
   pricing: "Pricing",
   awaiting_gate_exit: "Awaiting gate release",

@@ -9,6 +9,7 @@ type Node = { state: VisitState; label: string };
 const ORDER: Node[] = [
   { state: "in_processing", label: "Processing" },
   { state: "in_receiving", label: "Receiving" },
+  { state: "awaiting_manager", label: "Manager OK" },
   { state: "in_qc", label: "Analysis" },
   { state: "pricing", label: "Pricing" },
   { state: "in_accounting", label: "Accounting" },

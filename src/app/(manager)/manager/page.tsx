@@ -5,6 +5,7 @@ import { formatTimestamp, formatWeight } from "@/lib/visits/format";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
+import { approveBatch } from "@/app/visits/[id]/batch-actions";
 
 import { one as g1 } from "@/lib/db/relation";
 
@@ -33,6 +34,13 @@ export default async function ManagerHomePage() {
     return visit && visit.state !== "exited" && visit.state !== "stocked";
   });
 
+  // #7/#12: batches submitted by receiving, awaiting this site manager's approval.
+  const { data: approvalQueue } = await supabase
+    .from("visits")
+    .select("id, created_at, supplier:suppliers(name), declared_material_type:material_types(name), site:sites(name)")
+    .eq("state", "awaiting_manager")
+    .order("created_at", { ascending: true });
+
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
       <header>
@@ -41,6 +49,40 @@ export default async function ManagerHomePage() {
       </header>
 
       <LiveWorkflow />
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-sm">Awaiting your approval</h2>
+            <Badge variant={approvalQueue?.length ? "yellow" : "default"}>{approvalQueue?.length ?? 0}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {(approvalQueue?.length ?? 0) === 0 ? (
+            <p className="px-4 py-3 text-sm text-gray-500">No batches awaiting approval.</p>
+          ) : (
+            <ul className="divide-y">
+              {(approvalQueue ?? []).map((v) => {
+                const sup = g1<{ name: string }>((v as { supplier: unknown }).supplier);
+                const mat = g1<{ name: string }>((v as { declared_material_type: unknown }).declared_material_type);
+                const site = g1<{ name: string }>((v as { site: unknown }).site);
+                return (
+                  <li key={v.id as string} className="flex items-center justify-between gap-2 px-4 py-3 text-sm">
+                    <Link href={`/visits/${v.id}`} className="flex-1 hover:underline">
+                      <span className="font-medium">{sup?.name ?? "—"}</span>
+                      <span className="text-gray-500"> · {mat?.name ?? "—"} · {site?.name ?? "—"} · {formatTimestamp(v.created_at as string)}</span>
+                    </Link>
+                    <form action={approveBatch}>
+                      <input type="hidden" name="visit_id" value={v.id as string} />
+                      <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve</button>
+                    </form>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
