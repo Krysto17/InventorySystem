@@ -133,6 +133,7 @@ export default async function OwnerDashboard({
           site:sites(name),
           pricing:pricing(purchase_amount),
           payments:payments(direction, amount),
+          utility_charges:utility_charges(kind, amount),
           processing_records:processing_records(usage:processing_machine_usage(line_cost))
         `)
         .in("state", ["in_accounting", "awaiting_stock_intake"]);
@@ -232,10 +233,20 @@ export default async function OwnerDashboard({
     const pr = g1<{ purchase_amount?: number }>(v.pricing);
     const prRecsRaw = (v as { processing_records: unknown }).processing_records;
     const prRecs: unknown[] = Array.isArray(prRecsRaw) ? prRecsRaw : prRecsRaw ? [prRecsRaw] : [];
-    const processingOwed = prRecs.reduce((s: number, rec: unknown) => {
+    const rawProcessing = prRecs.reduce((s: number, rec: unknown) => {
       const r = rec as { usage?: { line_cost?: number }[] };
       return s + (r.usage ?? []).reduce((ss: number, u: { line_cost?: number }) => ss + Number(u.line_cost ?? 0), 0);
     }, 0);
+    // The processing fee the client owes is the "light bill" utility charge, which
+    // the manager may adjust/discount (#1). Fall back to the raw machine total only
+    // when no light-bill charge exists (e.g. legacy/processed visits).
+    const utilRaw = (v as { utility_charges: unknown }).utility_charges;
+    const utilCharges: { kind?: string; amount?: number }[] = Array.isArray(utilRaw)
+      ? utilRaw : utilRaw ? [utilRaw] : [];
+    const lightBill = utilCharges
+      .filter((u) => u.kind === "light_bill")
+      .reduce((s, u) => s + Number(u.amount ?? 0), 0);
+    const processingOwed = utilCharges.some((u) => u.kind === "light_bill") ? lightBill : rawProcessing;
     const pmts = (v as { payments: { direction: string; amount: number }[] }).payments ?? [];
     const processingPaid = pmts.filter((p) => p.direction === "processing_fee_in").reduce((s, p) => s + Number(p.amount), 0);
     const purchasePaid = pmts.filter((p) => p.direction === "purchase_amount_out").reduce((s, p) => s + Number(p.amount), 0);
