@@ -1,12 +1,16 @@
 import Link from "next/link";
-import { listVisitsByState } from "@/lib/visits/queries";
+import { listVisitsByState, listVisitsDoneAfter } from "@/lib/visits/queries";
 import { formatTimestamp } from "@/lib/visits/format";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
+import { DoneList } from "@/components/visits/DoneList";
 
 export default async function ReceivingHomePage() {
-  const queue = await listVisitsByState(["in_receiving"]);
+  const [queue, done] = await Promise.all([
+    listVisitsByState(["in_receiving"]),
+    listVisitsDoneAfter("in_receiving"),
+  ]);
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
       <header>
@@ -43,6 +47,8 @@ export default async function ReceivingHomePage() {
           )}
         </CardContent>
       </Card>
+
+      <DoneList rows={done} />
     </main>
   );
 }

@@ -1,12 +1,18 @@
 import Link from "next/link";
-import { listVisitsByState } from "@/lib/visits/queries";
+import { listVisitsByState, listQcCompletedVisits } from "@/lib/visits/queries";
+import { getProfile } from "@/lib/auth/get-profile";
 import { formatTimestamp } from "@/lib/visits/format";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
+import { DoneList } from "@/components/visits/DoneList";
 
 export default async function QcHomePage() {
-  const queue = await listVisitsByState(["in_qc"]);
+  const me = await getProfile();
+  const [queue, done] = await Promise.all([
+    listVisitsByState(["in_qc"]),
+    me ? listQcCompletedVisits(me.id) : Promise.resolve([]),
+  ]);
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
       <header>
@@ -45,6 +51,8 @@ export default async function QcHomePage() {
           )}
         </CardContent>
       </Card>
+
+      <DoneList rows={done} title="Analysed" />
     </main>
   );
 }

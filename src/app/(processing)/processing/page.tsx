@@ -1,12 +1,16 @@
 import Link from "next/link";
-import { listVisitsByState } from "@/lib/visits/queries";
+import { listVisitsByState, listVisitsDoneAfter } from "@/lib/visits/queries";
 import { formatTimestamp } from "@/lib/visits/format";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
+import { DoneList } from "@/components/visits/DoneList";
 
 export default async function ProcessingHomePage() {
-  const queue = await listVisitsByState(["in_processing"]);
+  const [queue, done] = await Promise.all([
+    listVisitsByState(["in_processing"]),
+    listVisitsDoneAfter("in_processing", { entryPath: "unprocessed" }),
+  ]);
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
       <header className="flex items-center justify-between">
@@ -48,6 +52,8 @@ export default async function ProcessingHomePage() {
           )}
         </CardContent>
       </Card>
+
+      <DoneList rows={done} />
     </main>
   );
 }
