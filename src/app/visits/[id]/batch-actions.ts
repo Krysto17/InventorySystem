@@ -104,15 +104,17 @@ export async function submitToManager(formData: FormData): Promise<void> {
 }
 
 // The (site) manager approves a batch → QC if any line needs analysis, else
-// straight to pricing (exempt materials skip QC, #8).
+// straight to pricing (exempt materials skip QC, #8). The manager may also
+// explicitly bypass analysis (skip_qc) and go straight to pricing (#3).
 export async function approveBatch(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me) return;
   if (me.role !== "manager" && me.role !== "owner") return;
   const visitId = String(formData.get("visit_id") ?? "");
   if (!visitId) return;
+  const skipQc = String(formData.get("skip_qc") ?? "") === "true";
   const supabase = await createClient();
-  await supabase.rpc("approve_visit_by_manager", { p_visit_id: visitId });
+  await supabase.rpc("approve_visit_by_manager", { p_visit_id: visitId, p_skip_qc: skipQc });
   revalidatePath(`/visits/${visitId}`);
   revalidatePath("/manager");
   revalidatePath("/qc");

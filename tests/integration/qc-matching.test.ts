@@ -84,6 +84,20 @@ describe("QC matching + analysis rules (integration)", () => {
     expect(st!.state).toBe("pricing");
   });
 
+  it("manager may BYPASS analysis (skip_qc) on a batch that needs XRF → pricing (#3)", async () => {
+    const v = await newVisit();
+    // A line that WOULD require analysis.
+    await recv.client.from("visit_materials").insert({
+      visit_id: v, material_type_id: monaziteId, weight_kg: 70, recorded_by: recv.userId,
+    });
+    await recv.client.rpc("submit_visit_to_manager", { p_visit_id: v });
+    // Manager chooses to skip QC → straight to pricing.
+    const { error } = await mgr.client.rpc("approve_visit_by_manager", { p_visit_id: v, p_skip_qc: true });
+    expect(error).toBeNull();
+    const { data: st } = await adminClient().from("visits").select("state").eq("id", v).single();
+    expect(st!.state).toBe("pricing");
+  });
+
   it("a mixed batch advances once only the REQUIRED lines have submitted XRF", async () => {
     const v = await newVisit();
     const { data: req } = await adminClient().from("visit_materials").insert({

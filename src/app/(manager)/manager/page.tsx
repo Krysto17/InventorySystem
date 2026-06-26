@@ -74,10 +74,17 @@ export default async function ManagerHomePage() {
                       <span className="font-medium">{sup?.name ?? "—"}</span>
                       <span className="text-gray-500"> · {mat?.name ?? "—"} · {site?.name ?? "—"} · {formatTimestamp(v.created_at as string)}</span>
                     </Link>
-                    <form action={approveBatch}>
-                      <input type="hidden" name="visit_id" value={v.id as string} />
-                      <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve</button>
-                    </form>
+                    <div className="flex shrink-0 gap-2">
+                      <form action={approveBatch}>
+                        <input type="hidden" name="visit_id" value={v.id as string} />
+                        <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve → analysis</button>
+                      </form>
+                      <form action={approveBatch}>
+                        <input type="hidden" name="visit_id" value={v.id as string} />
+                        <input type="hidden" name="skip_qc" value="true" />
+                        <button type="submit" className="rounded border border-line px-3 py-1 text-xs font-semibold text-ink-2 hover:bg-zinc-50" title="Skip XRF analysis and go straight to pricing">Skip → pricing</button>
+                      </form>
+                    </div>
                   </li>
                 );
               })}
