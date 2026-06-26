@@ -40,6 +40,7 @@ export default async function VisitDetailPage({
     { data: settlement },
     { data: paymentsRaw },
     { data: stockMovementRaw },
+    { data: visitMaterialsRaw },
   ] = await Promise.all([
     supabase
       .from("visits")
@@ -107,8 +108,21 @@ export default async function VisitDetailPage({
       .eq("ref_visit_id", id)
       .eq("reason", "purchase_intake")
       .maybeSingle(),
+    supabase
+      .from("visit_materials")
+      .select("id, weight_kg, receiving_comment, material:material_types(name)")
+      .eq("visit_id", id)
+      .order("created_at", { ascending: true }),
   ]);
   if (!visit) notFound();
+
+  // Lines for the processing card's optimistic list (in_processing iron entries).
+  const processingLines = (visitMaterialsRaw ?? []).map((l) => ({
+    id: l.id as string,
+    weight_kg: Number(l.weight_kg),
+    materialName: (get1((l as { material: unknown }).material) as { name?: string } | null)?.name ?? null,
+    comment: (l.receiving_comment as string | null) ?? null,
+  }));
 
   // Owner-finalised price → green "Director OK" node in the chain.
   const priceApproved = (finalizedCount ?? 0) > 0;
@@ -314,11 +328,13 @@ export default async function VisitDetailPage({
       visitState={visitNorm.state}
       viewerRole={me.role as Role}
     />
-    <BatchMaterials
-      visitId={visitNorm.id}
-      visitState={visitNorm.state}
-      viewerRole={me.role as Role}
-    />
+    {visitNorm.state !== "in_processing" && (
+      <BatchMaterials
+        visitId={visitNorm.id}
+        visitState={visitNorm.state}
+        viewerRole={me.role as Role}
+      />
+    )}
     <UtilityChargesCard
       visitId={visitNorm.id}
       visitState={visitNorm.state}
@@ -351,6 +367,7 @@ export default async function VisitDetailPage({
         }[]
       }
       materialTypes={(materialTypes ?? []) as { id: string; name: string }[]}
+      processingLines={processingLines}
       stockMovement={stockMovementNorm}
     />
     </div>

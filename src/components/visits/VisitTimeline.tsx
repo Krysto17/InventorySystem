@@ -1,5 +1,5 @@
 import { VisitOriginCard } from "./VisitOriginCard";
-import { ProcessingCard } from "./ProcessingCard";
+import { ProcessingCard, type ProcLine } from "./ProcessingCard";
 import { AnalysisCard } from "./AnalysisCard";
 import { PricingCard } from "./PricingCard";
 import { PaymentsCard } from "./PaymentsCard";
@@ -66,11 +66,12 @@ export type VisitTimelineProps = {
   };
   machines: Machine[];
   materialTypes: { id: string; name: string }[];
+  processingLines?: ProcLine[];
   stockMovement: Parameters<typeof StockIntakeCard>[0]["stockMovement"];
 };
 
 export function VisitTimeline(props: VisitTimelineProps) {
-  const { visit, processing, analysis, pricing, payments, paymentBalance, viewer, machines, materialTypes, stockMovement } = props;
+  const { visit, processing, analysis, pricing, payments, paymentBalance, viewer, machines, materialTypes, processingLines, stockMovement } = props;
   const isOwner = viewer.role === "owner";
 
   return (
@@ -134,7 +135,7 @@ export function VisitTimeline(props: VisitTimelineProps) {
             </>
           ) : visit.state === "in_processing" &&
             (viewer.role === "processing" || isOwner) ? (
-            <ProcessingCard visitId={visit.id} machines={machines} materialTypes={materialTypes} />
+            <ProcessingCard visitId={visit.id} machines={machines} materialTypes={materialTypes} initialLines={processingLines ?? []} />
           ) : (
             <p className="text-sm text-gray-600">Pending processing.</p>
           )}
