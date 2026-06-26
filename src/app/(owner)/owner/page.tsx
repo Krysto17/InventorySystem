@@ -46,6 +46,7 @@ export default async function OwnerDashboard({
     { data: pendingBulkSales },
     { data: salePrices },
     { data: recentMovements },
+    { data: accountingVisits },
   ] = await Promise.all([
     supabase.from("sites").select("id, name").order("name"),
 
@@ -122,23 +123,23 @@ export default async function OwnerDashboard({
       if (siteFilter) q = q.eq("site_id", siteFilter);
       return q;
     })(),
-  ]);
 
-  const { data: accountingVisits } = await (() => {
-    let q = supabase
-      .from("visits")
-      .select(`
-        id, state,
-        supplier:suppliers(name),
-        site:sites(name),
-        pricing:pricing(purchase_amount),
-        payments:payments(direction, amount),
-        processing_records:processing_records(usage:processing_machine_usage(line_cost))
-      `)
-      .in("state", ["in_accounting", "awaiting_stock_intake"]);
-    if (siteFilter) q = q.eq("site_id", siteFilter);
-    return q;
-  })();
+    (() => {
+      let q = supabase
+        .from("visits")
+        .select(`
+          id, state,
+          supplier:suppliers(name),
+          site:sites(name),
+          pricing:pricing(purchase_amount),
+          payments:payments(direction, amount),
+          processing_records:processing_records(usage:processing_machine_usage(line_cost))
+        `)
+        .in("state", ["in_accounting", "awaiting_stock_intake"]);
+      if (siteFilter) q = q.eq("site_id", siteFilter);
+      return q;
+    })(),
+  ]);
 
   // ── Visit funnel + rejection ──────────────────────────────────────────────
   const stateCounts: Record<string, number> = {};

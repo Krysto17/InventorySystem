@@ -27,104 +27,100 @@ export default async function VisitDetailPage({
   if (!me) notFound();
   const supabase = await createClient();
 
-  const { data: visit } = await supabase
-    .from("visits")
-    .select(`
-      id, state, entry_path, created_at, closed_at, processing_deducted,
-      supplier_id,
-      site:sites(name),
-      supplier:suppliers(name, phone),
-      declared_material_type:material_types(name),
-      created_by_profile:profiles!visits_created_by_fkey(full_name)
-    `)
-    .eq("id", id)
-    .single();
+  // All of a visit's facets are independent reads — fire them in one round-trip
+  // instead of a 10-deep await waterfall (perf, #10).
+  const [
+    { data: visit },
+    { data: pr },
+    { data: an },
+    { data: pricingRow },
+    { data: materialTypes },
+    { data: machines },
+    { count: finalizedCount },
+    { data: settlement },
+    { data: paymentsRaw },
+    { data: stockMovementRaw },
+  ] = await Promise.all([
+    supabase
+      .from("visits")
+      .select(`
+        id, state, entry_path, created_at, closed_at, processing_deducted,
+        supplier_id,
+        site:sites(name),
+        supplier:suppliers(name, phone),
+        declared_material_type:material_types(name),
+        created_by_profile:profiles!visits_created_by_fkey(full_name)
+      `)
+      .eq("id", id)
+      .single(),
+    supabase
+      .from("processing_records")
+      .select(`
+        id, completed_at,
+        recorded_by_profile:profiles!processing_records_recorded_by_fkey(full_name),
+        usage:processing_machine_usage(
+          measurement, rate_snapshot, line_cost,
+          machine:machines(name, charge_basis)
+        )
+      `)
+      .eq("visit_id", id)
+      .maybeSingle(),
+    supabase
+      .from("analysis_records")
+      .select(`
+        id, weight, grade, purity, sample_id, qc_observations, xrf_result, analyzed_at,
+        recorded_by_profile:profiles!analysis_records_recorded_by_fkey(full_name)
+      `)
+      .eq("visit_id", id)
+      .maybeSingle(),
+    supabase
+      .from("pricing")
+      .select(`
+        id, unit_price, purchase_amount, agreement_status, payment_terms,
+        priced_by_profile:profiles!pricing_priced_by_fkey(full_name),
+        overridden_by_profile:profiles!pricing_overridden_by_fkey(full_name)
+      `)
+      .eq("visit_id", id)
+      .maybeSingle(),
+    supabase.from("material_types").select("id, name").eq("active", true).order("name"),
+    supabase.from("machines").select("id, name, charge_basis, rate").eq("active", true),
+    supabase
+      .from("visit_materials")
+      .select("id", { count: "exact", head: true })
+      .eq("visit_id", id)
+      .eq("price_finalized", true),
+    supabase.from("batch_settlements").select("status").eq("visit_id", id).maybeSingle(),
+    supabase
+      .from("payments")
+      .select(`
+        id, direction, amount, method, notes, paid_at, status,
+        recorded_by_profile:profiles!payments_recorded_by_fkey(full_name)
+      `)
+      .eq("visit_id", id)
+      .order("paid_at", { ascending: true }),
+    supabase
+      .from("stock_movements")
+      .select(`
+        id, weight, grade, created_at,
+        recorded_by_profile:profiles!stock_movements_recorded_by_fkey(full_name)
+      `)
+      .eq("ref_visit_id", id)
+      .eq("reason", "purchase_intake")
+      .maybeSingle(),
+  ]);
   if (!visit) notFound();
 
-  const { data: pr } = await supabase
-    .from("processing_records")
-    .select(`
-      id, completed_at,
-      recorded_by_profile:profiles!processing_records_recorded_by_fkey(full_name),
-      usage:processing_machine_usage(
-        measurement, rate_snapshot, line_cost,
-        machine:machines(name, charge_basis)
-      )
-    `)
-    .eq("visit_id", id)
-    .maybeSingle();
-
-  const { data: an } = await supabase
-    .from("analysis_records")
-    .select(`
-      id, weight, grade, purity, sample_id, qc_observations, xrf_result, analyzed_at,
-      recorded_by_profile:profiles!analysis_records_recorded_by_fkey(full_name)
-    `)
-    .eq("visit_id", id)
-    .maybeSingle();
-
-  const { data: pricingRow } = await supabase
-    .from("pricing")
-    .select(`
-      id, unit_price, purchase_amount, agreement_status, payment_terms,
-      priced_by_profile:profiles!pricing_priced_by_fkey(full_name),
-      overridden_by_profile:profiles!pricing_overridden_by_fkey(full_name)
-    `)
-    .eq("visit_id", id)
-    .maybeSingle();
-
-
-  const { data: materialTypes } = await supabase
-    .from("material_types")
-    .select("id, name")
-    .eq("active", true)
-    .order("name");
-
-  const { data: machines } = await supabase
-    .from("machines")
-    .select("id, name, charge_basis, rate")
-    .eq("active", true);
-
   // Owner-finalised price → green "Director OK" node in the chain.
-  const { count: finalizedCount } = await supabase
-    .from("visit_materials")
-    .select("id", { count: "exact", head: true })
-    .eq("visit_id", id)
-    .eq("price_finalized", true);
   const priceApproved = (finalizedCount ?? 0) > 0;
 
   // Batch delete gate (#4/#5): general manager may delete until owner-approval,
   // owner until paid. Mirrors the delete_batch RPC, which re-checks server-side.
-  const { data: settlement } = await supabase
-    .from("batch_settlements")
-    .select("status")
-    .eq("visit_id", id)
-    .maybeSingle();
   const settlementStatus = (settlement?.status as string | null) ?? null;
   const canDeleteBatch =
     (me.role === "owner" && settlementStatus !== "paid") ||
     (!!me.is_general_manager &&
       settlementStatus !== "approved" &&
       settlementStatus !== "paid");
-
-  const { data: paymentsRaw } = await supabase
-    .from("payments")
-    .select(`
-      id, direction, amount, method, notes, paid_at, status,
-      recorded_by_profile:profiles!payments_recorded_by_fkey(full_name)
-    `)
-    .eq("visit_id", id)
-    .order("paid_at", { ascending: true });
-
-  const { data: stockMovementRaw } = await supabase
-    .from("stock_movements")
-    .select(`
-      id, weight, grade, created_at,
-      recorded_by_profile:profiles!stock_movements_recorded_by_fkey(full_name)
-    `)
-    .eq("ref_visit_id", id)
-    .eq("reason", "purchase_intake")
-    .maybeSingle();
 
   const visitNorm = {
     id: visit.id as string,

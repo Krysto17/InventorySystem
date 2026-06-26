@@ -10,36 +10,38 @@ import { approveBatch } from "@/app/visits/[id]/batch-actions";
 import { one as g1 } from "@/lib/db/relation";
 
 export default async function ManagerHomePage() {
-  const queue = await listVisitsByStateWithAnalysis("pricing");
-
-  // QC weight mismatches (auto-flagged when QC's weight differs >2% from
-  // receiving's); the manager resolves one by correcting either weight.
   const supabase = await createClient();
-  const { data: mismatches } = await supabase
-    .from("xrf_records")
-    .select(`
-      id, weight_kg,
-      line:visit_materials!inner(
+
+  // Independent dashboard reads — run them in one round-trip (perf, #10).
+  const [queue, { data: mismatches }, { data: approvalQueue }] = await Promise.all([
+    listVisitsByStateWithAnalysis("pricing"),
+    // QC weight mismatches (auto-flagged when QC's weight differs >2% from
+    // receiving's); the manager resolves one by correcting either weight.
+    supabase
+      .from("xrf_records")
+      .select(`
         id, weight_kg,
-        material:material_types(name),
-        visit:visits!inner(id, state, supplier:suppliers(name))
-      )
-    `)
-    .eq("mismatch", true)
-    .limit(20);
+        line:visit_materials!inner(
+          id, weight_kg,
+          material:material_types(name),
+          visit:visits!inner(id, state, supplier:suppliers(name))
+        )
+      `)
+      .eq("mismatch", true)
+      .limit(20),
+    // #7/#12: batches submitted by receiving, awaiting this site manager's approval.
+    supabase
+      .from("visits")
+      .select("id, created_at, supplier:suppliers(name), declared_material_type:material_types(name), site:sites(name)")
+      .eq("state", "awaiting_manager")
+      .order("created_at", { ascending: true }),
+  ]);
 
   const openMismatches = (mismatches ?? []).filter((m) => {
     const line = g1<{ visit: unknown }>((m as { line: unknown }).line);
     const visit = g1<{ state: string }>(line?.visit ?? null);
     return visit && visit.state !== "exited" && visit.state !== "stocked";
   });
-
-  // #7/#12: batches submitted by receiving, awaiting this site manager's approval.
-  const { data: approvalQueue } = await supabase
-    .from("visits")
-    .select("id, created_at, supplier:suppliers(name), declared_material_type:material_types(name), site:sites(name)")
-    .eq("state", "awaiting_manager")
-    .order("created_at", { ascending: true });
 
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
