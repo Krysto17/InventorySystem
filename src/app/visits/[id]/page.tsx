@@ -7,6 +7,7 @@ import { Stamp, Eyebrow } from "@/components/ui/stamp";
 import { Badge, stateVariant } from "@/components/ui/badge";
 import { STATE_LABELS } from "@/lib/visits/state-machine";
 import { BatchMaterials } from "@/components/visits/BatchMaterials";
+import { DeleteBatchButton } from "@/components/visits/DeleteBatchButton";
 import { UtilityChargesCard } from "@/components/visits/UtilityChargesCard";
 import { SupplierFinanceCard } from "@/components/visits/SupplierFinanceCard";
 import { BatchSettlementCard } from "@/components/visits/BatchSettlementCard";
@@ -91,6 +92,20 @@ export default async function VisitDetailPage({
     .eq("visit_id", id)
     .eq("price_finalized", true);
   const priceApproved = (finalizedCount ?? 0) > 0;
+
+  // Batch delete gate (#4/#5): general manager may delete until owner-approval,
+  // owner until paid. Mirrors the delete_batch RPC, which re-checks server-side.
+  const { data: settlement } = await supabase
+    .from("batch_settlements")
+    .select("status")
+    .eq("visit_id", id)
+    .maybeSingle();
+  const settlementStatus = (settlement?.status as string | null) ?? null;
+  const canDeleteBatch =
+    (me.role === "owner" && settlementStatus !== "paid") ||
+    (!!me.is_general_manager &&
+      settlementStatus !== "approved" &&
+      settlementStatus !== "paid");
 
   const { data: paymentsRaw } = await supabase
     .from("payments")
@@ -283,6 +298,11 @@ export default async function VisitDetailPage({
           </Badge>
         </div>
         <ApprovalChain state={visitNorm.state} entryPath={visitNorm.entry_path} priceApproved={priceApproved} />
+        {canDeleteBatch && (
+          <div className="flex justify-end">
+            <DeleteBatchButton visitId={visitNorm.id} />
+          </div>
+        )}
       </header>
       <PdfDownloadBar
         visitId={visitNorm.id}

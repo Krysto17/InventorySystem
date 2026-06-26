@@ -1859,6 +1859,7 @@ export type Database = {
     Functions: {
       submit_visit_to_manager: { Args: { p_visit_id: string }; Returns: undefined }
       approve_visit_by_manager: { Args: { p_visit_id: string }; Returns: undefined }
+      delete_batch: { Args: { p_visit_id: string }; Returns: undefined }
       current_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]

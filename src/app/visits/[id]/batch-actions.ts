@@ -1,8 +1,26 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
+
+// Delete an entire batch supply (#4/#5). The general manager may remove any
+// site's batch while it isn't owner-approved; the owner may remove any batch
+// until it's paid. The delete_batch RPC re-checks the role + settlement gate.
+export async function deleteBatch(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me) return;
+  if (me.role !== "owner" && !me.is_general_manager) return;
+  const visitId = String(formData.get("visit_id") ?? "");
+  if (!visitId) return;
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("delete_batch", { p_visit_id: visitId });
+  if (error) return; // gate failed (e.g. already approved/paid) — nothing removed
+  revalidatePath("/manager");
+  revalidatePath("/owner");
+  redirect(me.role === "owner" ? "/owner" : "/manager");
+}
 
 // Receiving adds a material line to an in_receiving batch.
 export async function addMaterialLine(formData: FormData): Promise<void> {
