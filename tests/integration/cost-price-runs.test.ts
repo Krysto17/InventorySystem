@@ -18,9 +18,11 @@ describe("cost-price runs", () => {
   }
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient().from("sites").select("id").limit(2);
-    siteAId = sites![0].id as string;
-    siteBId = sites![1].id as string;
+    // Cost-price is owner + GENERAL-manager only (Phase 13/#13). The general
+    // manager is the manager whose site is New-Site, so pin site A there.
+    const { data: sites } = await adminClient().from("sites").select("id, name");
+    siteAId = sites!.find((s) => s.name === "New-Site")!.id as string;
+    siteBId = sites!.find((s) => s.name !== "New-Site")!.id as string;
     mgr  = await makeUser({ username: "cpr-mgr",  role: "manager",    siteId: siteAId });
     acct = await makeUser({ username: "cpr-acct", role: "accounting", siteId: siteBId });
     proc = await makeUser({ username: "cpr-proc", role: "processing", siteId: siteAId });

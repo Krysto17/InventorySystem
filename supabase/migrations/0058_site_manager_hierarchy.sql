@@ -69,9 +69,12 @@ create policy "cost_price_runs: owner/general-manager insert"
 
 drop policy if exists "cost_price_runs: manager/owner read" on public.cost_price_runs;
 drop policy if exists "cost_price_runs: read own site or cross-site reporter" on public.cost_price_runs;
-create policy "cost_price_runs: cross-site readers read"
+-- Cost-price stays owner + general-manager ONLY (blueprint: Manager-only; the
+-- general manager is the sole manager with it). NOT has_cross_site_read(),
+-- which would leak it to accounting.
+create policy "cost_price_runs: owner/general-manager read"
   on public.cost_price_runs for select to authenticated
-  using (public.has_cross_site_read());
+  using (public.is_owner() or public.is_general_manager());
 
 drop policy if exists "cost_price_run_lots: manager author attaches lots" on public.cost_price_run_lots;
 drop policy if exists "cost_price_run_lots: author attaches lots" on public.cost_price_run_lots;
@@ -88,6 +91,6 @@ create policy "cost_price_run_lots: owner/general-manager author attaches"
 
 drop policy if exists "cost_price_run_lots: manager/owner read" on public.cost_price_run_lots;
 drop policy if exists "cost_price_run_lots: read via run" on public.cost_price_run_lots;
-create policy "cost_price_run_lots: cross-site readers read"
+create policy "cost_price_run_lots: owner/general-manager read"
   on public.cost_price_run_lots for select to authenticated
-  using (public.has_cross_site_read());
+  using (public.is_owner() or public.is_general_manager());
