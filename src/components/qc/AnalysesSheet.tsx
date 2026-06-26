@@ -13,15 +13,17 @@ export type AnalysisRow = {
   qcWeight: number | null;
   mismatch: boolean;
   submitted: boolean;
+  unitPrice: number | null; // owner/manager-attached price, visible to QC (#4)
 };
 
-type SortKey = "date" | "supplier" | "material" | "qcWeight" | "submitted" | "mismatch";
+type SortKey = "date" | "supplier" | "material" | "qcWeight" | "submitted" | "mismatch" | "unitPrice";
 
 const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
   { key: "date", label: "Date" },
   { key: "supplier", label: "Supplier" },
   { key: "material", label: "Material" },
   { key: "qcWeight", label: "QC weight (kg)", numeric: true },
+  { key: "unitPrice", label: "Price ₦/kg", numeric: true },
   { key: "submitted", label: "Status" },
   { key: "mismatch", label: "Flag" },
 ];
@@ -39,6 +41,7 @@ export function AnalysesSheet({ rows }: { rows: AnalysisRow[] }) {
         case "supplier": return r.supplier.toLowerCase();
         case "material": return r.material.toLowerCase();
         case "qcWeight": return r.qcWeight ?? -1;
+        case "unitPrice": return r.unitPrice ?? -1;
         case "submitted": return r.submitted ? 1 : 0;
         case "mismatch": return r.mismatch ? 1 : 0;
       }
@@ -83,6 +86,7 @@ export function AnalysesSheet({ rows }: { rows: AnalysisRow[] }) {
             </td>
             <td className="px-3 py-2">{r.material}</td>
             <td className="px-3 py-2 tabular-nums">{r.qcWeight ?? "—"}</td>
+            <td className="px-3 py-2 tabular-nums">{r.unitPrice != null ? `₦${r.unitPrice.toLocaleString()}` : "—"}</td>
             <td className="px-3 py-2">{r.submitted ? "Submitted" : "Draft"}</td>
             <td className="px-3 py-2">
               {r.mismatch ? <span className="text-red-600 font-medium">Mismatch</span> : "—"}

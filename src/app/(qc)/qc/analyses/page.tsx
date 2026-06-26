@@ -16,6 +16,7 @@ export default async function QcAnalysesPage() {
     .select(`
       id, result, weight_kg, mismatch, submitted, created_at, updated_at,
       visit_material:visit_materials!inner(
+        unit_price, purchase_amount,
         material_type:material_types(name),
         visit:visits(id, supplier:suppliers(name))
       )
@@ -27,6 +28,8 @@ export default async function QcAnalysesPage() {
     const vm = get1((x as { visit_material: unknown }).visit_material) as {
       material_type?: unknown;
       visit?: unknown;
+      unit_price?: number | null;
+      purchase_amount?: number | null;
     } | null;
     const material = (get1(vm?.material_type) as { name?: string } | null)?.name ?? "—";
     const visit = get1(vm?.visit) as { id?: string; supplier?: unknown } | null;
@@ -41,6 +44,7 @@ export default async function QcAnalysesPage() {
       qcWeight: x.weight_kg != null ? Number(x.weight_kg) : null,
       mismatch: !!x.mismatch,
       submitted: !!x.submitted,
+      unitPrice: vm?.unit_price != null ? Number(vm.unit_price) : null,
     };
   });
 
