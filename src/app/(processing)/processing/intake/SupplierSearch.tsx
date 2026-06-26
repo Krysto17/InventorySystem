@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { createClient } from "@/lib/supabase/client";
-
-type SupplierRow = { id: string; name: string; phone: string | null };
+import { useState } from "react";
+import { useSupplierSearch, type SupplierRow } from "./useSupplierSearch";
 
 export function SupplierSearch({
   onSelect,
@@ -13,38 +11,19 @@ export function SupplierSearch({
   onAddNew: () => void;
 }) {
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<SupplierRow[]>([]);
-  const [searching, startSearch] = useTransition();
-
-  function runSearch() {
-    if (!q.trim()) { setResults([]); return; }
-    startSearch(async () => {
-      const supabase = createClient();
-      const term = q.trim();
-      const { data } = await supabase
-        .from("suppliers")
-        .select("id, name, phone")
-        .or(`phone.ilike.%${term}%,name.ilike.%${term}%`)
-        .limit(10);
-      setResults((data ?? []) as SupplierRow[]);
-    });
-  }
+  const { results, searching } = useSupplierSearch(q);
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); runSearch(); } }}
-          placeholder="Phone or name"
-          className="flex-1 border rounded px-3 py-2"
-        />
-        <button type="button" onClick={runSearch} className="px-3 py-2 border rounded">
-          {searching ? "..." : "Search"}
-        </button>
-      </div>
+      <input
+        type="text"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Start typing a supplier name or phone…"
+        className="w-full border rounded px-3 py-2"
+        autoComplete="off"
+      />
+      {searching && <p className="text-sm text-gray-500">Searching…</p>}
       {results.length > 0 && (
         <ul className="border rounded divide-y">
           {results.map((s) => (
@@ -61,13 +40,20 @@ export function SupplierSearch({
           ))}
         </ul>
       )}
-      {q.trim() && !searching && results.length === 0 && (
+      {q.trim().length >= 2 && !searching && results.length === 0 && (
         <p className="text-sm text-gray-600">
-          No match.{" "}
+          No existing supplier matches.{" "}
           <button type="button" className="underline" onClick={onAddNew}>
             Add new supplier
           </button>
         </p>
+      )}
+      {/* Always allow proceeding to add-new even while matches show, so the user
+          can consciously create a distinct supplier. */}
+      {(results.length > 0 || q.trim().length < 2) && (
+        <button type="button" className="text-sm underline text-gray-600" onClick={onAddNew}>
+          + Add a new supplier instead
+        </button>
       )}
     </div>
   );

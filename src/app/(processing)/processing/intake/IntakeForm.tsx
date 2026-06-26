@@ -3,6 +3,7 @@
 import { useState, useActionState } from "react";
 import { createVisit, type IntakeState } from "../actions";
 import { SupplierSearch } from "./SupplierSearch";
+import { useSupplierSearch } from "./useSupplierSearch";
 
 type MaterialType = { id: string; name: string };
 type Supplier = { id: string; name: string; phone: string | null };
@@ -21,6 +22,10 @@ export function IntakeForm({
   const [state, formAction, pending] = useActionState(createVisit, initialState);
   const [picked, setPicked] = useState<Supplier | null>(null);
   const [addingNew, setAddingNew] = useState(false);
+  // Live duplicate-check: as the new supplier name is typed, suggest existing
+  // matches so the user can pick one instead of creating a duplicate.
+  const [newName, setNewName] = useState("");
+  const { results: nameMatches } = useSupplierSearch(newName);
 
   return (
     <form action={formAction} className="space-y-6 max-w-lg">
@@ -50,8 +55,32 @@ export function IntakeForm({
               name="new_supplier_name"
               placeholder="Name"
               required
+              autoComplete="off"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
               className="w-full border rounded px-3 py-2"
             />
+            {nameMatches.length > 0 && (
+              <div className="rounded border border-amber-300 bg-amber-50 p-2 text-sm dark:border-amber-700 dark:bg-amber-950/30">
+                <p className="mb-1 text-xs font-medium text-amber-800 dark:text-amber-300">
+                  Similar existing supplier{nameMatches.length > 1 ? "s" : ""} — pick to avoid a duplicate:
+                </p>
+                <ul className="divide-y divide-amber-200/60">
+                  {nameMatches.map((s) => (
+                    <li key={s.id}>
+                      <button
+                        type="button"
+                        onClick={() => { setPicked(s); setAddingNew(false); setNewName(""); }}
+                        className="w-full text-left py-1 hover:underline"
+                      >
+                        <span className="font-medium">{s.name}</span>
+                        {s.phone && <span className="ml-2 text-gray-500">{s.phone}</span>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <input
               name="new_supplier_phone"
               placeholder="Phone"
@@ -65,7 +94,7 @@ export function IntakeForm({
             <button
               type="button"
               className="underline text-sm"
-              onClick={() => setAddingNew(false)}
+              onClick={() => { setAddingNew(false); setNewName(""); }}
             >
               Cancel
             </button>
