@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { addMaterialLine, updateMaterialLine, deleteMaterialLine, submitToManager, recordXrf, setLinePrice, finalizeLinePrice } from "@/app/visits/[id]/batch-actions";
+import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
 
@@ -139,16 +140,16 @@ export async function BatchMaterials({
                       <input type="text" name="receiving_comment" defaultValue={l.receiving_comment ?? ""}
                         className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
                     </label>
-                    <button type="submit" className="col-span-2 rounded border px-3 py-1 text-xs hover:bg-zinc-50">Save correction</button>
+                    <SubmitButton pendingText="Saving…" className="col-span-2 rounded border px-3 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50">Save correction</SubmitButton>
                   </form>
                 )}
                 {canReceive && (
                   <form action={deleteMaterialLine} className="mt-1">
                     <input type="hidden" name="visit_id" value={visitId} />
                     <input type="hidden" name="visit_material_id" value={l.id} />
-                    <button type="submit" className="rounded border border-reject px-3 py-1 text-xs text-reject hover:bg-reject-soft">
+                    <SubmitButton pendingText="Deleting…" className="rounded border border-reject px-3 py-1 text-xs text-reject hover:bg-reject-soft disabled:opacity-50">
                       Delete line
-                    </button>
+                    </SubmitButton>
                   </form>
                 )}
 
@@ -193,12 +194,12 @@ export async function BatchMaterials({
                       I confirm the XRF entries for this line are correct
                     </label>
                     <div className="flex gap-2">
-                      <button name="submitted" value="false" type="submit" formNoValidate className="rounded border px-3 py-1 text-xs hover:bg-zinc-50">
+                      <SubmitButton name="submitted" value="false" formNoValidate pendingText="Saving…" className="rounded border px-3 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50">
                         Save draft
-                      </button>
-                      <button name="submitted" value="true" type="submit" className="rounded bg-black px-3 py-1 text-xs text-white">
+                      </SubmitButton>
+                      <SubmitButton name="submitted" value="true" pendingText="Submitting…" className="rounded bg-black px-3 py-1 text-xs text-white disabled:opacity-50">
                         Submit
-                      </button>
+                      </SubmitButton>
                     </div>
                   </form>
                 )}
@@ -233,15 +234,15 @@ export async function BatchMaterials({
                           className="mt-1 block w-32 rounded border px-2 py-1 text-sm"
                         />
                       </label>
-                      <button type="submit" className="rounded border px-3 py-1 text-xs hover:bg-zinc-50">Set price</button>
+                      <SubmitButton pendingText="Saving…" className="rounded border px-3 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50">Set price</SubmitButton>
                     </form>
                     {viewerRole === "owner" && l.unit_price != null && !l.price_finalized && (
                       <form action={finalizeLinePrice}>
                         <input type="hidden" name="visit_id" value={visitId} />
                         <input type="hidden" name="visit_material_id" value={l.id} />
-                        <button type="submit" className="rounded bg-ore px-3 py-1 text-xs font-semibold text-white hover:bg-ore-strong">
+                        <SubmitButton pendingText="Finalizing…" className="rounded bg-ore px-3 py-1 text-xs font-semibold text-white hover:bg-ore-strong disabled:opacity-50">
                           Finalize price
-                        </button>
+                        </SubmitButton>
                       </form>
                     )}
                   </div>
@@ -290,9 +291,9 @@ export async function BatchMaterials({
                 <input type="checkbox" name="requires_analysis" defaultChecked />
                 Requires chemical (XRF) analysis
               </label>
-              <button type="submit" className="col-span-2 rounded border px-3 py-1.5 text-sm hover:bg-zinc-50">
+              <SubmitButton pendingText="Adding…" className="col-span-2 rounded border px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-50">
                 + Add material line
-              </button>
+              </SubmitButton>
             </form>
 
             {lines.length > 0 && (
@@ -302,9 +303,9 @@ export async function BatchMaterials({
                   Material lines are saved as drafts — add or edit them above until
                   you submit the batch to the manager for approval.
                 </p>
-                <button type="submit" className="w-full rounded bg-black px-3 py-2 text-sm text-white">
+                <SubmitButton pendingText="Submitting…" className="w-full rounded bg-black px-3 py-2 text-sm text-white disabled:opacity-50">
                   Submit to manager →
-                </button>
+                </SubmitButton>
               </form>
             )}
           </div>

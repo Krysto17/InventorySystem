@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { submitProcessing, addProcessingMaterialLine, type ProcessingState } from "@/app/(processing)/processing/actions";
+import { SubmitButton } from "@/components/ui/SubmitButton";
 
 type Machine = { id: string; name: string; charge_basis: "weight" | "bag" | "hour" | "minute"; rate: number };
 type MaterialType = { id: string; name: string };
@@ -108,9 +109,12 @@ export function ProcessingCard({
       </div>
       <input name="receiving_comment" type="text" placeholder="Comment (optional)"
         className="block w-full rounded border px-2 py-1 text-sm" />
-      <button type="submit" className="rounded border px-3 py-1 text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800">
+      <SubmitButton
+        pendingText="Adding…"
+        className="rounded border px-3 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:hover:bg-zinc-800"
+      >
         + Add material
-      </button>
+      </SubmitButton>
     </form>
     </div>
   );
