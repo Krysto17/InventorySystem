@@ -9,7 +9,15 @@ type Supplier = { id: string; name: string; phone: string | null };
 
 const initialState: IntakeState = {};
 
-export function IntakeForm({ materialTypes }: { materialTypes: MaterialType[] }) {
+// When `entryPath` is fixed (intake is split by role, #3) the path selector is
+// hidden and submitted as a hidden field; otherwise the user picks.
+export function IntakeForm({
+  materialTypes,
+  entryPath,
+}: {
+  materialTypes: MaterialType[];
+  entryPath?: "unprocessed" | "processed";
+}) {
   const [state, formAction, pending] = useActionState(createVisit, initialState);
   const [picked, setPicked] = useState<Supplier | null>(null);
   const [addingNew, setAddingNew] = useState(false);
@@ -77,17 +85,30 @@ export function IntakeForm({ materialTypes }: { materialTypes: MaterialType[] })
             <option key={m.id} value={m.id}>{m.name}</option>
           ))}
         </select>
-        <fieldset className="flex gap-4">
-          <label className="flex items-center gap-2">
-            <input type="radio" name="entry_path" value="unprocessed" required /> Unprocessed
-          </label>
-          <label className="flex items-center gap-2">
-            <input type="radio" name="entry_path" value="processed" required /> Processed
-          </label>
-        </fieldset>
-        <p className="text-xs text-gray-500">
-          Unprocessed visits start at processing; pre-processed visits go straight to receiving.
-        </p>
+        {entryPath ? (
+          <>
+            <input type="hidden" name="entry_path" value={entryPath} />
+            <p className="text-sm">
+              {entryPath === "unprocessed"
+                ? "Unprocessed material — starts at processing (plant)."
+                : "Pre-processed material — goes straight to receiving."}
+            </p>
+          </>
+        ) : (
+          <>
+            <fieldset className="flex gap-4">
+              <label className="flex items-center gap-2">
+                <input type="radio" name="entry_path" value="unprocessed" required /> Unprocessed
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="radio" name="entry_path" value="processed" required /> Processed
+              </label>
+            </fieldset>
+            <p className="text-xs text-gray-500">
+              Unprocessed visits start at processing; pre-processed visits go straight to receiving.
+            </p>
+          </>
+        )}
       </section>
 
       {state.error && <p className="text-red-600 text-sm">{state.error}</p>}

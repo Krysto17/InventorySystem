@@ -41,11 +41,12 @@ export async function createVisit(
 ): Promise<IntakeState> {
   const me = await getProfile();
   if (!me) return { error: "Not signed in" };
-  if (me.role !== "processing" && me.role !== "owner") {
-    return { error: "Only processing can create visits" };
+  const isOwner = me.role === "owner";
+  if (!isOwner && me.role !== "processing" && me.role !== "receiving") {
+    return { error: "Only processing or receiving can create visits" };
   }
-  if (!me.site_id && me.role !== "owner") {
-    return { error: "Processing user must be assigned to a site" };
+  if (!me.site_id && !isOwner) {
+    return { error: "Intake user must be assigned to a site" };
   }
 
   const supplierIdRaw = String(formData.get("supplier_id") ?? "").trim();
@@ -58,6 +59,16 @@ export async function createVisit(
   if (!materialTypeId) return { error: "Material type is required" };
   if (entryPath !== "unprocessed" && entryPath !== "processed") {
     return { error: "Entry path is required" };
+  }
+  // Intake is split by entry path (#3): processing handles unprocessed (plant
+  // first), receiving handles pre-processed (straight to receiving).
+  if (!isOwner) {
+    if (me.role === "processing" && entryPath !== "unprocessed") {
+      return { error: "Processing intake is for unprocessed material only" };
+    }
+    if (me.role === "receiving" && entryPath !== "processed") {
+      return { error: "Receiving intake is for processed material only" };
+    }
   }
 
   const supabase = await createClient();

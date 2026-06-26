@@ -34,10 +34,11 @@ export type NavItem = {
 const NAV: Record<Role, NavItem[]> = {
   processing: [
     { label: "Queue", href: "/processing", icon: "processing" },
-    { label: "New visit", href: "/processing/intake", icon: "intake" },
+    { label: "New unprocessed", href: "/processing/intake", icon: "intake" },
   ],
   receiving: [
     { label: "Queue", href: "/receiving", icon: "receiving" },
+    { label: "New processed", href: "/receiving/intake", icon: "intake" },
   ],
   qc: [
     { label: "XRF queue", href: "/qc", icon: "qc" },

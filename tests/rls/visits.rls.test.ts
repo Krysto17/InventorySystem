@@ -28,19 +28,24 @@ describe("visits RLS", () => {
     materialTypeId = m!.id as string;
   });
 
-  // Visits now start directly at in_processing — there is no gate stage.
-  async function insertVisitAs(user: TestUser, siteId: string) {
+  // Intake is split by entry path (#3): processing → unprocessed (in_processing),
+  // receiving → processed (in_receiving). Visits start directly at that state.
+  async function insertVisitAs(
+    user: TestUser,
+    siteId: string,
+    path: "unprocessed" | "processed" = "unprocessed",
+  ) {
     return user.client.from("visits").insert({
       site_id: siteId,
       supplier_id: supplierId,
       declared_material_type_id: materialTypeId,
-      entry_path: "unprocessed",
-      state: "in_processing",
+      entry_path: path,
+      state: path === "unprocessed" ? "in_processing" : "in_receiving",
       created_by: user.userId,
     }).select("id").single();
   }
 
-  it("processing can insert a visit at own site", async () => {
+  it("processing can insert an unprocessed visit at own site", async () => {
     const { error } = await insertVisitAs(procA, siteAId);
     expect(error).toBeNull();
   });
@@ -50,8 +55,18 @@ describe("visits RLS", () => {
     expect(error).not.toBeNull();
   });
 
-  it("non-processing role (receiving) cannot insert a visit", async () => {
-    const { error } = await insertVisitAs(recvA, siteAId);
+  it("processing cannot insert a PROCESSED visit (that's receiving's lane)", async () => {
+    const { error } = await insertVisitAs(procA, siteAId, "processed");
+    expect(error).not.toBeNull();
+  });
+
+  it("receiving can insert a PROCESSED visit at own site", async () => {
+    const { error } = await insertVisitAs(recvA, siteAId, "processed");
+    expect(error).toBeNull();
+  });
+
+  it("receiving cannot insert an UNPROCESSED visit (that's processing's lane)", async () => {
+    const { error } = await insertVisitAs(recvA, siteAId, "unprocessed");
     expect(error).not.toBeNull();
   });
 
