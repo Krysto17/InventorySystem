@@ -1,5 +1,5 @@
 import { VisitOriginCard } from "./VisitOriginCard";
-import { ProcessingCard, type ProcLine } from "./ProcessingCard";
+import { ProcessingCard } from "./ProcessingCard";
 import { AnalysisCard } from "./AnalysisCard";
 import { PricingCard } from "./PricingCard";
 import { PaymentsCard } from "./PaymentsCard";
@@ -25,6 +25,7 @@ export type VisitTimelineProps = {
     id: string;
     recorded_by_name: string | null;
     completed_at: string | null;
+    discount_percent: number;
     usage: {
       machine_name: string;
       charge_basis: string;
@@ -66,12 +67,11 @@ export type VisitTimelineProps = {
   };
   machines: Machine[];
   materialTypes: { id: string; name: string }[];
-  processingLines?: ProcLine[];
   stockMovement: Parameters<typeof StockIntakeCard>[0]["stockMovement"];
 };
 
 export function VisitTimeline(props: VisitTimelineProps) {
-  const { visit, processing, analysis, pricing, payments, paymentBalance, viewer, machines, materialTypes, processingLines, stockMovement } = props;
+  const { visit, processing, analysis, pricing, payments, paymentBalance, viewer, machines, materialTypes, stockMovement } = props;
   const isOwner = viewer.role === "owner";
 
   return (
@@ -125,9 +125,18 @@ export function VisitTimeline(props: VisitTimelineProps) {
               <div className="text-sm mt-2">
                 Total fee:{" "}
                 <strong>
-                  {formatNaira(processing.usage.reduce((s, u) => s + Number(u.line_cost), 0))}
+                  {formatNaira(
+                    processing.usage.reduce((s, u) => s + Number(u.line_cost), 0) *
+                      (1 - processing.discount_percent / 100),
+                  )}
                 </strong>
               </div>
+              {/* Discount is visible to managers + owner only (#7). */}
+              {processing.discount_percent > 0 && (viewer.role === "manager" || isOwner) && (
+                <div className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                  {processing.discount_percent}% processing discount applied
+                </div>
+              )}
               <div className="text-xs text-gray-500 mt-1">
                 {processing.recorded_by_name ?? "—"} ·{" "}
                 {formatTimestamp(processing.completed_at)}
@@ -135,7 +144,7 @@ export function VisitTimeline(props: VisitTimelineProps) {
             </>
           ) : visit.state === "in_processing" &&
             (viewer.role === "processing" || isOwner) ? (
-            <ProcessingCard visitId={visit.id} machines={machines} materialTypes={materialTypes} initialLines={processingLines ?? []} />
+            <ProcessingCard visitId={visit.id} machines={machines} materialTypes={materialTypes} />
           ) : (
             <p className="text-sm text-gray-600">Pending processing.</p>
           )}

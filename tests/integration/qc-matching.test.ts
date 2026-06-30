@@ -8,10 +8,10 @@ describe("QC matching + analysis rules (integration)", () => {
   let recv: TestUser, qc: TestUser, mgr: TestUser;
   let supplierId: string, monaziteId: string, zirconId: string;
 
-  // Flow now: receiving submits → site manager approves → QC/pricing.
+  // Flow now: receiving submits straight to analysis (in_qc), or to pricing when
+  // no line needs analysis — no manager-approval step (#3).
   async function advance(visitId: string) {
-    await recv.client.rpc("submit_visit_to_manager", { p_visit_id: visitId });
-    return mgr.client.rpc("approve_visit_by_manager", { p_visit_id: visitId });
+    return recv.client.rpc("submit_visit_to_manager", { p_visit_id: visitId });
   }
 
   async function newVisit(state = "in_receiving") {
@@ -84,17 +84,19 @@ describe("QC matching + analysis rules (integration)", () => {
     expect(st!.state).toBe("pricing");
   });
 
-  it("manager may BYPASS analysis (skip_qc) on a batch that needs XRF → pricing (#3)", async () => {
+  it("manager may BYPASS analysis from in_qc → pricing (price without XRF, #3)", async () => {
     const v = await newVisit();
-    // A line that WOULD require analysis.
+    // A line that requires analysis → submit routes to in_qc.
     await recv.client.from("visit_materials").insert({
       visit_id: v, material_type_id: monaziteId, weight_kg: 70, recorded_by: recv.userId,
     });
     await recv.client.rpc("submit_visit_to_manager", { p_visit_id: v });
-    // Manager chooses to skip QC → straight to pricing.
-    const { error } = await mgr.client.rpc("approve_visit_by_manager", { p_visit_id: v, p_skip_qc: true });
+    let { data: st } = await adminClient().from("visits").select("state").eq("id", v).single();
+    expect(st!.state).toBe("in_qc");
+    // Manager skips analysis → straight to pricing.
+    const { error } = await mgr.client.rpc("manager_skip_to_pricing", { p_visit_id: v });
     expect(error).toBeNull();
-    const { data: st } = await adminClient().from("visits").select("state").eq("id", v).single();
+    ({ data: st } = await adminClient().from("visits").select("state").eq("id", v).single());
     expect(st!.state).toBe("pricing");
   });
 

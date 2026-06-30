@@ -1,11 +1,11 @@
-import Link from "next/link";
 import { listVisitsByState, listQcCompletedVisits } from "@/lib/visits/queries";
 import { getProfile } from "@/lib/auth/get-profile";
-import { formatTimestamp } from "@/lib/visits/format";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
 import { DoneList } from "@/components/visits/DoneList";
+import { VisitQueueTable } from "@/components/visits/VisitQueueTable";
+import { toQueueRows } from "@/lib/visits/queue-rows";
 
 export default async function QcHomePage() {
   const me = await getProfile();
@@ -32,23 +32,7 @@ export default async function QcHomePage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {queue.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-gray-500">Queue is empty.</p>
-          ) : (
-            <ul className="divide-y">
-              {queue.map((v) => (
-                <li key={v.id}>
-                  <Link href={`/visits/${v.id}`} className="block px-4 py-3 hover:bg-gray-50">
-                    <div className="font-medium text-sm">{v.supplier?.name ?? "—"}</div>
-                    <div className="text-xs text-gray-500">
-                      {v.declared_material_type?.name ?? "—"} · {v.entry_path} ·{" "}
-                      {formatTimestamp(v.created_at)}
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+          <VisitQueueTable rows={toQueueRows(queue)} />
         </CardContent>
       </Card>
 

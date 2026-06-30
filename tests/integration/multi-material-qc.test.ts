@@ -49,9 +49,8 @@ describe("multi-material batch → QC → pricing (integration)", () => {
     expect(lineA?.id).toBeTruthy();
     expect(lineB?.id).toBeTruthy();
 
-    // 3. receiving submits → site manager approves → QC
-    await recv.client.rpc("submit_visit_to_manager", { p_visit_id: visitId });
-    const { error: advErr } = await mgr.client.rpc("approve_visit_by_manager", { p_visit_id: visitId });
+    // 3. receiving submits → straight to QC (a line needs analysis, #3)
+    const { error: advErr } = await recv.client.rpc("submit_visit_to_manager", { p_visit_id: visitId });
     expect(advErr).toBeNull();
     let { data: st } = await adminClient().from("visits").select("state").eq("id", visitId).single();
     expect(st!.state).toBe("in_qc");

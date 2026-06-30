@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { recordXrf, setLinePrice, finalizeLinePrice } from "@/app/visits/[id]/batch-actions";
+import { recordXrf, setLinePrice, finalizeLinePrice, skipToPricing } from "@/app/visits/[id]/batch-actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { ReceivingLines, type RxLine } from "@/components/visits/ReceivingLines";
 import type { Role } from "@/lib/auth/roles";
@@ -66,6 +66,8 @@ export async function BatchMaterials({
   const canQc = (viewerRole === "qc" || viewerRole === "owner") && visitState === "in_qc";
   const canPrice = (viewerRole === "manager" || viewerRole === "owner") && visitState === "pricing";
   const canSeeXrf = viewerRole === "owner" || viewerRole === "manager" || viewerRole === "qc";
+  // Manager may bypass XRF from analysis straight to pricing (#3).
+  const canSkipAnalysis = (viewerRole === "manager" || viewerRole === "owner") && visitState === "in_qc";
 
   const { data: materialTypes } = canReceive
     ? await supabase.from("material_types").select("id, name").order("name")
@@ -103,6 +105,15 @@ export async function BatchMaterials({
           />
         ) : (
         <>
+        {canSkipAnalysis && (
+          <form action={skipToPricing} className="flex items-center justify-between gap-2 rounded-lg border border-line bg-panel p-3">
+            <span className="text-xs text-ink-2">Price this batch without waiting for XRF analysis.</span>
+            <input type="hidden" name="visit_id" value={visitId} />
+            <SubmitButton pendingText="Skipping…" className="shrink-0 rounded border border-line px-3 py-1 text-xs font-semibold hover:bg-zinc-50 disabled:opacity-50">
+              Skip analysis → pricing
+            </SubmitButton>
+          </form>
+        )}
         {lines.length === 0 ? (
           <p className="text-sm text-zinc-500">No material lines recorded yet.</p>
         ) : (

@@ -52,6 +52,7 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Gate passes", href: "/manager/gate-passes", icon: "gate", generalOnly: true },
     { label: "Reports", href: "/manager/reports", icon: "reports", generalOnly: true },
     { label: "Cost price", href: "/manager/cost-price", icon: "pricing", generalOnly: true },
+    { label: "Analyses", href: "/manager/analyses", icon: "qc", generalOnly: true },
   ],
   accounting: [
     { label: "Settlements", href: "/accounting", icon: "accounting" },
@@ -70,6 +71,7 @@ const NAV: Record<Role, NavItem[]> = {
   owner: [
     { label: "Dashboard", href: "/owner", icon: "dashboard" },
     { label: "Approvals", href: "/owner/approvals", icon: "pricing" },
+    { label: "Analyses", href: "/owner/analyses", icon: "qc" },
     { label: "Ledger", href: "/owner/ledger", icon: "accounting" },
     { label: "Finance breakdown", href: "/owner/finance", icon: "reports" },
     { label: "Mixing batches", href: "/owner/cost-batches", icon: "bulkSales" },

@@ -40,7 +40,6 @@ export default async function VisitDetailPage({
     { data: settlement },
     { data: paymentsRaw },
     { data: stockMovementRaw },
-    { data: visitMaterialsRaw },
   ] = await Promise.all([
     supabase
       .from("visits")
@@ -57,7 +56,7 @@ export default async function VisitDetailPage({
     supabase
       .from("processing_records")
       .select(`
-        id, completed_at,
+        id, completed_at, discount_percent,
         recorded_by_profile:profiles!processing_records_recorded_by_fkey(full_name),
         usage:processing_machine_usage(
           measurement, rate_snapshot, line_cost,
@@ -108,21 +107,8 @@ export default async function VisitDetailPage({
       .eq("ref_visit_id", id)
       .eq("reason", "purchase_intake")
       .maybeSingle(),
-    supabase
-      .from("visit_materials")
-      .select("id, weight_kg, receiving_comment, material:material_types(name)")
-      .eq("visit_id", id)
-      .order("created_at", { ascending: true }),
   ]);
   if (!visit) notFound();
-
-  // Lines for the processing card's optimistic list (in_processing iron entries).
-  const processingLines = (visitMaterialsRaw ?? []).map((l) => ({
-    id: l.id as string,
-    weight_kg: Number(l.weight_kg),
-    materialName: (get1((l as { material: unknown }).material) as { name?: string } | null)?.name ?? null,
-    comment: (l.receiving_comment as string | null) ?? null,
-  }));
 
   // Owner-finalised price → green "Director OK" node in the chain.
   const priceApproved = (finalizedCount ?? 0) > 0;
@@ -168,6 +154,7 @@ export default async function VisitDetailPage({
             ) as { full_name?: string } | null
           )?.full_name ?? null,
         completed_at: pr.completed_at as string | null,
+        discount_percent: Number((pr as { discount_percent?: number }).discount_percent ?? 0),
         usage: ((pr as { usage: unknown[] }).usage ?? []).map((u) => {
           const row = u as {
             machine: { name: string; charge_basis: string } | null | unknown[];
@@ -311,7 +298,6 @@ export default async function VisitDetailPage({
           state={visitNorm.state}
           entryPath={visitNorm.entry_path}
           priceApproved={priceApproved}
-          managerSubmitted={pricingNorm !== null}
         />
         {canDeleteBatch && (
           <div className="flex justify-end">
@@ -372,7 +358,6 @@ export default async function VisitDetailPage({
         }[]
       }
       materialTypes={(materialTypes ?? []) as { id: string; name: string }[]}
-      processingLines={processingLines}
       stockMovement={stockMovementNorm}
     />
     </div>

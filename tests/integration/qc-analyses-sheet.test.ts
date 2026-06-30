@@ -5,7 +5,7 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 // material + supplier (the query the "My analyses" sheet runs), and only theirs.
 describe("QC analyses sheet (#9)", () => {
   let siteId: string;
-  let recv: TestUser, qc: TestUser, qc2: TestUser, mgr: TestUser;
+  let recv: TestUser, qc: TestUser, qc2: TestUser;
   let supplierId: string, monaziteId: string;
 
   beforeAll(async () => {
@@ -14,7 +14,6 @@ describe("QC analyses sheet (#9)", () => {
     recv = await makeUser({ username: "qas-recv", role: "receiving", siteId });
     qc   = await makeUser({ username: "qas-qc",   role: "qc",        siteId });
     qc2  = await makeUser({ username: "qas-qc2",  role: "qc",        siteId });
-    mgr  = await makeUser({ username: "qas-mgr",  role: "manager",   siteId });
     const { data: s } = await adminClient().from("suppliers").insert({ name: "QAS Supplier" }).select("id").single();
     supplierId = s!.id as string;
     const { data: mz } = await adminClient().from("material_types").select("id").eq("name", "Monazite").single();
@@ -30,7 +29,6 @@ describe("QC analyses sheet (#9)", () => {
       visit_id: v!.id, material_type_id: monaziteId, weight_kg: 100, recorded_by: recv.userId,
     }).select("id").single();
     await recv.client.rpc("submit_visit_to_manager", { p_visit_id: v!.id });
-    await mgr.client.rpc("approve_visit_by_manager", { p_visit_id: v!.id });
 
     await qc.client.from("xrf_records").insert({
       visit_material_id: line!.id, result: "Sn 60%", weight_kg: 99, recorded_by: qc.userId,
@@ -72,7 +70,6 @@ describe("QC analyses sheet (#9)", () => {
       visit_id: vA!.id, material_type_id: monaziteId, weight_kg: 50, recorded_by: recv.userId,
     }).select("id").single();
     await recv.client.rpc("submit_visit_to_manager", { p_visit_id: vA!.id });
-    await mgr.client.rpc("approve_visit_by_manager", { p_visit_id: vA!.id });
     await qc.client.from("xrf_records").insert({
       visit_material_id: lineA!.id, result: "Sn 55%", submitted: true, recorded_by: qc.userId,
     });
@@ -87,7 +84,6 @@ describe("QC analyses sheet (#9)", () => {
       requires_analysis: false, recorded_by: recv.userId,
     });
     await recv.client.rpc("submit_visit_to_manager", { p_visit_id: vB!.id });
-    await mgr.client.rpc("approve_visit_by_manager", { p_visit_id: vB!.id });
 
     // Replicate listQcCompletedVisits: analyst's xrf → distinct visit ids → not in_qc.
     const { data: xrf } = await qc.client

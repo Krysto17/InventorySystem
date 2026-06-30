@@ -17,10 +17,9 @@ export const TERMINAL_STATES: ReadonlySet<VisitState> = new Set(["exited", "stoc
 
 const FORWARD_TRANSITIONS: ReadonlyArray<readonly [VisitState, VisitState]> = [
   ["in_processing", "in_receiving"],
-  ["in_receiving", "awaiting_manager"],
-  ["awaiting_manager", "in_qc"],
-  ["awaiting_manager", "pricing"],
+  ["in_receiving", "in_qc"],
   ["in_receiving", "pricing"],
+  ["in_qc", "pricing"],
   ["pricing", "in_accounting"],
   ["pricing", "awaiting_gate_exit"],
   ["pricing", "exited"],

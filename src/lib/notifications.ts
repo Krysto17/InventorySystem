@@ -41,12 +41,12 @@ export async function roleNotifications(role: Role): Promise<NotificationItem[]>
     push("Supply settlements to approve", "/owner/approvals", settles);
     push("Payments to approve", "/owner/approvals", pays);
   } else if (role === "manager") {
-    const [approvals, exits, pricing] = await Promise.all([
-      countWhere("visits", "state", "awaiting_manager"),
+    const [analysis, exits, pricing] = await Promise.all([
+      countWhere("visits", "state", "in_qc"),
       countWhere("visits", "state", "awaiting_gate_exit"),
       countWhere("visits", "state", "pricing"),
     ]);
-    push("Batches to approve", "/manager", approvals);
+    push("Batches in analysis", "/manager", analysis);
     push("Exits to authorise", "/manager", exits);
     push("Visits to price", "/manager", pricing);
   } else if (role === "accounting") {

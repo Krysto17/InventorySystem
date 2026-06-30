@@ -242,13 +242,13 @@ export function ReceivingLines({
             <input type="hidden" name="visit_id" value={visitId} />
             <p className="text-xs text-zinc-500">
               Material lines are saved as drafts — add or edit them above until you submit the
-              batch to the manager for approval.
+              batch for analysis (or straight to pricing when no line needs XRF).
             </p>
             <SubmitButton
               pendingText="Submitting…"
               className="w-full rounded bg-black px-3 py-2 text-sm text-white disabled:opacity-50"
             >
-              Submit to manager →
+              Submit for analysis →
             </SubmitButton>
           </form>
         )}

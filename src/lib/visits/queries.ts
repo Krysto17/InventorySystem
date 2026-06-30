@@ -9,7 +9,18 @@ export type VisitQueueRow = {
   state: VisitState;
   supplier: { id: string; name: string; phone: string | null } | null;
   declared_material_type: { id: string; name: string } | null;
+  weight: number; // total of the batch's material-line weights (for #8 sorting)
 };
+
+// Sum the batch's material-line weights onto each row (for sortable queue tables).
+function withWeight<T extends { visit_materials?: { weight_kg: number }[] | null }>(
+  rows: T[],
+): (T & { weight: number })[] {
+  return rows.map((r) => ({
+    ...r,
+    weight: (r.visit_materials ?? []).reduce((s, m) => s + Number(m.weight_kg ?? 0), 0),
+  }));
+}
 
 export async function listVisitsByState(states: VisitState[]): Promise<VisitQueueRow[]> {
   const supabase = await createClient();
@@ -18,12 +29,13 @@ export async function listVisitsByState(states: VisitState[]): Promise<VisitQueu
     .select(`
       id, created_at, entry_path, state,
       supplier:suppliers(id, name, phone),
-      declared_material_type:material_types(id, name)
+      declared_material_type:material_types(id, name),
+      visit_materials(weight_kg)
     `)
     .in("state", states)
     .order("created_at", { ascending: true });
   if (error) throw error;
-  return (data ?? []) as unknown as VisitQueueRow[];
+  return withWeight((data ?? []) as never[]) as unknown as VisitQueueRow[];
 }
 
 // A role's "done" list (#14): visits (RLS-scoped to the viewer's site) that have
@@ -44,7 +56,8 @@ export async function listVisitsDoneAfter(
     .select(`
       id, created_at, entry_path, state,
       supplier:suppliers(id, name, phone),
-      declared_material_type:material_types(id, name)
+      declared_material_type:material_types(id, name),
+      visit_materials(weight_kg)
     `)
     .in("state", downstream)
     .order("created_at", { ascending: false })
@@ -52,7 +65,7 @@ export async function listVisitsDoneAfter(
   if (opts.entryPath) q = q.eq("entry_path", opts.entryPath);
   const { data, error } = await q;
   if (error) throw error;
-  return (data ?? []) as unknown as VisitQueueRow[];
+  return withWeight((data ?? []) as never[]) as unknown as VisitQueueRow[];
 }
 
 // QC's done list specifically: only visits this analyst actually XRF'd (exempt
@@ -85,14 +98,15 @@ export async function listQcCompletedVisits(
     .select(`
       id, created_at, entry_path, state,
       supplier:suppliers(id, name, phone),
-      declared_material_type:material_types(id, name)
+      declared_material_type:material_types(id, name),
+      visit_materials(weight_kg)
     `)
     .in("id", visitIds)
     .neq("state", "in_qc")
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return (data ?? []) as unknown as VisitQueueRow[];
+  return withWeight((data ?? []) as never[]) as unknown as VisitQueueRow[];
 }
 
 export async function listVisitsByStateWithAnalysis(state: VisitState): Promise<
@@ -105,12 +119,13 @@ export async function listVisitsByStateWithAnalysis(state: VisitState): Promise<
       id, created_at, entry_path, state,
       supplier:suppliers(id, name, phone),
       declared_material_type:material_types(id, name),
+      visit_materials(weight_kg),
       analysis:analysis_records(grade, weight, purity)
     `)
     .eq("state", state)
     .order("created_at", { ascending: true });
   if (error) throw error;
-  return (data ?? []).map((r) => {
+  return withWeight((data ?? []) as never[]).map((r) => {
     const raw = r as unknown as VisitQueueRow & {
       analysis: { grade: string | null; weight: number; purity: number | null }[] | null;
     };

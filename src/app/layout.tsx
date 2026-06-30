@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/shell/ThemeProvider";
 import { AppShell } from "@/components/shell/AppShell";
+import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 import { getProfile } from "@/lib/auth/get-profile";
 import { roleNotifications } from "@/lib/notifications";
 
@@ -13,11 +14,15 @@ import { roleNotifications } from "@/lib/notifications";
 export const metadata: Metadata = {
   title: "Magnetic Joezion — Inventory",
   description: "Magnetic Joezion Nig. Ltd — material tracking and inventory system",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Joezion" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: "#1c1917",
 };
 
 export default async function RootLayout({
@@ -43,6 +48,7 @@ export default async function RootLayout({
         />
       </head>
       <body className="min-h-full">
+        <ServiceWorkerRegister />
         <ThemeProvider>
           <AppShell
             profile={

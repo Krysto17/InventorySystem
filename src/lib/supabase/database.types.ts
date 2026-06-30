@@ -1197,6 +1197,7 @@ export type Database = {
         Row: {
           completed_at: string | null
           created_at: string
+          discount_percent: number
           id: string
           recorded_by: string
           started_at: string | null
@@ -1206,6 +1207,7 @@ export type Database = {
         Insert: {
           completed_at?: string | null
           created_at?: string
+          discount_percent?: number
           id?: string
           recorded_by: string
           started_at?: string | null
@@ -1215,6 +1217,7 @@ export type Database = {
         Update: {
           completed_at?: string | null
           created_at?: string
+          discount_percent?: number
           id?: string
           recorded_by?: string
           started_at?: string | null
@@ -1858,7 +1861,7 @@ export type Database = {
     }
     Functions: {
       submit_visit_to_manager: { Args: { p_visit_id: string }; Returns: undefined }
-      approve_visit_by_manager: { Args: { p_visit_id: string; p_skip_qc?: boolean }; Returns: undefined }
+      manager_skip_to_pricing: { Args: { p_visit_id: string }; Returns: undefined }
       delete_batch: { Args: { p_visit_id: string }; Returns: undefined }
       current_role: {
         Args: never

@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { listVisitsByStateWithAnalysis } from "@/lib/visits/queries";
-import { formatTimestamp, formatWeight } from "@/lib/visits/format";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
-import { approveBatch } from "@/app/visits/[id]/batch-actions";
+import { VisitQueueTable } from "@/components/visits/VisitQueueTable";
 
 import { one as g1 } from "@/lib/db/relation";
 
@@ -13,7 +12,7 @@ export default async function ManagerHomePage() {
   const supabase = await createClient();
 
   // Independent dashboard reads — run them in one round-trip (perf, #10).
-  const [queue, { data: mismatches }, { data: approvalQueue }] = await Promise.all([
+  const [queue, { data: mismatches }] = await Promise.all([
     listVisitsByStateWithAnalysis("pricing"),
     // QC weight mismatches (auto-flagged when QC's weight differs >2% from
     // receiving's); the manager resolves one by correcting either weight.
@@ -29,12 +28,6 @@ export default async function ManagerHomePage() {
       `)
       .eq("mismatch", true)
       .limit(20),
-    // #7/#12: batches submitted by receiving, awaiting this site manager's approval.
-    supabase
-      .from("visits")
-      .select("id, created_at, supplier:suppliers(name), declared_material_type:material_types(name), site:sites(name)")
-      .eq("state", "awaiting_manager")
-      .order("created_at", { ascending: true }),
   ]);
 
   const openMismatches = (mismatches ?? []).filter((m) => {
@@ -55,74 +48,22 @@ export default async function ManagerHomePage() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-sm">Awaiting your approval</h2>
-            <Badge variant={approvalQueue?.length ? "yellow" : "default"}>{approvalQueue?.length ?? 0}</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {(approvalQueue?.length ?? 0) === 0 ? (
-            <p className="px-4 py-3 text-sm text-gray-500">No batches awaiting approval.</p>
-          ) : (
-            <ul className="divide-y">
-              {(approvalQueue ?? []).map((v) => {
-                const sup = g1<{ name: string }>((v as { supplier: unknown }).supplier);
-                const mat = g1<{ name: string }>((v as { declared_material_type: unknown }).declared_material_type);
-                const site = g1<{ name: string }>((v as { site: unknown }).site);
-                return (
-                  <li key={v.id as string} className="flex items-center justify-between gap-2 px-4 py-3 text-sm">
-                    <Link href={`/visits/${v.id}`} className="flex-1 hover:underline">
-                      <span className="font-medium">{sup?.name ?? "—"}</span>
-                      <span className="text-gray-500"> · {mat?.name ?? "—"} · {site?.name ?? "—"} · {formatTimestamp(v.created_at as string)}</span>
-                    </Link>
-                    <div className="flex shrink-0 gap-2">
-                      <form action={approveBatch}>
-                        <input type="hidden" name="visit_id" value={v.id as string} />
-                        <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve → analysis</button>
-                      </form>
-                      <form action={approveBatch}>
-                        <input type="hidden" name="visit_id" value={v.id as string} />
-                        <input type="hidden" name="skip_qc" value="true" />
-                        <button type="submit" className="rounded border border-line px-3 py-1 text-xs font-semibold text-ink-2 hover:bg-zinc-50" title="Skip XRF analysis and go straight to pricing">Skip → pricing</button>
-                      </form>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
             <h2 className="font-semibold text-sm">Pricing queue</h2>
             <Badge variant="purple">{queue.length}</Badge>
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {queue.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-gray-500">Queue is empty.</p>
-          ) : (
-            <ul className="divide-y">
-              {queue.map((v) => (
-                <li key={v.id}>
-                  <Link href={`/visits/${v.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
-                    <div>
-                      <div className="font-medium text-sm">{v.supplier?.name ?? "—"}</div>
-                      <div className="text-xs text-gray-500">
-                        {v.declared_material_type?.name ?? "—"} · {formatTimestamp(v.created_at)}
-                      </div>
-                    </div>
-                    <div className="text-right text-sm">
-                      <div>Grade: <strong>{v.analysis?.grade ?? "—"}</strong></div>
-                      <div className="text-xs text-gray-500">{v.analysis ? formatWeight(v.analysis.weight) : "—"}</div>
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+          <VisitQueueTable
+            rows={queue.map((v) => ({
+              id: v.id,
+              supplier: v.supplier?.name ?? "—",
+              material: v.declared_material_type?.name ?? "—",
+              weight: v.weight,
+              date: v.created_at,
+              extra: v.analysis?.grade ?? "—",
+            }))}
+            extraLabel="Grade"
+          />
         </CardContent>
       </Card>
 

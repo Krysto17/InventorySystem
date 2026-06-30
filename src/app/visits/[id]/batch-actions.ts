@@ -90,7 +90,8 @@ export async function deleteMaterialLine(formData: FormData): Promise<void> {
 }
 
 // Receiving's material lines are saved as drafts while the visit is in
-// receiving (editable any time); this submits the batch to the SITE manager.
+// receiving (editable any time); this submits the batch for analysis — straight
+// to QC, or to pricing when no line needs analysis (no manager gate, #3).
 export async function submitToManager(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me) return;
@@ -100,21 +101,18 @@ export async function submitToManager(formData: FormData): Promise<void> {
   await supabase.rpc("submit_visit_to_manager", { p_visit_id: visitId });
   revalidatePath(`/visits/${visitId}`);
   revalidatePath("/receiving");
-  revalidatePath("/manager");
+  revalidatePath("/qc");
 }
 
-// The (site) manager approves a batch → QC if any line needs analysis, else
-// straight to pricing (exempt materials skip QC, #8). The manager may also
-// explicitly bypass analysis (skip_qc) and go straight to pricing (#3).
-export async function approveBatch(formData: FormData): Promise<void> {
+// Manager bypasses XRF analysis from in_qc → pricing (price without XRF, #3).
+export async function skipToPricing(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me) return;
   if (me.role !== "manager" && me.role !== "owner") return;
   const visitId = String(formData.get("visit_id") ?? "");
   if (!visitId) return;
-  const skipQc = String(formData.get("skip_qc") ?? "") === "true";
   const supabase = await createClient();
-  await supabase.rpc("approve_visit_by_manager", { p_visit_id: visitId, p_skip_qc: skipQc });
+  await supabase.rpc("manager_skip_to_pricing", { p_visit_id: visitId });
   revalidatePath(`/visits/${visitId}`);
   revalidatePath("/manager");
   revalidatePath("/qc");

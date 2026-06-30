@@ -150,17 +150,34 @@ export async function submitProcessing(
   const visitId = String(formData.get("visit_id") ?? "");
   if (!visitId) return { error: "Missing visit id" };
 
+  // Machine-usage rows (the processing fee).
   const lines: UsageLine[] = [];
+  // Material lines (e.g. iron weights) entered in the same form (#7).
+  const mats: { material_type_id: string; weight_kg: number; comment: string }[] = [];
   for (const [key, val] of formData.entries()) {
-    const m = key.match(/^usage\[(\d+)\]\[(machine_id|measurement)\]$/);
-    if (!m) continue;
-    const idx = Number(m[1]);
-    lines[idx] ??= { machine_id: "", measurement: 0 };
-    if (m[2] === "machine_id") lines[idx].machine_id = String(val);
-    else lines[idx].measurement = Number(val);
+    const um = key.match(/^usage\[(\d+)\]\[(machine_id|measurement)\]$/);
+    if (um) {
+      const idx = Number(um[1]);
+      lines[idx] ??= { machine_id: "", measurement: 0 };
+      if (um[2] === "machine_id") lines[idx].machine_id = String(val);
+      else lines[idx].measurement = Number(val);
+      continue;
+    }
+    const mm = key.match(/^material\[(\d+)\]\[(material_type_id|weight_kg|comment)\]$/);
+    if (mm) {
+      const idx = Number(mm[1]);
+      mats[idx] ??= { material_type_id: "", weight_kg: 0, comment: "" };
+      if (mm[2] === "material_type_id") mats[idx].material_type_id = String(val);
+      else if (mm[2] === "weight_kg") mats[idx].weight_kg = Number(val);
+      else mats[idx].comment = String(val);
+    }
   }
   const cleaned = lines.filter((l) => l && l.machine_id && l.measurement > 0);
   if (cleaned.length === 0) return { error: "At least one machine usage row is required" };
+  const cleanMats = mats.filter((m) => m && m.material_type_id && m.weight_kg > 0);
+
+  // Per-batch processing discount (0–100%), recorded for managers; applied to fee.
+  const discountPercent = Math.min(100, Math.max(0, Number(formData.get("discount_percent")) || 0));
 
   const supabase = await createClient();
 
@@ -173,6 +190,22 @@ export async function submitProcessing(
     (machineRows ?? []).map((r) => [r.id as string, Number(r.rate)]),
   );
 
+  // Material lines first — they may only be inserted while the visit is still
+  // in_processing, and the processing_record insert below advances it to
+  // in_receiving via trigger.
+  if (cleanMats.length > 0) {
+    const { error: matErr } = await supabase.from("visit_materials").insert(
+      cleanMats.map((m) => ({
+        visit_id: visitId,
+        material_type_id: m.material_type_id,
+        weight_kg: m.weight_kg,
+        receiving_comment: m.comment.trim() || null,
+        recorded_by: me.id,
+      })),
+    );
+    if (matErr) return { error: matErr.message };
+  }
+
   const now = new Date().toISOString();
   const { data: rec, error: prErr } = await supabase
     .from("processing_records")
@@ -181,6 +214,7 @@ export async function submitProcessing(
       recorded_by: me.id,
       started_at: now,
       completed_at: now,
+      discount_percent: discountPercent,
     })
     .select("id")
     .single();
@@ -195,15 +229,15 @@ export async function submitProcessing(
   const { error: uErr } = await supabase.from("processing_machine_usage").insert(usageRows);
   if (uErr) return { error: uErr.message };
 
-  // The processing fee is automatically billed to the supplier as a light bill
-  // (a utility charge on the visit), which the manager later deducts from — or
-  // collects against — the supplier's batch settlement.
-  const fee = usageRows.reduce((s, u) => s + u.measurement * u.rate_snapshot, 0);
+  // The processing fee is billed to the supplier as a light bill (a utility
+  // charge on the visit), net of the per-batch discount.
+  const gross = usageRows.reduce((s, u) => s + u.measurement * u.rate_snapshot, 0);
+  const fee = gross * (1 - discountPercent / 100);
   if (fee > 0) {
     await supabase.from("utility_charges").insert({
       visit_id: visitId,
       kind: "light_bill",
-      description: "Processing fee",
+      description: discountPercent > 0 ? `Processing fee (${discountPercent}% discount)` : "Processing fee",
       amount: fee,
       recorded_by: me.id,
     });
