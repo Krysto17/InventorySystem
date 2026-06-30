@@ -173,22 +173,28 @@ export async function submitProcessing(
     }
   }
   const cleaned = lines.filter((l) => l && l.machine_id && l.measurement > 0);
-  if (cleaned.length === 0) return { error: "At least one machine usage row is required" };
   const cleanMats = mats.filter((m) => m && m.material_type_id && m.weight_kg > 0);
+  // Machine usage is optional — a New-Site batch may just weigh material (e.g.
+  // iron) with no machine processing. Require at least one of the two so the
+  // visit still advances to receiving, where receiving adds further lines.
+  if (cleaned.length === 0 && cleanMats.length === 0) {
+    return { error: "Add at least one machine-usage row or material line" };
+  }
 
   // Per-batch processing discount (0–100%), recorded for managers; applied to fee.
   const discountPercent = Math.min(100, Math.max(0, Number(formData.get("discount_percent")) || 0));
 
   const supabase = await createClient();
 
-  const { data: machineRows, error: mErr } = await supabase
-    .from("machines")
-    .select("id, rate")
-    .in("id", cleaned.map((l) => l.machine_id));
-  if (mErr) return { error: mErr.message };
-  const rates = new Map<string, number>(
-    (machineRows ?? []).map((r) => [r.id as string, Number(r.rate)]),
-  );
+  const rates = new Map<string, number>();
+  if (cleaned.length > 0) {
+    const { data: machineRows, error: mErr } = await supabase
+      .from("machines")
+      .select("id, rate")
+      .in("id", cleaned.map((l) => l.machine_id));
+    if (mErr) return { error: mErr.message };
+    for (const r of machineRows ?? []) rates.set(r.id as string, Number(r.rate));
+  }
 
   // Material lines first — they may only be inserted while the visit is still
   // in_processing, and the processing_record insert below advances it to
@@ -226,8 +232,10 @@ export async function submitProcessing(
     measurement: l.measurement,
     rate_snapshot: rates.get(l.machine_id) ?? 0,
   }));
-  const { error: uErr } = await supabase.from("processing_machine_usage").insert(usageRows);
-  if (uErr) return { error: uErr.message };
+  if (usageRows.length > 0) {
+    const { error: uErr } = await supabase.from("processing_machine_usage").insert(usageRows);
+    if (uErr) return { error: uErr.message };
+  }
 
   // The processing fee is billed to the supplier as a light bill (a utility
   // charge on the visit), net of the per-batch discount.
