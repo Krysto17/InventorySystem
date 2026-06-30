@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
+import { InstallButton } from "@/components/pwa/InstallButton";
 import { createClient } from "@/lib/supabase/client";
 import { fetchMyNotifications } from "@/app/notification-actions";
 import type { Role } from "@/lib/auth/roles";
@@ -65,8 +66,14 @@ export function AppShell({ profile, notificationItems, children }: Props) {
   const bare = !profile || BARE_PREFIXES.some((p) => pathname.startsWith(p));
 
   if (bare) {
-    // Login / set-password / unauthenticated — render content with no chrome.
-    return <main className="flex-1">{children}</main>;
+    // Login / set-password / unauthenticated — render content with no chrome,
+    // but still offer the install button.
+    return (
+      <main className="flex-1">
+        {children}
+        <InstallButton />
+      </main>
+    );
   }
 
   return (
@@ -87,6 +94,7 @@ export function AppShell({ profile, notificationItems, children }: Props) {
         />
         <main className="flex-1">{children}</main>
       </div>
+      <InstallButton />
     </div>
   );
 }
