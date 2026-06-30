@@ -43,6 +43,7 @@ const NAV: Record<Role, NavItem[]> = {
   qc: [
     { label: "XRF queue", href: "/qc", icon: "qc" },
     { label: "My analyses", href: "/qc/analyses", icon: "qc" },
+    { label: "Samples", href: "/qc/samples", icon: "qc" },
   ],
   manager: [
     { label: "Pricing queue", href: "/manager", icon: "pricing" },

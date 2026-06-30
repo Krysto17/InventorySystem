@@ -1326,6 +1326,51 @@ export type Database = {
           },
         ]
       }
+      sample_analyses: {
+        Row: {
+          created_at: string
+          id: string
+          material_type_id: string | null
+          price: number | null
+          priced_by: string | null
+          recorded_by: string | null
+          result: string
+          site_id: string
+          supplier_id: string | null
+          supplier_name: string
+          updated_at: string
+          weight_kg: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          material_type_id?: string | null
+          price?: number | null
+          priced_by?: string | null
+          recorded_by?: string | null
+          result: string
+          site_id: string
+          supplier_id?: string | null
+          supplier_name: string
+          updated_at?: string
+          weight_kg?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          material_type_id?: string | null
+          price?: number | null
+          priced_by?: string | null
+          recorded_by?: string | null
+          result?: string
+          site_id?: string
+          supplier_id?: string | null
+          supplier_name?: string
+          updated_at?: string
+          weight_kg?: number | null
+        }
+        Relationships: []
+      }
       sites: {
         Row: {
           created_at: string

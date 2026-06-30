@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { InstallButton } from "@/components/pwa/InstallButton";
+import { NotificationButton } from "@/components/pwa/NotificationButton";
 import { createClient } from "@/lib/supabase/client";
 import { fetchMyNotifications } from "@/app/notification-actions";
 import type { Role } from "@/lib/auth/roles";
@@ -29,9 +30,13 @@ export function AppShell({ profile, notificationItems, children }: Props) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>(notificationItems);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTotal = useRef(notificationItems.reduce((s, i) => s + i.count, 0));
 
   // Keep in sync with the server-rendered value on navigation.
-  useEffect(() => setItems(notificationItems), [notificationItems]);
+  useEffect(() => {
+    setItems(notificationItems);
+    lastTotal.current = notificationItems.reduce((s, i) => s + i.count, 0);
+  }, [notificationItems]);
 
   // Realtime: when a queue/approval table changes, re-fetch the viewer's counts
   // so the bell updates without a reload. Degrades silently if realtime is down.
@@ -44,7 +49,23 @@ export function AppShell({ profile, notificationItems, children }: Props) {
       if (debounce.current) clearTimeout(debounce.current);
       debounce.current = setTimeout(async () => {
         try {
-          setItems(await fetchMyNotifications());
+          const fresh = await fetchMyNotifications();
+          const total = fresh.reduce((s, i) => s + i.count, 0);
+          // Fire a system pop-up when the actionable total grows (permission must
+          // be granted; no server push — only while a device has the app open).
+          if (
+            total > lastTotal.current &&
+            typeof Notification !== "undefined" &&
+            Notification.permission === "granted"
+          ) {
+            const top = fresh[0];
+            new Notification("Magnetic Joezion", {
+              body: top ? `${top.label} (${total} pending)` : "You have new items to action",
+              icon: "/icons/icon-192.png",
+            });
+          }
+          lastTotal.current = total;
+          setItems(fresh);
         } catch {
           /* realtime/refetch hiccup — keep the last known counts */
         }
@@ -95,6 +116,7 @@ export function AppShell({ profile, notificationItems, children }: Props) {
         <main className="flex-1">{children}</main>
       </div>
       <InstallButton />
+      <NotificationButton />
     </div>
   );
 }
