@@ -1654,7 +1654,9 @@ export type Database = {
           receiving_comment: string | null
           recorded_by: string | null
           requires_analysis: boolean
+          settlement_status: string
           unit_price: number | null
+          unsettled_reason: string | null
           updated_at: string
           visit_id: string
           weight_kg: number
@@ -1672,7 +1674,9 @@ export type Database = {
           receiving_comment?: string | null
           recorded_by?: string | null
           requires_analysis?: boolean
+          settlement_status?: string
           unit_price?: number | null
+          unsettled_reason?: string | null
           updated_at?: string
           visit_id: string
           weight_kg: number
@@ -1690,7 +1694,9 @@ export type Database = {
           receiving_comment?: string | null
           recorded_by?: string | null
           requires_analysis?: boolean
+          settlement_status?: string
           unit_price?: number | null
+          unsettled_reason?: string | null
           updated_at?: string
           visit_id?: string
           weight_kg?: number
@@ -1862,6 +1868,9 @@ export type Database = {
     Functions: {
       submit_visit_to_manager: { Args: { p_visit_id: string }; Returns: undefined }
       manager_skip_to_pricing: { Args: { p_visit_id: string }; Returns: undefined }
+      unsettle_line: { Args: { p_line_id: string; p_reason?: string }; Returns: undefined }
+      resettle_line: { Args: { p_line_id: string }; Returns: undefined }
+      remove_line: { Args: { p_line_id: string }; Returns: undefined }
       delete_batch: { Args: { p_visit_id: string }; Returns: undefined }
       current_role: {
         Args: never

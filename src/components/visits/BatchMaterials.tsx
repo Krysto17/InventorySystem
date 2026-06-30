@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { recordXrf, setLinePrice, finalizeLinePrice, skipToPricing } from "@/app/visits/[id]/batch-actions";
+import { recordXrf, setLinePrice, finalizeLinePrice, skipToPricing, unsettleLine, resettleLine, removeLineAsManager } from "@/app/visits/[id]/batch-actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { ReceivingLines, type RxLine } from "@/components/visits/ReceivingLines";
 import type { Role } from "@/lib/auth/roles";
@@ -17,6 +17,8 @@ type Line = {
   unit_price: number | null;
   purchase_amount: number | null;
   price_finalized: boolean;
+  settlement_status: string;
+  unsettled_reason: string | null;
   material: { name: string } | null;
   xrf: { result: string | null; submitted: boolean; weight_kg: number | null; mismatch: boolean } | null;
 };
@@ -38,7 +40,7 @@ export async function BatchMaterials({
     .from("visit_materials")
     .select(`
       id, weight_kg, material_type_id, magnetic_analysis, receiving_comment, requires_analysis,
-      unit_price, purchase_amount, price_finalized,
+      unit_price, purchase_amount, price_finalized, settlement_status, unsettled_reason,
       material:material_types(name),
       xrf:xrf_records(result, submitted, weight_kg, mismatch)
     `)
@@ -55,6 +57,8 @@ export async function BatchMaterials({
     unit_price: l.unit_price != null ? Number(l.unit_price) : null,
     purchase_amount: l.purchase_amount != null ? Number(l.purchase_amount) : null,
     price_finalized: Boolean(l.price_finalized),
+    settlement_status: (l.settlement_status as string) ?? "settled",
+    unsettled_reason: (l.unsettled_reason as string | null) ?? null,
     material: g1((l as { material: unknown }).material) as { name: string } | null,
     xrf: g1((l as { xrf: unknown }).xrf) as Line["xrf"],
   }));
@@ -68,13 +72,18 @@ export async function BatchMaterials({
   const canSeeXrf = viewerRole === "owner" || viewerRole === "manager" || viewerRole === "qc";
   // Manager may bypass XRF from analysis straight to pricing (#3).
   const canSkipAnalysis = (viewerRole === "manager" || viewerRole === "owner") && visitState === "in_qc";
+  // Manager (own site, RPC-enforced) or owner may unsettle a line before/after
+  // pricing — remove it or gate-pass it out when it fails spec/pricing.
+  const canUnsettle = (viewerRole === "manager" || viewerRole === "owner")
+    && ["in_qc", "pricing", "in_accounting", "awaiting_stock_intake"].includes(visitState);
 
   const { data: materialTypes } = canReceive
     ? await supabase.from("material_types").select("id, name").order("name")
     : { data: null };
 
   const totalWeight = lines.reduce((s, l) => s + l.weight_kg, 0);
-  const totalPurchase = lines.reduce((s, l) => s + (l.purchase_amount ?? 0), 0);
+  // Unsettled lines are excluded from the batch purchase total.
+  const totalPurchase = lines.reduce((s, l) => s + (l.settlement_status === "unsettled" ? 0 : l.purchase_amount ?? 0), 0);
 
   // The receiving stage (add/edit/delete draft lines) is handled client-side
   // with optimistic updates so rapid entry feels instant.
@@ -119,14 +128,17 @@ export async function BatchMaterials({
         ) : (
           <div className="space-y-3">
             {lines.map((l) => (
-              <div key={l.id} className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+              <div key={l.id} className={`rounded-lg border p-3 text-sm dark:border-zinc-800 ${l.settlement_status === "unsettled" ? "border-reject/40 bg-reject-soft/30" : "border-zinc-200"}`}>
                 <div className="flex items-center justify-between">
                   <div className="font-medium">
-                    {l.material?.name ?? "—"}
+                    <span className={l.settlement_status === "unsettled" ? "line-through opacity-70" : ""}>{l.material?.name ?? "—"}</span>
                     {!l.requires_analysis && (
                       <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800">
                         no analysis required
                       </span>
+                    )}
+                    {l.settlement_status === "unsettled" && (
+                      <span className="ml-2 rounded bg-reject px-1.5 py-0.5 text-[10px] font-medium text-white">unsettled · gate pass</span>
                     )}
                     {canSeeXrf && l.xrf?.mismatch && (
                       <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
@@ -136,6 +148,9 @@ export async function BatchMaterials({
                   </div>
                   <div className="text-zinc-500">{l.weight_kg.toFixed(3)} kg</div>
                 </div>
+                {l.settlement_status === "unsettled" && l.unsettled_reason && (
+                  <div className="mt-1 text-xs text-reject">Reason: {l.unsettled_reason}</div>
+                )}
                 {l.magnetic_analysis && (
                   <div className="mt-1 text-xs text-zinc-500">Magnetic: {l.magnetic_analysis}</div>
                 )}
@@ -239,6 +254,36 @@ export async function BatchMaterials({
                 )}
                 {canPrice && viewerRole !== "owner" && l.price_finalized && (
                   <div className="mt-2 text-xs text-zinc-500">Price finalized by owner — locked.</div>
+                )}
+
+                {/* Unsettle a line that fails spec/pricing (#): remove it, or
+                    gate-pass it out (excluded from the batch total). Reversible. */}
+                {canUnsettle && (
+                  <div className="mt-3 border-t border-line/60 pt-2">
+                    {l.settlement_status === "unsettled" ? (
+                      <form action={resettleLine} className="flex flex-wrap items-center gap-2">
+                        <input type="hidden" name="visit_id" value={visitId} />
+                        <input type="hidden" name="visit_material_id" value={l.id} />
+                        <span className="text-xs text-reject">Excluded from settlement · gate pass issued.</span>
+                        <SubmitButton pendingText="…" className="rounded border px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50">Re-settle</SubmitButton>
+                      </form>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] text-ink-2">Fails spec/pricing?</span>
+                        <form action={unsettleLine} className="flex items-center gap-1">
+                          <input type="hidden" name="visit_id" value={visitId} />
+                          <input type="hidden" name="visit_material_id" value={l.id} />
+                          <input type="text" name="reason" placeholder="reason (optional)" className="w-36 rounded border px-2 py-1 text-xs" />
+                          <SubmitButton pendingText="…" className="rounded border border-reject px-2 py-1 text-xs text-reject hover:bg-reject-soft disabled:opacity-50">Unsettle → gate pass</SubmitButton>
+                        </form>
+                        <form action={removeLineAsManager}>
+                          <input type="hidden" name="visit_id" value={visitId} />
+                          <input type="hidden" name="visit_material_id" value={l.id} />
+                          <SubmitButton pendingText="Removing…" className="rounded border border-reject px-2 py-1 text-xs text-reject hover:bg-reject-soft disabled:opacity-50">Remove line</SubmitButton>
+                        </form>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             ))}

@@ -118,6 +118,29 @@ export async function skipToPricing(formData: FormData): Promise<void> {
   revalidatePath("/qc");
 }
 
+// A line that fails spec/pricing — manager (own site) or owner. Three outcomes:
+// unsettle (keep + gate pass + exclude from total), re-settle (reverse), remove.
+async function lineAction(formData: FormData, rpc: "unsettle_line" | "resettle_line" | "remove_line") {
+  const me = await getProfile();
+  if (!me || (me.role !== "manager" && me.role !== "owner")) return;
+  const visitId = String(formData.get("visit_id") ?? "");
+  const lineId = String(formData.get("visit_material_id") ?? "");
+  if (!lineId) return;
+  const supabase = await createClient();
+  if (rpc === "unsettle_line") {
+    const reason = String(formData.get("reason") ?? "").trim() || undefined;
+    await supabase.rpc("unsettle_line", { p_line_id: lineId, p_reason: reason });
+  } else {
+    await supabase.rpc(rpc, { p_line_id: lineId });
+  }
+  if (visitId) revalidatePath(`/visits/${visitId}`);
+  revalidatePath("/manager");
+}
+
+export async function unsettleLine(formData: FormData): Promise<void> { await lineAction(formData, "unsettle_line"); }
+export async function resettleLine(formData: FormData): Promise<void> { await lineAction(formData, "resettle_line"); }
+export async function removeLineAsManager(formData: FormData): Promise<void> { await lineAction(formData, "remove_line"); }
+
 // QC records / updates the XRF result for a line. `submit` marks it final;
 // once every line is submitted the visit auto-advances to pricing.
 export async function recordXrf(formData: FormData): Promise<void> {
