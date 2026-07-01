@@ -34,7 +34,7 @@ export async function BatchSettlementCard({
       supabase.from("visit_materials")
         .select("id, weight_kg, unit_price, purchase_amount, material:material_types(name)")
         .eq("visit_id", visitId).order("created_at", { ascending: true }),
-      supabase.from("utility_charges").select("amount").eq("visit_id", visitId),
+      supabase.from("utility_charges").select("kind, description, amount").eq("visit_id", visitId),
       supabase.from("advance_deductions").select("amount, notes, created_at").eq("ref_visit_id", visitId),
       supabase.rpc("supplier_outstanding_debt", { _supplier_id: supplierId }),
       supabase.from("batch_settlements").select("*").eq("visit_id", visitId).maybeSingle(),
@@ -44,9 +44,13 @@ export async function BatchSettlementCard({
     .from("suppliers").select("account_name, account_number, bank_name").eq("id", supplierId).maybeSingle();
 
   const materials = (lines ?? []).reduce((s, l) => s + Number(l.purchase_amount ?? 0), 0);
-  const light = (charges ?? []).reduce((s, c) => s + Number(c.amount), 0);
+  // Processing fee (light bill) vs. other deductions — each "other" charge is
+  // itemised by its own description as the deduction type.
+  const lightBill = (charges ?? []).filter((c) => c.kind === "light_bill").reduce((s, c) => s + Number(c.amount), 0);
+  const otherCharges = (charges ?? []).filter((c) => c.kind === "other");
+  const otherTotal = otherCharges.reduce((s, c) => s + Number(c.amount), 0);
   const advance = (deds ?? []).reduce((s, d) => s + Number(d.amount), 0);
-  const net = materials - light - advance;
+  const net = materials - lightBill - otherTotal - advance;
   const outstandingDebt = Number(debt ?? 0);
 
   const isManager = viewerRole === "manager";
@@ -99,7 +103,14 @@ export async function BatchSettlementCard({
         {/* Breakdown */}
         <div className="space-y-1 border-t border-line pt-3 text-sm">
           <Row label="Materials total" value={ngn(materials)} />
-          <Row label="Processing fee" value={`− ${ngn(light)}`} />
+          <Row label="Processing fee" value={`− ${ngn(lightBill)}`} />
+          {otherCharges.map((c, i) => (
+            <Row
+              key={i}
+              label={(c.description as string | null)?.trim() || "Other deduction"}
+              value={`− ${ngn(Number(c.amount))}`}
+            />
+          ))}
           <Row label="Advance deducted" value={`− ${ngn(advance)}`} />
           <div className="flex items-center justify-between border-t border-line pt-1 font-semibold">
             <span>Net balance payable</span><span>{ngn(net)}</span>

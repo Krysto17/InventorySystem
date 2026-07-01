@@ -49,8 +49,13 @@ export async function UtilityChargesCard({
             {(charges ?? []).map((c) => (
               <li key={c.id as string} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <span>
-                  {c.kind === "light_bill" ? "Processing fee" : "Other"}
-                  {c.description != null && <span className="text-zinc-500"> · {c.description as string}</span>}
+                  {/* For an "other" deduction the description IS the type. */}
+                  {c.kind === "light_bill"
+                    ? "Processing fee"
+                    : ((c.description as string | null)?.trim() || "Other deduction")}
+                  {c.kind === "light_bill" && c.description != null && (
+                    <span className="text-zinc-500"> · {c.description as string}</span>
+                  )}
                 </span>
                 <span className="flex items-center gap-2">
                   <span className="font-medium">{ngn(Number(c.amount))}</span>
@@ -88,7 +93,7 @@ export async function UtilityChargesCard({
               Kind
               <select name="kind" defaultValue="light_bill" className="mt-1 block rounded border px-2 py-1 text-sm">
                 <option value="light_bill">Processing fee</option>
-                <option value="other">Other</option>
+                <option value="other">Other deduction</option>
               </select>
             </label>
             <label className="text-xs font-medium">
@@ -96,8 +101,8 @@ export async function UtilityChargesCard({
               <input type="number" name="amount" min="0.01" step="0.01" required className="mt-1 block w-32 rounded border px-2 py-1 text-sm" />
             </label>
             <label className="flex-1 text-xs font-medium">
-              Description
-              <input type="text" name="description" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+              Type / description <span className="font-normal text-zinc-400">(required for &ldquo;Other&rdquo;)</span>
+              <input type="text" name="description" placeholder="e.g. Transport, Loading" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
             </label>
             <button type="submit" className="rounded border px-3 py-1 text-sm hover:bg-zinc-50">Add</button>
           </form>

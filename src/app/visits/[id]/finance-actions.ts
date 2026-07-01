@@ -15,6 +15,8 @@ export async function addUtilityCharge(formData: FormData): Promise<void> {
   const amount = Number(formData.get("amount"));
   const description = String(formData.get("description") ?? "").trim() || null;
   if (!visitId || !["light_bill", "other"].includes(kind) || !(amount > 0)) return;
+  // For an "other" deduction the description is its type — require it.
+  if (kind === "other" && !description) return;
 
   const supabase = await createClient();
   await supabase.from("utility_charges").insert({
