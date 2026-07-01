@@ -1552,6 +1552,7 @@ export type Database = {
           bank_name: string | null
           created_at: string
           created_by: string | null
+          former_accounts: Json
           former_names: string[]
           id: string
           name: string
@@ -1566,6 +1567,7 @@ export type Database = {
           bank_name?: string | null
           created_at?: string
           created_by?: string | null
+          former_accounts?: Json
           former_names?: string[]
           id?: string
           name: string
@@ -1580,6 +1582,7 @@ export type Database = {
           bank_name?: string | null
           created_at?: string
           created_by?: string | null
+          former_accounts?: Json
           former_names?: string[]
           id?: string
           name?: string

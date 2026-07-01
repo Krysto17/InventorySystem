@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 export type SupplierListRow = {
@@ -60,7 +61,9 @@ export function SupplierSearchList({ suppliers }: { suppliers: SupplierListRow[]
           <tbody>
             {rows.map((s) => (
               <tr key={s.id} className="border-b hover:bg-gray-50 dark:hover:bg-zinc-900/40">
-                <td className="px-3 py-2 font-medium">{s.name}</td>
+                <td className="px-3 py-2 font-medium">
+                  <Link href={`/suppliers/${s.id}`} className="hover:underline">{s.name}</Link>
+                </td>
                 <td className="px-3 py-2 mono text-xs text-gray-500">{s.code ?? "—"}</td>
                 <td className="px-3 py-2 text-gray-600">{s.phone ?? "—"}</td>
                 <td className="px-3 py-2 text-xs text-gray-500">{s.formerNames.length ? s.formerNames.join(", ") : "—"}</td>
