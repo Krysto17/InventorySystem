@@ -137,6 +137,30 @@ async function lineAction(formData: FormData, rpc: "unsettle_line" | "resettle_l
   revalidatePath("/manager");
 }
 
+// Owner approves the manager's price → finalizes every line + releases to
+// accounting (#1/#5). Reject sends it back to the manager to re-price.
+export async function approvePricing(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || me.role !== "owner") return;
+  const visitId = String(formData.get("visit_id") ?? "");
+  if (!visitId) return;
+  const supabase = await createClient();
+  await supabase.rpc("approve_pricing", { p_visit_id: visitId });
+  revalidatePath(`/visits/${visitId}`);
+  revalidatePath("/owner/approvals");
+  revalidatePath("/owner");
+}
+export async function rejectPricing(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || me.role !== "owner") return;
+  const visitId = String(formData.get("visit_id") ?? "");
+  if (!visitId) return;
+  const supabase = await createClient();
+  await supabase.rpc("reject_pricing", { p_visit_id: visitId });
+  revalidatePath(`/visits/${visitId}`);
+  revalidatePath("/owner/approvals");
+}
+
 export async function unsettleLine(formData: FormData): Promise<void> { await lineAction(formData, "unsettle_line"); }
 export async function resettleLine(formData: FormData): Promise<void> { await lineAction(formData, "resettle_line"); }
 export async function removeLineAsManager(formData: FormData): Promise<void> { await lineAction(formData, "remove_line"); }

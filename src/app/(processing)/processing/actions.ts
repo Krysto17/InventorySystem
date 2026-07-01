@@ -88,6 +88,10 @@ export async function createVisit(
       })
       .select("id")
       .single();
+    if (supErr?.code === "23505") {
+      // Unique-name violation (#3) — a supplier with this name already exists.
+      return { error: `A supplier named "${newSupplierName}" already exists — pick them from the list instead.` };
+    }
     if (supErr || !created) return { error: supErr?.message ?? "Failed to create supplier" };
     supplierId = created.id as string;
   }

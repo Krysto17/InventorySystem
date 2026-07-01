@@ -3,7 +3,7 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 
 describe("happy path: processed → agreed → in_accounting (no processing stage)", () => {
   let siteId: string;
-  let proc: TestUser, recv: TestUser, mgr: TestUser;
+  let proc: TestUser, recv: TestUser, mgr: TestUser, owner: TestUser;
   let supplierId: string, materialTypeId: string;
 
   beforeAll(async () => {
@@ -12,6 +12,7 @@ describe("happy path: processed → agreed → in_accounting (no processing stag
     proc = await makeUser({ username: "hpp-proc", role: "processing", siteId });
     recv = await makeUser({ username: "hpp-recv", role: "receiving", siteId });
     mgr = await makeUser({ username: "hpp-mgr", role: "manager", siteId });
+    owner = await makeUser({ username: "hpp-owner", role: "owner", siteId: null });
     const { data: s } = await adminClient()
       .from("suppliers")
       .insert({ name: "HPP Supp", phone: "07099990000" })
@@ -45,6 +46,10 @@ describe("happy path: processed → agreed → in_accounting (no processing stag
       payment_terms: "immediate",
       priced_by: mgr.userId,
     });
+    // Agreed price parks at the owner approval gate; owner approves (#1/#5).
+    const { data: gate } = await adminClient().from("visits").select("state").eq("id", v!.id).single();
+    expect(gate?.state).toBe("awaiting_price_approval");
+    await owner.client.rpc("approve_pricing", { p_visit_id: v!.id });
     const { data } = await adminClient()
       .from("visits")
       .select("state")

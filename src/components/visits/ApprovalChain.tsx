@@ -46,13 +46,16 @@ export function ApprovalChain({
   const exited = state === "exited";
   const nodes: { label: string; kind: "done" | "now" | "next" | "skip" | "reject" }[] = [];
 
-  // awaiting_manager is retired; any legacy row sits at the analysis gate.
-  const effectiveState: VisitState = state === "awaiting_manager" ? "in_qc" : state;
+  // awaiting_manager is retired (→ analysis gate). At awaiting_price_approval the
+  // manager has priced (Pricing done) and the visit sits at the Director OK gate.
+  const atApprovalGate = state === "awaiting_price_approval";
+  const effectiveState: VisitState =
+    state === "awaiting_manager" ? "in_qc" : atApprovalGate ? "pricing" : state;
   const pricingIdx = ORDER.findIndex((n) => n.state === "pricing");
 
-  // "Director OK" — owner finalises the price, rendered right after Pricing.
+  // "Director OK" — owner approves/finalises the price, rendered after Pricing.
   const directorKind = (currentIdx: number): "done" | "now" | "next" =>
-    priceApproved ? "done" : currentIdx >= pricingIdx ? "now" : "next";
+    priceApproved ? "done" : atApprovalGate || currentIdx > pricingIdx ? "now" : "next";
 
   if (exited) {
     // No-agreement off-ramp: completed up to pricing, then an Exited terminal.
@@ -77,7 +80,8 @@ export function ApprovalChain({
       } else if (i < currentIdx) {
         nodes.push({ label: n.label, kind: "done" });
       } else if (i === currentIdx) {
-        nodes.push({ label: n.label, kind: "now" });
+        // At the approval gate the Pricing node is already done (manager priced).
+        nodes.push({ label: n.label, kind: atApprovalGate && n.state === "pricing" ? "done" : "now" });
       } else {
         nodes.push({ label: n.label, kind: "next" });
       }

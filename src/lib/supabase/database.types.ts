@@ -1913,6 +1913,8 @@ export type Database = {
     Functions: {
       submit_visit_to_manager: { Args: { p_visit_id: string }; Returns: undefined }
       manager_skip_to_pricing: { Args: { p_visit_id: string }; Returns: undefined }
+      approve_pricing: { Args: { p_visit_id: string }; Returns: undefined }
+      reject_pricing: { Args: { p_visit_id: string }; Returns: undefined }
       unsettle_line: { Args: { p_line_id: string; p_reason?: string }; Returns: undefined }
       resettle_line: { Args: { p_line_id: string }; Returns: undefined }
       remove_line: { Args: { p_line_id: string }; Returns: undefined }

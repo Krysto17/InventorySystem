@@ -85,12 +85,15 @@ const NAV: Record<Role, NavItem[]> = {
   ],
 };
 
+// Every role can search the shared supplier directory (#4).
+const SUPPLIERS_ITEM: NavItem = { label: "Suppliers", href: "/suppliers", icon: "search" };
+
 export function navForRole(role: Role, opts?: { isGeneralManager?: boolean }): NavItem[] {
-  const items = NAV[role] ?? [];
-  if (role === "manager" && !opts?.isGeneralManager) {
-    return items.filter((i) => !i.generalOnly);
-  }
-  return items;
+  const base = NAV[role] ?? [];
+  const items = role === "manager" && !opts?.isGeneralManager
+    ? base.filter((i) => !i.generalOnly)
+    : base;
+  return [...items, SUPPLIERS_ITEM];
 }
 
 // The home path's first segment, used to decide which nav item is "active".

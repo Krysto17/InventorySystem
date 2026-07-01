@@ -6,7 +6,7 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 // pricing → manager prices each line → purchase_amount is the sum.
 describe("multi-material batch → QC → pricing (integration)", () => {
   let siteId: string;
-  let proc: TestUser, recv: TestUser, qc: TestUser, mgr: TestUser;
+  let proc: TestUser, recv: TestUser, qc: TestUser, mgr: TestUser, owner: TestUser;
   let supplierId: string, matA: string, matB: string;
 
   beforeAll(async () => {
@@ -16,6 +16,7 @@ describe("multi-material batch → QC → pricing (integration)", () => {
     recv = await makeUser({ username: "mm-recv", role: "receiving",  siteId });
     qc   = await makeUser({ username: "mm-qc",   role: "qc",         siteId });
     mgr  = await makeUser({ username: "mm-mgr",  role: "manager",    siteId });
+    owner = await makeUser({ username: "mm-owner", role: "owner", siteId: null });
     const { data: s } = await adminClient().from("suppliers").insert({ name: "Batch Supplier" }).select("id").single();
     supplierId = s!.id as string;
     // Monazite + Zircon — the real multi-material pairing; magnetic analysis
@@ -79,7 +80,10 @@ describe("multi-material batch → QC → pricing (integration)", () => {
     // 120*100 + 80*200 = 12000 + 16000 = 28000
     expect(Number(pricing!.purchase_amount)).toBe(28000);
 
-    // 8. agreement moved the visit to accounting
+    // 8. agreement parks at the owner approval gate; owner approves → accounting (#1/#5)
+    ({ data: st } = await adminClient().from("visits").select("state").eq("id", visitId).single());
+    expect(st!.state).toBe("awaiting_price_approval");
+    await owner.client.rpc("approve_pricing", { p_visit_id: visitId });
     ({ data: st } = await adminClient().from("visits").select("state").eq("id", visitId).single());
     expect(st!.state).toBe("in_accounting");
   });

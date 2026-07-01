@@ -1,17 +1,13 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { Badge, stateVariant } from "@/components/ui/badge";
-import { Stamp } from "@/components/ui/stamp";
-import { ApprovalChain } from "@/components/visits/ApprovalChain";
-import { STATE_LABELS, type VisitState } from "@/lib/visits/state-machine";
+import { LiveWorkflowList, type WorkflowRow } from "@/components/visits/LiveWorkflowList";
+import type { VisitState } from "@/lib/visits/state-machine";
 
 import { one as g1 } from "@/lib/db/relation";
 
 // Shared "Live workflow — supply pipeline" panel shown on every role's home.
-// Lists the most recent visits the viewer is allowed to see (RLS-scoped) with
-// their stage chain, so everyone sees where work stands.
-export async function LiveWorkflow({ limit = 6 }: { limit?: number }) {
+// Lists the visits the viewer is allowed to see (RLS-scoped); the client list
+// handles search/sort and collapsing to 10 rows (#6/#7).
+export async function LiveWorkflow({ limit = 100 }: { limit?: number }) {
   const supabase = await createClient();
   const { data: visits } = await supabase
     .from("visits")
@@ -24,59 +20,23 @@ export async function LiveWorkflow({ limit = 6 }: { limit?: number }) {
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  // Which of these visits have an owner-finalised price (drives the green
-  // "Director OK" node in the chain).
+  // Which of these visits have an owner-finalised price (green "Director OK").
   const visitIds = (visits ?? []).map((v) => v.id as string);
   const { data: finalized } = visitIds.length
     ? await supabase.from("visit_materials").select("visit_id").in("visit_id", visitIds).eq("price_finalized", true)
     : { data: [] as { visit_id: string }[] };
   const priceApprovedSet = new Set((finalized ?? []).map((r) => r.visit_id as string));
 
-  return (
-    <Card>
-      <CardHeader className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Live workflow — supply pipeline</h2>
-        <span className="mono hidden text-[11px] text-ink-2 sm:block">
-          Processing · Receiving · Analysis · Pricing · Accounting · Stocked
-        </span>
-      </CardHeader>
-      <CardContent className="p-0">
-        {(visits?.length ?? 0) === 0 ? (
-          <p className="px-4 py-3 text-sm text-ink-2">No visits yet.</p>
-        ) : (
-          <ul>
-            {(visits ?? []).map((v) => {
-              const supplier = g1<{ name: string }>(v.supplier);
-              const material = g1<{ name: string }>(v.declared_material_type);
-              const site = g1<{ name: string }>(v.site);
-              const state = v.state as VisitState;
-              return (
-                <li key={v.id as string} className="border-b-[1.5px] border-line px-4 py-3 last:border-b-0">
-                  <Link href={`/visits/${v.id}`} className="block">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2 text-sm">
-                        <Stamp>{(v.id as string).slice(0, 8).toUpperCase()}</Stamp>
-                        <strong className="text-ink">{supplier?.name ?? "—"}</strong>
-                        <span className="text-ink-2">
-                          · {material?.name ?? "—"} · {site?.name ?? "—"}
-                        </span>
-                      </div>
-                      <Badge variant={stateVariant(state)}>{STATE_LABELS[state] ?? state}</Badge>
-                    </div>
-                    <div className="mt-2">
-                      <ApprovalChain
-                        state={state}
-                        entryPath={v.entry_path as "unprocessed" | "processed"}
-                        priceApproved={priceApprovedSet.has(v.id as string)}
-                      />
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
-  );
+  const rows: WorkflowRow[] = (visits ?? []).map((v) => ({
+    id: v.id as string,
+    supplier: g1<{ name: string }>(v.supplier)?.name ?? "—",
+    material: g1<{ name: string }>(v.declared_material_type)?.name ?? "—",
+    site: g1<{ name: string }>(v.site)?.name ?? "—",
+    state: v.state as VisitState,
+    entryPath: v.entry_path as "unprocessed" | "processed",
+    priceApproved: priceApprovedSet.has(v.id as string),
+    date: v.created_at as string,
+  }));
+
+  return <LiveWorkflowList rows={rows} />;
 }

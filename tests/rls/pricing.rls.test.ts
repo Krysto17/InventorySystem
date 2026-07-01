@@ -3,7 +3,7 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 
 describe("pricing RLS + transition + purchase_amount", () => {
   let siteAId: string;
-  let mgrA: TestUser, recvA: TestUser;
+  let mgrA: TestUser, recvA: TestUser, owner: TestUser;
   let supplierId: string, materialTypeId: string;
 
   async function newPricingVisitWithAnalysis(weight: number) {
@@ -30,6 +30,7 @@ describe("pricing RLS + transition + purchase_amount", () => {
     siteAId = sites![0].id as string;
     mgrA = await makeUser({ username: "pp-mgr-a", role: "manager", siteId: siteAId });
     recvA = await makeUser({ username: "pp-recv-a", role: "receiving", siteId: siteAId });
+    owner = await makeUser({ username: "pp-owner", role: "owner", siteId: null });
     const { data: s } = await adminClient()
       .from("suppliers")
       .insert({ name: "PP Supp", phone: "07044440000" })
@@ -40,7 +41,7 @@ describe("pricing RLS + transition + purchase_amount", () => {
     materialTypeId = m!.id as string;
   });
 
-  it("manager can insert pricing with agreement=agreed; visit transitions to in_accounting", async () => {
+  it("manager's agreed price parks at owner approval; owner approve → in_accounting", async () => {
     const vid = await newPricingVisitWithAnalysis(300);
     const { error } = await mgrA.client.from("pricing").insert({
       visit_id: vid,
@@ -50,11 +51,12 @@ describe("pricing RLS + transition + purchase_amount", () => {
       priced_by: mgrA.userId,
     });
     expect(error).toBeNull();
-    const { data: v } = await adminClient()
-      .from("visits")
-      .select("state")
-      .eq("id", vid)
-      .single();
+    let { data: v } = await adminClient().from("visits").select("state").eq("id", vid).single();
+    expect(v?.state).toBe("awaiting_price_approval"); // owner gate (#1/#5)
+
+    const { error: aErr } = await owner.client.rpc("approve_pricing", { p_visit_id: vid });
+    expect(aErr).toBeNull();
+    ({ data: v } = await adminClient().from("visits").select("state").eq("id", vid).single());
     expect(v?.state).toBe("in_accounting");
   });
 
