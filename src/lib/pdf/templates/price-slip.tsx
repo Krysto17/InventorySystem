@@ -81,8 +81,8 @@ export function PriceSlipPdf({ data, docId }: { data: PdfPriceSlipData; docId: s
             </View>
             <View style={s.col}>
               {/* Grade + RA are written by hand after printing. */}
-              <View style={s.line}><Text style={s.lbl}>Grade (DM3) :</Text><View style={s.blank} /></View>
-              <View style={s.line}><Text style={s.lbl}>RA (USV/H) :</Text><View style={s.blank} /></View>
+              <View style={s.line}><Text style={s.lbl}>Grade :</Text><View style={s.blank} /></View>
+              <View style={s.line}><Text style={s.lbl}>RA :</Text><View style={s.blank} /></View>
             </View>
             <View style={s.col}>
               <Text style={s.lbl}>Customer Sign :</Text><View style={s.signBox} />

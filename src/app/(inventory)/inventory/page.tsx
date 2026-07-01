@@ -15,7 +15,8 @@ export default async function InventoryPage() {
       id, created_at,
       supplier:suppliers(name),
       declared_material_type:material_types(name),
-      analysis:analysis_records(weight, grade)
+      analysis:analysis_records(weight, grade),
+      materials:visit_materials(id, unit_price, material:material_types(name))
     `)
     .eq("state", "awaiting_stock_intake")
     .order("created_at", { ascending: true });
@@ -83,9 +84,13 @@ export default async function InventoryPage() {
                   | { weight?: number; grade?: string | null }[]
                   | null;
                 const analysis = Array.isArray(an) ? an[0] : an;
+                const rawMats = (v as { materials?: unknown }).materials;
+                const pricedLines = ((Array.isArray(rawMats) ? rawMats : []) as {
+                  id: string; unit_price: number | null; material: { name?: string } | { name?: string }[] | null;
+                }[]).filter((m) => m.unit_price != null);
                 return (
-                  <li key={v.id}>
-                    <Link href={`/visits/${v.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
+                  <li key={v.id} className="px-4 py-3 hover:bg-gray-50">
+                    <Link href={`/visits/${v.id}`} className="flex items-center justify-between">
                       <div>
                         <div className="font-medium text-sm">{sup?.name ?? "—"}</div>
                         <div className="text-xs text-gray-500">
@@ -96,6 +101,25 @@ export default async function InventoryPage() {
                       </div>
                       <div className="text-xs text-gray-500">{formatTimestamp(v.created_at)}</div>
                     </Link>
+                    {/* Price slips for each priced line — printable straight from intake. */}
+                    {pricedLines.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {pricedLines.map((m) => {
+                          const name = (Array.isArray(m.material) ? m.material[0]?.name : m.material?.name) ?? "material";
+                          return (
+                            <a
+                              key={m.id}
+                              href={`/api/pdf/price-slip/${m.id}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded border px-2 py-0.5 text-[11px] hover:bg-gray-100"
+                            >
+                              🖨 {name} slip
+                            </a>
+                          );
+                        })}
+                      </div>
+                    )}
                   </li>
                 );
               })}

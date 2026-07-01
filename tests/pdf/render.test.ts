@@ -6,7 +6,10 @@ import { PriceSlipPdf } from "../../src/lib/pdf/templates/price-slip";
 import { SupplyInvoicePdf } from "../../src/lib/pdf/templates/supply-invoice";
 
 const el = (c: unknown, p: unknown) =>
-  React.createElement(c as React.ComponentType<unknown>, p) as React.ReactElement<DocumentProps>;
+  React.createElement(
+    c as React.ComponentType<Record<string, unknown>>,
+    p as Record<string, unknown>,
+  ) as React.ReactElement<DocumentProps>;
 
 describe("PDF templates render to valid buffers", () => {
   it("price slip", async () => {
