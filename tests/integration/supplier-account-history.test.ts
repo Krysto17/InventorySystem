@@ -25,7 +25,7 @@ describe("supplier rename + account history", () => {
 
     // First set — nothing to archive yet.
     await mgr.client.from("suppliers").update({ account_name: "Ada N", account_number: "0011223344", bank_name: "GTB" }).eq("id", s!.id);
-    let { data: a } = await adminClient().from("suppliers").select("former_accounts").eq("id", s!.id).single();
+    let { data: a } = await adminClient().from("suppliers").select("account_number, former_accounts").eq("id", s!.id).single();
     expect(a!.former_accounts).toHaveLength(0);
 
     // Change to a new account — the old one is archived.

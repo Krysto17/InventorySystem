@@ -1,40 +1,26 @@
 import React from "react";
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
+import { BrandHeader, PageFooter } from "../brand";
+import { shared } from "../styles";
 import type { PdfPriceSlipData } from "../fetch-data";
-import { formatTs } from "../format";
+import { formatTs, formatKg } from "../format";
 
 const ngn = (n: number | null | undefined) =>
-  n == null ? "" : Number(n).toLocaleString("en-NG", { minimumFractionDigits: 2 });
+  n == null ? "—" : `NGN ${Number(n).toLocaleString("en-NG", { minimumFractionDigits: 2 })}`;
 
 const s = StyleSheet.create({
-  page: { padding: 18, fontSize: 9, fontFamily: "Helvetica", color: "#000" },
-  card: { borderWidth: 1, borderColor: "#000", padding: 12, height: "100%" },
-  printedOn: { fontSize: 7, color: "#333" },
-  title: { textAlign: "center", marginTop: 2 },
-  company: { fontSize: 13, fontFamily: "Helvetica-Bold", letterSpacing: 0.5 },
-  rc: { fontSize: 7, marginTop: 1 },
-  hr: { borderBottomWidth: 1, borderBottomColor: "#000", marginVertical: 8 },
-  cols: { flexDirection: "row", justifyContent: "space-between" },
-  col: { flexDirection: "column" },
-  line: { flexDirection: "row", marginBottom: 4 },
-  lbl: { fontFamily: "Helvetica-Bold" },
-  val: { marginLeft: 4 },
-  boxRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
-  box: { borderWidth: 1, borderColor: "#000", height: 12, width: 120, marginLeft: 4 },
-  signBox: { borderWidth: 1, borderColor: "#000", height: 22, width: 110, marginTop: 2, marginBottom: 4 },
-  blank: { borderBottomWidth: 1, borderBottomColor: "#000", width: 70, marginLeft: 4 },
-  amount: { fontSize: 14, fontFamily: "Helvetica-Bold", marginTop: 6 },
-  note: { fontSize: 7, textAlign: "right", maxWidth: 180 },
-  decl: { fontFamily: "Helvetica-Bold", marginBottom: 2 },
-  declText: { fontSize: 8, lineHeight: 1.3 },
-  thanks: { fontSize: 8, fontStyle: "italic", marginTop: 3, color: "#555" },
+  rc: { fontSize: 8, color: "#666666", marginTop: -12, marginBottom: 12, paddingHorizontal: 24 },
+  fillLine: { flex: 1, borderBottomWidth: 0.8, borderBottomColor: "#333333", height: 11 },
+  note: { fontSize: 8, color: "#666666", marginBottom: 12 },
+  commentBox: { borderWidth: 0.8, borderColor: "#333333", height: 150, marginTop: 4, borderRadius: 2 },
+  decl: { fontSize: 8, color: "#444444", lineHeight: 1.4, marginTop: 12 },
 });
 
-function LabelBox({ label }: { label: string }) {
+function Field({ label, value, fill }: { label: string; value?: string; fill?: boolean }) {
   return (
-    <View style={s.boxRow}>
-      <Text style={s.lbl}>{label}</Text>
-      <View style={s.box} />
+    <View style={shared.row}>
+      <Text style={shared.label}>{label}</Text>
+      {fill ? <View style={s.fillLine} /> : <Text style={shared.value}>{value ?? "—"}</Text>}
     </View>
   );
 }
@@ -46,68 +32,46 @@ export function PriceSlipPdf({ data, docId }: { data: PdfPriceSlipData; docId: s
   const material = data.material_name ?? "—";
 
   return (
-    <Document title={`Price slip — ${data.receipt_no}`}>
-      <Page size="A5" orientation="landscape" style={s.page}>
-        <View style={s.card}>
-          <Text style={s.printedOn}>Printed on : {formatTs(now.toISOString())}</Text>
+    <Document title={`Price Slip — ${data.receipt_no}`}>
+      <Page size="A5" style={shared.page}>
+        <BrandHeader siteName={data.site_name} docType="Price Slip" />
+        <Text style={shared.docTitle}>Purchase Price Slip</Text>
+        <Text style={shared.docSubtitle}>
+          {supplier}{data.supplier_code ? ` · ${data.supplier_code}` : ""} · {formatTs(data.visit_created_at)}
+        </Text>
+        <Text style={s.rc}>RC: 1966608</Text>
 
-          <View style={s.title}>
-            <Text style={s.company}>MAGNETIC JOEZION NIG. LTD</Text>
-            <Text style={s.rc}>RC: 1966608</Text>
+        <View style={shared.body}>
+          <View style={shared.section}>
+            <Field label="Slip no." value={data.receipt_no} />
+            <Field label="Site" value={data.site_name ?? "—"} />
+            <Field label="Vendor" value={supplier} />
+            <Field label="Vendor ID" value={data.supplier_code ?? "—"} />
+            <Field label="Commodity" value={material} />
+            <Field label="Weight" value={formatKg(data.weight_kg)} />
+            <Field label="Unit price" value={`${ngn(data.unit_price)} / kg`} />
+            {/* Grade + RA are written in by hand after printing. */}
+            <Field label="Grade" fill />
+            <Field label="RA (µSv/h)" fill />
           </View>
 
-          <View style={s.hr} />
-
-          <View style={s.cols}>
-            <View style={s.col}>
-              <View style={s.line}><Text style={s.lbl}>Date:</Text><Text style={s.val}>{formatTs(data.visit_created_at)}</Text></View>
-              <View style={s.line}><Text style={s.lbl}>Receipt:</Text><Text style={s.val}>{data.receipt_no}</Text></View>
-              <View style={s.line}><Text style={s.lbl}>Supplier:</Text><Text style={s.val}>{supplier}</Text></View>
-            </View>
-            <View style={s.col}>
-              <LabelBox label="Account Name :" />
-              <LabelBox label="Account No :" />
-              <LabelBox label="Bank Name :" />
-            </View>
+          <View style={shared.highlight}>
+            <Text style={shared.label}>Total payable</Text>
+            <Text style={[shared.bold, { fontSize: 16, marginTop: 2 }]}>{ngn(data.amount)}</Text>
           </View>
 
-          <View style={s.hr} />
+          <Text style={s.note}>Note: Offer valid until today, {validDate} 5:00pm.</Text>
 
-          <View style={s.cols}>
-            <View style={s.col}>
-              <View style={s.line}><Text style={s.lbl}>Material :</Text><Text style={s.val}>{material}</Text></View>
-              <View style={s.line}><Text style={s.lbl}>Qty (Kg) :</Text><Text style={s.val}>{Number(data.weight_kg).toFixed(2)}</Text></View>
-              <View style={s.line}><Text style={s.lbl}>Rate :</Text><Text style={s.val}>{ngn(data.unit_price)}</Text></View>
-            </View>
-            <View style={s.col}>
-              {/* Grade + RA are written by hand after printing. */}
-              <View style={s.line}><Text style={s.lbl}>Grade :</Text><View style={s.blank} /></View>
-              <View style={s.line}><Text style={s.lbl}>RA (µSv/h) :</Text><View style={s.blank} /></View>
-            </View>
-            <View style={s.col}>
-              <Text style={s.lbl}>Customer Sign :</Text><View style={s.signBox} />
-              <Text style={s.lbl}>Paid :</Text><View style={s.signBox} />
-            </View>
-          </View>
+          <Text style={shared.sectionTitle}>Comment / Remarks</Text>
+          <View style={s.commentBox} />
 
-          <Text style={s.amount}>Amount (NGN) : {ngn(data.amount)}</Text>
-
-          <View style={s.hr} />
-
-          <View style={s.cols}>
-            <Text style={s.lbl}>COMMENTS:</Text>
-            <Text style={s.note}>NOTE: Price is valid until today, {validDate} 5:00pm</Text>
-          </View>
-
-          <View style={s.hr} />
-
-          <Text style={s.decl}>DECLARATION:</Text>
-          <Text style={s.declText}>
-            I, {supplier} hereby declare that the {Number(data.weight_kg).toFixed(2)} Kg of {material} supplied is
-            legally mined and free of any conflict.
+          <Text style={s.decl}>
+            Declaration: I, {supplier}, hereby declare that the {formatKg(data.weight_kg)} of {material} supplied is
+            legally mined and free of any conflict. Thank you.
           </Text>
-          <Text style={s.thanks}>Thank you. · Doc {docId}</Text>
         </View>
+
+        <PageFooter docId={docId} generatedAt={now.toISOString()} />
       </Page>
     </Document>
   );

@@ -449,6 +449,7 @@ export type PdfPriceSlipData = {
   receipt_no: string;
   site_name: string | null;
   supplier_name: string | null;
+  supplier_code: string | null;
   material_name: string | null;
   weight_kg: number;
   unit_price: number | null;
@@ -464,13 +465,14 @@ export async function fetchPriceSlipData(lineId: string): Promise<PdfPriceSlipDa
     .select(`
       id, weight_kg, unit_price, purchase_amount,
       material:material_types(name),
-      visit:visits(created_at, supplier:suppliers(name), site:sites(name))
+      visit:visits(created_at, supplier:suppliers(name, supplier_code), site:sites(name))
     `)
     .eq("id", lineId)
     .maybeSingle();
   if (!l || l.unit_price == null) return null;
 
   const visit = g1<{ created_at: string; supplier: unknown; site: unknown }>((l as { visit: unknown }).visit);
+  const supplier = g1<{ name: string; supplier_code: string | null }>(visit?.supplier);
   // Deterministic 6-digit receipt number from the line id.
   const receiptNo = ((parseInt(lineId.replace(/-/g, "").slice(0, 8), 16) % 900000) + 100000).toString();
 
@@ -478,7 +480,8 @@ export async function fetchPriceSlipData(lineId: string): Promise<PdfPriceSlipDa
     line_id: l.id as string,
     receipt_no: receiptNo,
     site_name: g1<{ name: string }>(visit?.site)?.name ?? null,
-    supplier_name: g1<{ name: string }>(visit?.supplier)?.name ?? null,
+    supplier_name: supplier?.name ?? null,
+    supplier_code: supplier?.supplier_code ?? null,
     material_name: g1<{ name: string }>((l as { material: unknown }).material)?.name ?? null,
     weight_kg: num(l.weight_kg),
     unit_price: l.unit_price != null ? num(l.unit_price) : null,

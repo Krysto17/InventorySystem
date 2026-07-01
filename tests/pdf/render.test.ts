@@ -18,6 +18,7 @@ describe("PDF templates render to valid buffers", () => {
       receipt_no: "192980",
       site_name: "New-Site",
       supplier_name: "CHRISTOPHER BABAYO",
+      supplier_code: "SUP-NEW-0001",
       material_name: "Columbite",
       weight_kg: 104,
       unit_price: 22100,
