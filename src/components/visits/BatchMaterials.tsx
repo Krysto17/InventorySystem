@@ -256,6 +256,18 @@ export async function BatchMaterials({
                         🔒 finalized by owner
                       </span>
                     )}
+                    {/* Manager / inventory / owner print the price slip (grade + RA
+                        are written by hand after printing). */}
+                    {["manager", "owner", "inventory"].includes(viewerRole) && (
+                      <a
+                        href={`/api/pdf/price-slip/${l.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="ml-2 rounded border px-1.5 py-0.5 text-[10px] font-medium hover:bg-zinc-50"
+                      >
+                        🖨 Print price slip
+                      </a>
+                    )}
                   </div>
                 )}
 

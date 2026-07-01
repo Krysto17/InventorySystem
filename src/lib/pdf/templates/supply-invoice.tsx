@@ -40,6 +40,9 @@ export function SupplyInvoicePdf({ data, docId }: { data: PdfSupplyInvoiceData; 
           <View style={[shared.section, { marginTop: 14 }]}>
             <View style={shared.row}><Text style={shared.label}>Materials total</Text><Text style={shared.value}>{formatNgn(data.materials_total)}</Text></View>
             <View style={shared.row}><Text style={shared.label}>Processing fee</Text><Text style={shared.value}>− {formatNgn(data.light_bill_total)}</Text></View>
+            {data.other_deductions.map((d, i) => (
+              <View style={shared.row} key={i}><Text style={shared.label}>{d.label}</Text><Text style={shared.value}>− {formatNgn(d.amount)}</Text></View>
+            ))}
             <View style={shared.row}><Text style={shared.label}>Advance deducted</Text><Text style={shared.value}>− {formatNgn(data.advance_deducted)}</Text></View>
           </View>
 

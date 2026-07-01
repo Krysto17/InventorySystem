@@ -3,7 +3,8 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import React from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
-import { fetchVisitPdfData, fetchBulkSalePdfData, fetchLotSalePdfData, fetchUtilityInvoiceData, fetchSupplyInvoiceData } from "@/lib/pdf/fetch-data";
+import { fetchVisitPdfData, fetchBulkSalePdfData, fetchLotSalePdfData, fetchUtilityInvoiceData, fetchSupplyInvoiceData, fetchPriceSlipData } from "@/lib/pdf/fetch-data";
+import { PriceSlipPdf } from "@/lib/pdf/templates/price-slip";
 import { LotSaleBreakdownPdf } from "@/lib/pdf/templates/lot-sale-breakdown";
 import { UtilityInvoicePdf } from "@/lib/pdf/templates/utility-invoice";
 import { SupplyInvoicePdf } from "@/lib/pdf/templates/supply-invoice";
@@ -66,6 +67,16 @@ export async function GET(
     const docId = docHash(type, id);
     const buffer = await renderToBuffer(pdf(BulkSaleReceiptPdf, { data, docId }));
     return pdfResponse(buffer, `bulk-sale-${id.slice(0, 8)}.pdf`);
+  }
+
+  // ── Material price slip (printed when a price is set) ─────────────────────
+  if (type === "price-slip") {
+    if (!["inventory", "manager", "owner"].includes(me.role)) return forbidden();
+    const data = await fetchPriceSlipData(id); // RLS-scoped read; null if not priced/visible
+    if (!data) return notFound("Priced line not found");
+    const docId = docHash(type, id);
+    const buffer = await renderToBuffer(pdf(PriceSlipPdf, { data, docId }));
+    return pdfResponse(buffer, `price-slip-${data.receipt_no}.pdf`);
   }
 
   // ── Supply invoice (batch settlement) ─────────────────────────────────────

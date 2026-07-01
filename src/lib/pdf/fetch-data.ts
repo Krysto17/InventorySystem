@@ -436,10 +436,56 @@ export type PdfSupplyInvoiceData = {
   items: PdfSupplyInvoiceItem[];
   materials_total: number;
   light_bill_total: number;
+  // "Other" deductions itemised by their description (the deduction type).
+  other_deductions: { label: string; amount: number }[];
   advance_deducted: number;
   net_balance: number;
   remaining_debt: number;
 };
+
+// ─── Material price slip (printed when a price is set) ────────────────────────
+export type PdfPriceSlipData = {
+  line_id: string;
+  receipt_no: string;
+  site_name: string | null;
+  supplier_name: string | null;
+  material_name: string | null;
+  weight_kg: number;
+  unit_price: number | null;
+  amount: number;
+  visit_created_at: string;
+};
+
+// Only a priced line yields a slip (unit_price required).
+export async function fetchPriceSlipData(lineId: string): Promise<PdfPriceSlipData | null> {
+  const supabase = await createClient();
+  const { data: l } = await supabase
+    .from("visit_materials")
+    .select(`
+      id, weight_kg, unit_price, purchase_amount,
+      material:material_types(name),
+      visit:visits(created_at, supplier:suppliers(name), site:sites(name))
+    `)
+    .eq("id", lineId)
+    .maybeSingle();
+  if (!l || l.unit_price == null) return null;
+
+  const visit = g1<{ created_at: string; supplier: unknown; site: unknown }>((l as { visit: unknown }).visit);
+  // Deterministic 6-digit receipt number from the line id.
+  const receiptNo = ((parseInt(lineId.replace(/-/g, "").slice(0, 8), 16) % 900000) + 100000).toString();
+
+  return {
+    line_id: l.id as string,
+    receipt_no: receiptNo,
+    site_name: g1<{ name: string }>(visit?.site)?.name ?? null,
+    supplier_name: g1<{ name: string }>(visit?.supplier)?.name ?? null,
+    material_name: g1<{ name: string }>((l as { material: unknown }).material)?.name ?? null,
+    weight_kg: num(l.weight_kg),
+    unit_price: l.unit_price != null ? num(l.unit_price) : null,
+    amount: num(l.purchase_amount),
+    visit_created_at: (visit?.created_at as string) ?? new Date().toISOString(),
+  };
+}
 
 export async function fetchSupplyInvoiceData(visitId: string): Promise<PdfSupplyInvoiceData | null> {
   const supabase = await createClient();
@@ -455,7 +501,7 @@ export async function fetchSupplyInvoiceData(visitId: string): Promise<PdfSupply
       supabase.from("visit_materials")
         .select("weight_kg, unit_price, purchase_amount, material:material_types(name)")
         .eq("visit_id", visitId).order("created_at", { ascending: true }),
-      supabase.from("utility_charges").select("amount").eq("visit_id", visitId),
+      supabase.from("utility_charges").select("kind, description, amount").eq("visit_id", visitId),
       supabase.from("advance_deductions").select("amount").eq("ref_visit_id", visitId),
       supabase.rpc("supplier_outstanding_debt", { _supplier_id: v.supplier_id }),
       supabase.from("batch_settlements")
@@ -473,11 +519,18 @@ export async function fetchSupplyInvoiceData(visitId: string): Promise<PdfSupply
     };
   });
 
-  // Prefer the submitted settlement's snapshot; otherwise compute live.
+  // Split charges: processing fee (light bill) vs. itemised "other" deductions.
+  const chargeRows = (charges as { kind?: string; description?: string | null; amount: unknown }[]) ?? [];
+  const lightBill = chargeRows.filter((c) => c.kind === "light_bill").reduce((a, c) => a + num(c.amount), 0);
+  const otherDeductions = chargeRows
+    .filter((c) => c.kind === "other")
+    .map((c) => ({ label: (c.description ?? "").trim() || "Other deduction", amount: num(c.amount) }));
+  const otherTotal = otherDeductions.reduce((a, d) => a + d.amount, 0);
+
+  // Prefer the submitted settlement's snapshot for totals; otherwise compute live.
   const materials = settlement ? num(settlement.materials_total) : items.reduce((a, i) => a + i.amount, 0);
-  const light = settlement ? num(settlement.light_bill_total) : (charges ?? []).reduce((a, c) => a + num(c.amount), 0);
   const advance = settlement ? num(settlement.advance_deducted) : (deds ?? []).reduce((a, d) => a + num(d.amount), 0);
-  const net = settlement ? num(settlement.net_balance) : materials - light - advance;
+  const net = settlement ? num(settlement.net_balance) : materials - lightBill - otherTotal - advance;
   const remaining = settlement ? num(settlement.remaining_debt) : num(debt);
 
   return {
@@ -489,7 +542,8 @@ export async function fetchSupplyInvoiceData(visitId: string): Promise<PdfSupply
     status: (settlement?.status as string | undefined) ?? null,
     items,
     materials_total: materials,
-    light_bill_total: light,
+    light_bill_total: lightBill,
+    other_deductions: otherDeductions,
     advance_deducted: advance,
     net_balance: net,
     remaining_debt: remaining,
