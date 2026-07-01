@@ -9,11 +9,14 @@ const ngn = (n: number | null | undefined) =>
   n == null ? "—" : `NGN ${Number(n).toLocaleString("en-NG", { minimumFractionDigits: 2 })}`;
 
 const s = StyleSheet.create({
-  rc: { fontSize: 8, color: "#666666", marginTop: -12, marginBottom: 12, paddingHorizontal: 24 },
   fillLine: { flex: 1, borderBottomWidth: 0.8, borderBottomColor: "#333333", height: 11 },
   note: { fontSize: 8, color: "#666666", marginBottom: 12 },
-  commentBox: { borderWidth: 0.8, borderColor: "#333333", height: 150, marginTop: 4, borderRadius: 2 },
+  commentBox: { borderWidth: 0.8, borderColor: "#333333", height: 90, marginTop: 4, borderRadius: 2 },
   decl: { fontSize: 8, color: "#444444", lineHeight: 1.4, marginTop: 12 },
+  signRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 22 },
+  signBlock: { width: "45%" },
+  signLine: { borderTopWidth: 0.8, borderTopColor: "#333333", paddingTop: 3 },
+  signLabel: { fontSize: 8, color: "#666666" },
 });
 
 function Field({ label, value, fill }: { label: string; value?: string; fill?: boolean }) {
@@ -34,20 +37,19 @@ export function PriceSlipPdf({ data, docId }: { data: PdfPriceSlipData; docId: s
   return (
     <Document title={`Price Slip — ${data.receipt_no}`}>
       <Page size="A5" style={shared.page}>
-        <BrandHeader siteName={data.site_name} docType="Price Slip" />
+        <BrandHeader siteName={data.site_name} docType="Price Slip" rc="1966608" />
         <Text style={shared.docTitle}>Purchase Price Slip</Text>
         <Text style={shared.docSubtitle}>
           {supplier}{data.supplier_code ? ` · ${data.supplier_code}` : ""} · {formatTs(data.visit_created_at)}
         </Text>
-        <Text style={s.rc}>RC: 1966608</Text>
 
         <View style={shared.body}>
           <View style={shared.section}>
             <Field label="Slip no." value={data.receipt_no} />
             <Field label="Site" value={data.site_name ?? "—"} />
-            <Field label="Vendor" value={supplier} />
-            <Field label="Vendor ID" value={data.supplier_code ?? "—"} />
-            <Field label="Commodity" value={material} />
+            <Field label="Supplier" value={supplier} />
+            <Field label="Supplier ID" value={data.supplier_code ?? "—"} />
+            <Field label="Material" value={material} />
             <Field label="Weight" value={formatKg(data.weight_kg)} />
             <Field label="Unit price" value={`${ngn(data.unit_price)} / kg`} />
             {/* Grade + RA are written in by hand after printing. */}
@@ -69,6 +71,17 @@ export function PriceSlipPdf({ data, docId }: { data: PdfPriceSlipData; docId: s
             Declaration: I, {supplier}, hereby declare that the {formatKg(data.weight_kg)} of {material} supplied is
             legally mined and free of any conflict. Thank you.
           </Text>
+
+          <View style={s.signRow}>
+            <View style={s.signBlock}>
+              <View style={s.signLine} />
+              <Text style={s.signLabel}>Customer&apos;s signature &amp; date</Text>
+            </View>
+            <View style={s.signBlock}>
+              <View style={s.signLine} />
+              <Text style={s.signLabel}>Authorised by</Text>
+            </View>
+          </View>
         </View>
 
         <PageFooter docId={docId} generatedAt={now.toISOString()} />

@@ -36,11 +36,12 @@ const styles = StyleSheet.create({
   },
 });
 
-export function BrandHeader({ siteName, docType }: { siteName?: string | null; docType: string }) {
+export function BrandHeader({ siteName, docType, rc }: { siteName?: string | null; docType: string; rc?: string | null }) {
   return (
     <View style={styles.header}>
       <View>
         <Text style={styles.headerTitle}>MAGNETIC JOEZION NIG. LTD</Text>
+        {rc ? <Text style={styles.headerSub}>RC: {rc}</Text> : null}
         <Text style={styles.headerSub}>
           {siteName ? `${siteName} · ` : ""}Inventory &amp; Material Tracking
         </Text>
