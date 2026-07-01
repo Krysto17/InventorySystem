@@ -51,10 +51,13 @@ export async function addMaterialLine(formData: FormData): Promise<void> {
 }
 
 // Receiving edits a line's weight / magnetic / comment before sending to QC.
+// Receiving corrects a draft line (in receiving); the manager may also correct
+// any batch line (e.g. a kg fix) while the visit is still open — RLS enforces
+// the manager's own site + open state.
 export async function updateMaterialLine(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me) return;
-  if (me.role !== "receiving" && me.role !== "owner") return;
+  if (me.role !== "receiving" && me.role !== "manager" && me.role !== "owner") return;
 
   const visitId = String(formData.get("visit_id") ?? "");
   const lineId = String(formData.get("visit_material_id") ?? "");

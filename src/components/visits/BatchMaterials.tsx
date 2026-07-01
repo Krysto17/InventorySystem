@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { recordXrf, setLinePrice, finalizeLinePrice, skipToPricing, unsettleLine, resettleLine, removeLineAsManager } from "@/app/visits/[id]/batch-actions";
+import { recordXrf, setLinePrice, finalizeLinePrice, skipToPricing, unsettleLine, resettleLine, removeLineAsManager, updateMaterialLine } from "@/app/visits/[id]/batch-actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { ReceivingLines, type RxLine } from "@/components/visits/ReceivingLines";
 import type { Role } from "@/lib/auth/roles";
@@ -76,8 +76,13 @@ export async function BatchMaterials({
   // pricing — remove it or gate-pass it out when it fails spec/pricing.
   const canUnsettle = (viewerRole === "manager" || viewerRole === "owner")
     && ["in_qc", "pricing", "in_accounting", "awaiting_stock_intake"].includes(visitState);
+  // Manager/owner may correct a batch line (e.g. a kg fix) coming from receiving,
+  // while the visit is still open. RLS enforces the manager's own site.
+  const canEditLines = (viewerRole === "manager" || viewerRole === "owner")
+    && !canReceive
+    && !["exited", "stocked"].includes(visitState);
 
-  const { data: materialTypes } = canReceive
+  const { data: materialTypes } = canReceive || canEditLines
     ? await supabase.from("material_types").select("id, name").order("name")
     : { data: null };
 
@@ -156,6 +161,38 @@ export async function BatchMaterials({
                 )}
                 {l.receiving_comment && (
                   <div className="text-xs text-zinc-500">Note: {l.receiving_comment}</div>
+                )}
+
+                {/* Manager/owner correction of a line from receiving (e.g. kg fix). */}
+                {canEditLines && l.settlement_status !== "unsettled" && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-[11px] font-medium text-ink-2 hover:underline">Correct line (kg / material)</summary>
+                    <form action={updateMaterialLine} className="mt-2 grid grid-cols-2 gap-2">
+                      <input type="hidden" name="visit_id" value={visitId} />
+                      <input type="hidden" name="visit_material_id" value={l.id} />
+                      <label className="col-span-2 text-[11px] font-medium">
+                        Material type
+                        <select name="material_type_id" defaultValue={l.material_type_id} className="mt-1 block w-full rounded border px-2 py-1 text-sm">
+                          {(materialTypes ?? []).map((m) => (
+                            <option key={m.id as string} value={m.id as string}>{m.name as string}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="text-[11px] font-medium">
+                        Weight (kg)
+                        <input type="number" name="weight_kg" step="0.001" min="0" defaultValue={l.weight_kg} className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+                      </label>
+                      <label className="text-[11px] font-medium">
+                        Magnetic analysis
+                        <input type="text" name="magnetic_analysis" defaultValue={l.magnetic_analysis ?? ""} className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+                      </label>
+                      <label className="col-span-2 text-[11px] font-medium">
+                        Comment
+                        <input type="text" name="receiving_comment" defaultValue={l.receiving_comment ?? ""} className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+                      </label>
+                      <SubmitButton pendingText="Saving…" className="col-span-2 rounded border px-3 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50">Save correction</SubmitButton>
+                    </form>
+                  </details>
                 )}
 
                 {/* XRF result — only owner / manager / qc can see it */}
