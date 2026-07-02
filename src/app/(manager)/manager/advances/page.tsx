@@ -5,7 +5,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
-import { recordAdvance, setAdvanceApproval } from "./actions";
+import { recordAdvance, setAdvanceApproval, deleteAdvance } from "./actions";
 
 import { one as g1 } from "@/lib/db/relation";
 const ngn = (n: number) => `₦${n.toLocaleString()}`;
@@ -13,6 +13,7 @@ const ngn = (n: number) => `₦${n.toLocaleString()}`;
 export default async function ManagerAdvancesPage() {
   const me = await getProfile();
   const isOwner = me?.role === "owner";
+  const canManage = me?.role === "manager" || isOwner;
   const supabase = await createClient();
 
   const { data: suppliers } = await supabase
@@ -21,7 +22,7 @@ export default async function ManagerAdvancesPage() {
   const { data: advances } = await supabase
     .from("advances")
     .select(`
-      id, purpose, amount_naira, approval_status, created_at,
+      id, purpose, amount_naira, approval_status, created_at, account_number,
       supplier:suppliers(name, supplier_code)
     `)
     .order("created_at", { ascending: false })
@@ -54,6 +55,9 @@ export default async function ManagerAdvancesPage() {
             <label className="text-sm">Amount (₦)
               <input type="number" name="amount_naira" min="1" step="0.01" required className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
             </label>
+            <label className="text-sm sm:col-span-2">Account number <span className="font-normal text-gray-400">(where to pay)</span>
+              <input type="text" name="account_number" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+            </label>
             <label className="text-sm sm:col-span-2">Comment
               <input type="text" name="comment" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
             </label>
@@ -81,7 +85,10 @@ export default async function ManagerAdvancesPage() {
                         <strong>{sup?.name ?? "—"}</strong>
                         {sup?.supplier_code && <Stamp>{sup.supplier_code}</Stamp>}
                       </div>
-                      <div className="text-xs text-gray-500">{a.purpose as string} · {formatTimestamp(a.created_at as string)}</div>
+                      <div className="text-xs text-gray-500">
+                        {a.purpose as string} · {formatTimestamp(a.created_at as string)}
+                        {a.account_number ? <> · Acct <span className="mono">{a.account_number as string}</span></> : null}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{ngn(Number(a.amount_naira))}</span>
@@ -99,6 +106,13 @@ export default async function ManagerAdvancesPage() {
                             <button type="submit" className="rounded border px-2.5 py-0.5 text-xs">Reject</button>
                           </form>
                         </>
+                      )}
+                      {/* Manager/owner may delete a still-pending advance (#4). */}
+                      {canManage && st === "pending" && (
+                        <form action={deleteAdvance}>
+                          <input type="hidden" name="advance_id" value={a.id as string} />
+                          <button type="submit" className="rounded border border-reject px-2.5 py-0.5 text-xs text-reject hover:bg-reject-soft">Delete</button>
+                        </form>
                       )}
                     </div>
                   </li>

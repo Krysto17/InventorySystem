@@ -17,6 +17,8 @@ export type AnalysisRow = {
   unitPrice: number | null;
   state: string;
   canPrice: boolean;
+  settlementStatus: string; // 'settled' | 'unsettled'
+  agreed: boolean;          // price agreed (past the pricing stage)
 };
 
 type SortKey = "date" | "supplier" | "site" | "material" | "qcWeight" | "unitPrice";
@@ -88,7 +90,11 @@ export function AllAnalysesTable({ rows }: { rows: AnalysisRow[] }) {
               <td className="px-3 py-2 text-right tabular-nums">{r.unitPrice != null ? `₦${r.unitPrice.toLocaleString()}` : "—"}</td>
               <td className="max-w-[18rem] px-3 py-2 text-xs text-gray-600">{r.result ?? "—"}</td>
               <td className="px-3 py-2">
-                {r.canPrice ? (
+                {r.settlementStatus === "unsettled" ? (
+                  <span className="rounded bg-reject px-1.5 py-0.5 text-[10px] font-medium text-white">Withdrawn</span>
+                ) : r.agreed ? (
+                  <span className="rounded bg-approve-soft px-1.5 py-0.5 text-[10px] font-medium text-approve">Settled</span>
+                ) : r.canPrice ? (
                   <form action={setLinePrice} className="flex items-center gap-1">
                     <input type="hidden" name="visit_id" value={r.visitId} />
                     <input type="hidden" name="visit_material_id" value={r.lineId} />
@@ -103,7 +109,7 @@ export function AllAnalysesTable({ rows }: { rows: AnalysisRow[] }) {
                     <SubmitButton pendingText="…" className="rounded border px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50">Set</SubmitButton>
                   </form>
                 ) : (
-                  <span className="text-xs text-gray-400">{r.state === "pricing" ? "—" : "not in pricing"}</span>
+                  <span className="text-xs text-gray-400">not in pricing</span>
                 )}
               </td>
             </tr>

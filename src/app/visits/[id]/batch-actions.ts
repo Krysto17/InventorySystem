@@ -208,7 +208,7 @@ export async function removeLineAsManager(formData: FormData): Promise<void> { a
 export async function recordXrf(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me) return;
-  if (me.role !== "qc" && me.role !== "owner") return;
+  if (me.role !== "qc") return; // XRF is read-only for everyone else, incl. owner
 
   const visitId = String(formData.get("visit_id") ?? "");
   const lineId = String(formData.get("visit_material_id") ?? "");

@@ -20,12 +20,17 @@ export async function LiveWorkflow({ limit = 100 }: { limit?: number }) {
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  // Which of these visits have an owner-finalised price (green "Director OK").
+  // Which of these visits have an owner-finalised price (green "Director OK"),
+  // and which have any withdrawn/unsettled line (marked "Unsettled", #3).
   const visitIds = (visits ?? []).map((v) => v.id as string);
-  const { data: finalized } = visitIds.length
-    ? await supabase.from("visit_materials").select("visit_id").in("visit_id", visitIds).eq("price_finalized", true)
-    : { data: [] as { visit_id: string }[] };
+  const [{ data: finalized }, { data: unsettled }] = visitIds.length
+    ? await Promise.all([
+        supabase.from("visit_materials").select("visit_id").in("visit_id", visitIds).eq("price_finalized", true),
+        supabase.from("visit_materials").select("visit_id").in("visit_id", visitIds).eq("settlement_status", "unsettled"),
+      ])
+    : [{ data: [] as { visit_id: string }[] }, { data: [] as { visit_id: string }[] }];
   const priceApprovedSet = new Set((finalized ?? []).map((r) => r.visit_id as string));
+  const unsettledSet = new Set((unsettled ?? []).map((r) => r.visit_id as string));
 
   const rows: WorkflowRow[] = (visits ?? []).map((v) => ({
     id: v.id as string,
@@ -35,6 +40,7 @@ export async function LiveWorkflow({ limit = 100 }: { limit?: number }) {
     state: v.state as VisitState,
     entryPath: v.entry_path as "unprocessed" | "processed",
     priceApproved: priceApprovedSet.has(v.id as string),
+    unsettled: unsettledSet.has(v.id as string),
     date: v.created_at as string,
   }));
 

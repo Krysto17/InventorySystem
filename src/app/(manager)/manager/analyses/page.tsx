@@ -1,6 +1,6 @@
 import { requireGeneralManager } from "@/lib/auth/require-general-manager";
 import { getProfile } from "@/lib/auth/get-profile";
-import { fetchAllAnalyses } from "@/lib/analyses/all-analyses";
+import { fetchAllAnalyses, AGREED_STATES } from "@/lib/analyses/all-analyses";
 import { fetchSamples } from "@/lib/analyses/samples";
 import { AllAnalysesTable, type AnalysisRow } from "@/components/analyses/AllAnalysesTable";
 import { SampleAnalysesTable } from "@/components/qc/SampleAnalysesTable";
@@ -15,7 +15,8 @@ export default async function ManagerAnalysesPage() {
   // here (cross-site writes belong to the owner).
   const rows: AnalysisRow[] = raw.map((r) => ({
     ...r,
-    canPrice: r.state === "pricing" && r.site === (me?.site_name ?? ""),
+    canPrice: r.state === "pricing" && r.settlementStatus !== "unsettled" && r.site === (me?.site_name ?? ""),
+    agreed: AGREED_STATES.includes(r.state),
   }));
 
   return (

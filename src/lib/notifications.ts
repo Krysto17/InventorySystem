@@ -24,14 +24,13 @@ export async function roleNotifications(role: Role): Promise<NotificationItem[]>
   };
 
   if (role === "owner") {
-    const [prices, bulk, lots, adv, exp, batches, settles, pays] = await Promise.all([
+    const [prices, bulk, lots, adv, exp, batches, pays] = await Promise.all([
       countWhere("visits", "state", "awaiting_price_approval"),
       countWhere("bulk_sales", "approval_status", "pending"),
       countWhere("lot_sales", "approval_status", "pending"),
       countWhere("advances", "approval_status", "pending"),
       countWhere("consumables", "approval_status", "pending"),
       countWhere("cost_price_runs", "approval_status", "pending"),
-      countWhere("batch_settlements", "status", "pending"),
       countWhere("payments", "status", "pending"),
     ]);
     push("Prices to approve", "/owner/approvals", prices);
@@ -40,7 +39,6 @@ export async function roleNotifications(role: Role): Promise<NotificationItem[]>
     push("Advances to approve", "/owner/approvals", adv);
     push("Expenses to approve", "/owner/approvals", exp);
     push("Mixing batches to approve", "/owner/cost-batches", batches);
-    push("Supply settlements to approve", "/owner/approvals", settles);
     push("Payments to approve", "/owner/approvals", pays);
   } else if (role === "manager") {
     const [analysis, exits, pricing] = await Promise.all([

@@ -16,6 +16,7 @@ export type WorkflowRow = {
   state: VisitState;
   entryPath: "unprocessed" | "processed";
   priceApproved: boolean;
+  unsettled: boolean;
   date: string;
 };
 
@@ -78,7 +79,10 @@ export function LiveWorkflowList({ rows }: { rows: WorkflowRow[] }) {
                       <span className="text-ink-2">· {v.material} · {v.site}</span>
                       <span className="mono text-[11px] text-ink-2">{new Date(v.date).toLocaleString()}</span>
                     </div>
-                    <Badge variant={stateVariant(v.state)}>{STATE_LABELS[v.state] ?? v.state}</Badge>
+                    <div className="flex items-center gap-2">
+                      {v.unsettled && <Badge variant="red">Unsettled</Badge>}
+                      <Badge variant={stateVariant(v.state)}>{STATE_LABELS[v.state] ?? v.state}</Badge>
+                    </div>
                   </div>
                   <div className="mt-2">
                     <ApprovalChain state={v.state} entryPath={v.entryPath} priceApproved={v.priceApproved} />

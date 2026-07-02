@@ -38,6 +38,9 @@ export async function submitBatchSettlement(formData: FormData): Promise<void> {
   const light = sum(charges, "amount");
   const advance = sum(deds, "amount");
 
+  // The owner already approved the price, so the settlement no longer needs a
+  // separate owner approval (no back-and-forth): it's submitted straight to
+  // accounting as "approved" for payment.
   await supabase.from("batch_settlements").insert({
     visit_id: visitId,
     site_id: visit.site_id,
@@ -47,8 +50,12 @@ export async function submitBatchSettlement(formData: FormData): Promise<void> {
     net_balance: materials - light - advance,
     remaining_debt: Number(debt ?? 0),
     submitted_by: me.id,
+    status: "approved",
+    approved_by: me.id,
+    approved_at: new Date().toISOString(),
   });
   revalidatePath(`/visits/${visitId}`);
+  revalidatePath("/accounting/payouts");
 }
 
 // Manager records the supplier's bank/account details before submitting the

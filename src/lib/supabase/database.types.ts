@@ -99,6 +99,7 @@ export type Database = {
       advances: {
         Row: {
           amount_naira: number
+          account_number: string | null
           approval_status: string
           approved_at: string | null
           approved_by: string | null
@@ -116,6 +117,7 @@ export type Database = {
         }
         Insert: {
           amount_naira: number
+          account_number?: string | null
           approval_status?: string
           approved_at?: string | null
           approved_by?: string | null
@@ -133,6 +135,7 @@ export type Database = {
         }
         Update: {
           amount_naira?: number
+          account_number?: string | null
           approval_status?: string
           approved_at?: string | null
           approved_by?: string | null

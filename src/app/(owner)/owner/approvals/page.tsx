@@ -4,7 +4,6 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
-import { setSettlementStatus } from "@/app/visits/[id]/settlement-actions";
 import { setAdvanceApproval } from "@/app/(manager)/manager/advances/actions";
 import { reviewExpense } from "@/app/(inventory)/inventory/consumables/actions";
 import { approvePricing, rejectPricing } from "@/app/visits/[id]/batch-actions";
@@ -15,14 +14,11 @@ const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDi
 export default async function OwnerApprovalsPage() {
   const supabase = await createClient();
 
-  const [{ data: movements }, { data: settledLightBills }, { data: advances }, { data: pendingSupplies }, { data: pendingAdvances }] =
+  const [{ data: movements }, { data: settledLightBills }, { data: advances }, { data: pendingAdvances }] =
     await Promise.all([
       supabase.from("stock_movements").select("weight, direction, material:material_types(name)"),
       supabase.from("batch_settlements").select("light_bill_total"),
       supabase.from("advances").select("amount_naira, approval_status, supplier_id"),
-      supabase.from("batch_settlements")
-        .select("id, visit_id, net_balance, materials_total, light_bill_total, advance_deducted, created_at, visit:visits(supplier:suppliers(name))")
-        .eq("status", "pending").order("created_at", { ascending: true }),
       supabase.from("advances")
         .select("id, purpose, amount_naira, created_at, supplier:suppliers(name, supplier_code)")
         .eq("approval_status", "pending").order("created_at", { ascending: true }),
@@ -70,7 +66,7 @@ export default async function OwnerApprovalsPage() {
         </Card>
         <Card>
           <CardHeader><h2 className="text-sm font-semibold">Pending approvals</h2></CardHeader>
-          <CardContent><div className="mono text-2xl font-bold text-ore">{(pendingSupplies?.length ?? 0) + (pendingAdvances?.length ?? 0) + (pendingExpenses?.length ?? 0)}</div></CardContent>
+          <CardContent><div className="mono text-2xl font-bold text-ore">{(pendingPrices?.length ?? 0) + (pendingAdvances?.length ?? 0) + (pendingExpenses?.length ?? 0)}</div></CardContent>
         </Card>
       </div>
 
@@ -135,54 +131,8 @@ export default async function OwnerApprovalsPage() {
         </CardContent>
       </Card>
 
-      {/* Pending supplies (batch settlements) */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Supplies awaiting approval</h2>
-            <Badge variant={pendingSupplies?.length ? "yellow" : "default"}>{pendingSupplies?.length ?? 0}</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {(pendingSupplies?.length ?? 0) === 0 ? (
-            <p className="px-4 py-3 text-sm text-ink-2">No supplies pending.</p>
-          ) : (
-            <ul className="divide-y divide-line">
-              {(pendingSupplies ?? []).map((s) => {
-                const sup = g1<{ name: string }>(g1<{ supplier: unknown }>((s as { visit: unknown }).visit)?.supplier);
-                return (
-                  <li key={s.id as string} className="space-y-2 px-4 py-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                      <div>
-                        <Link href={`/visits/${s.visit_id}`} className="font-medium underline">{sup?.name ?? "—"}</Link>
-                        <span className="text-ink-2"> · net {ngn(Number(s.net_balance))} · {formatTimestamp(s.created_at as string)}</span>
-                      </div>
-                      <span className="text-xs text-ink-2">
-                        materials {ngn(Number(s.materials_total))} − processing fee {ngn(Number(s.light_bill_total))} − advance {ngn(Number(s.advance_deducted))}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <form action={setSettlementStatus}>
-                        <input type="hidden" name="visit_id" value={s.visit_id as string} />
-                        <input type="hidden" name="settlement_id" value={s.id as string} />
-                        <input type="hidden" name="status" value="approved" />
-                        <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve</button>
-                      </form>
-                      <form action={setSettlementStatus} className="flex items-end gap-2">
-                        <input type="hidden" name="visit_id" value={s.visit_id as string} />
-                        <input type="hidden" name="settlement_id" value={s.id as string} />
-                        <input type="hidden" name="status" value="rejected" />
-                        <input type="text" name="rejection_note" placeholder="Reason" className="rounded border px-2 py-1 text-xs" />
-                        <button type="submit" className="rounded border px-3 py-1 text-xs">Reject</button>
-                      </form>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      {/* Batch settlements no longer need a separate owner approval — the owner
+          already approved the price, so they go straight to accounting (#2). */}
 
       {/* Pending advances */}
       <Card>

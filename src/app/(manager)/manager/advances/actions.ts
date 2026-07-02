@@ -14,6 +14,7 @@ export async function recordAdvance(formData: FormData): Promise<void> {
   const purpose = String(formData.get("purpose") ?? "").trim();
   const amount = Number(formData.get("amount_naira"));
   const comment = String(formData.get("comment") ?? "").trim() || null;
+  const accountNumber = String(formData.get("account_number") ?? "").trim() || null;
   if (!supplierId || !purpose || !(amount > 0)) return;
 
   const supabase = await createClient();
@@ -23,8 +24,20 @@ export async function recordAdvance(formData: FormData): Promise<void> {
 
   await supabase.from("advances").insert({
     supplier_id: supplierId, site_id: siteId, purpose, amount_naira: amount,
-    comment, recorded_by: me.id,
+    comment, account_number: accountNumber, recorded_by: me.id,
   });
+  revalidatePath("/manager/advances");
+}
+
+// Manager (own site) deletes a still-pending advance; owner may delete any. RLS
+// enforces the manager can only delete their own site's pending advances.
+export async function deleteAdvance(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || (me.role !== "manager" && me.role !== "owner")) return;
+  const id = String(formData.get("advance_id") ?? "");
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("advances").delete().eq("id", id);
   revalidatePath("/manager/advances");
 }
 

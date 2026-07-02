@@ -177,32 +177,14 @@ export async function BatchSettlementCard({
           </div>
         )}
 
-        {isManager && !locked && (
+        {(isManager || isOwner) && !locked && (
           <form action={submitBatchSettlement} className="border-t border-line pt-3">
             <input type="hidden" name="visit_id" value={visitId} />
             <button type="submit" className="w-full rounded bg-ore px-3 py-2 text-sm font-semibold text-white hover:bg-ore-strong">
-              {status ? "Re-submit batch to owner" : "Submit batch to owner for approval"}
+              {status ? "Re-submit batch to accounting" : "Submit batch to accounting for payment"}
             </button>
+            <p className="mt-1 text-center text-[11px] text-ink-2">Owner already approved the price — this goes straight to accounting.</p>
           </form>
-        )}
-
-        {/* Owner: approve / reject */}
-        {isOwner && status === "pending" && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
-            <form action={setSettlementStatus}>
-              <input type="hidden" name="visit_id" value={visitId} />
-              <input type="hidden" name="settlement_id" value={settlement!.id as string} />
-              <input type="hidden" name="status" value="approved" />
-              <button type="submit" className="rounded bg-approve px-3 py-1 text-sm font-semibold text-white">Approve batch</button>
-            </form>
-            <form action={setSettlementStatus} className="flex items-end gap-2">
-              <input type="hidden" name="visit_id" value={visitId} />
-              <input type="hidden" name="settlement_id" value={settlement!.id as string} />
-              <input type="hidden" name="status" value="rejected" />
-              <input type="text" name="rejection_note" placeholder="Reason" className="rounded border px-2 py-1 text-sm" />
-              <button type="submit" className="rounded border px-3 py-1 text-sm">Reject</button>
-            </form>
-          </div>
         )}
 
         {/* Accountant: pay once approved (only the accountant marks paid) */}

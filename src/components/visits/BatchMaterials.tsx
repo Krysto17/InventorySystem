@@ -67,10 +67,10 @@ export async function BatchMaterials({
   if (lines.length === 0 && visitState !== "in_receiving") return null;
 
   const canReceive = (viewerRole === "receiving" || viewerRole === "owner") && visitState === "in_receiving";
-  // QC can analyse a line through the pricing stages too — so a supplier's
-  // several materials can each be analysed separately, even after a manager
-  // skipped analysis to pricing (#2/#4).
-  const canQc = (viewerRole === "qc" || viewerRole === "owner")
+  // Only QC records/edits an XRF (read-only for owner et al.). QC can analyse
+  // through the pricing stages, so a supplier's several materials can each be
+  // analysed separately, even after a manager skipped analysis to pricing.
+  const canQc = viewerRole === "qc"
     && ["in_qc", "pricing", "awaiting_price_approval"].includes(visitState);
   const canPrice = (viewerRole === "manager" || viewerRole === "owner") && visitState === "pricing";
   const canSeeXrf = viewerRole === "owner" || viewerRole === "manager" || viewerRole === "qc";

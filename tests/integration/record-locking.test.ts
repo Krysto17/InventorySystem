@@ -83,14 +83,15 @@ describe("hybrid record locking (integration)", () => {
     ({ data: row } = await adminClient().from("xrf_records").select("result").eq("id", x!.id).single());
     expect(row!.result).toBe("v3");
 
-    // Once the batch reaches accounting, QC is locked; only owner can correct.
+    // Once the batch reaches accounting, QC is locked. XRF is read-only for the
+    // owner too, so the owner cannot change it either — it stays as QC left it.
     await adminClient().from("visits").update({ state: "in_accounting" }).eq("id", visitId);
     await qc.client.from("xrf_records").update({ result: "v4" }).eq("id", x!.id);
     ({ data: row } = await adminClient().from("xrf_records").select("result").eq("id", x!.id).single());
-    expect(row!.result).toBe("v3"); // locked at accounting
+    expect(row!.result).toBe("v3"); // QC locked at accounting
 
     await owner.client.from("xrf_records").update({ result: "owner-fix" }).eq("id", x!.id);
     ({ data: row } = await adminClient().from("xrf_records").select("result").eq("id", x!.id).single());
-    expect(row!.result).toBe("owner-fix");
+    expect(row!.result).toBe("v3"); // owner is read-only for XRF
   });
 });

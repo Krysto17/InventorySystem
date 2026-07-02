@@ -1,6 +1,6 @@
 import { getProfile } from "@/lib/auth/get-profile";
 import { redirect } from "next/navigation";
-import { fetchAllAnalyses } from "@/lib/analyses/all-analyses";
+import { fetchAllAnalyses, AGREED_STATES } from "@/lib/analyses/all-analyses";
 import { fetchSamples } from "@/lib/analyses/samples";
 import { AllAnalysesTable, type AnalysisRow } from "@/components/analyses/AllAnalysesTable";
 import { SampleAnalysesTable } from "@/components/qc/SampleAnalysesTable";
@@ -11,8 +11,12 @@ export default async function OwnerAnalysesPage() {
   if (!me || me.role !== "owner") redirect("/login");
 
   const [raw, samples] = await Promise.all([fetchAllAnalyses(), fetchSamples()]);
-  // Owner may price any line that is in the pricing stage.
-  const rows: AnalysisRow[] = raw.map((r) => ({ ...r, canPrice: r.state === "pricing" }));
+  // Owner may price a line in the pricing stage; agreed → Settled, withdrawn → Withdrawn (#3).
+  const rows: AnalysisRow[] = raw.map((r) => ({
+    ...r,
+    canPrice: r.state === "pricing" && r.settlementStatus !== "unsettled",
+    agreed: AGREED_STATES.includes(r.state),
+  }));
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-6">
