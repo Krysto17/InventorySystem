@@ -140,6 +140,41 @@ async function lineAction(formData: FormData, rpc: "unsettle_line" | "resettle_l
   revalidatePath("/manager");
 }
 
+// Manager/owner submits the priced batch to the owner for approval: records an
+// "agreed" pricing agreement (amount comes from the priced lines) which moves
+// the visit to awaiting_price_approval (Pricing node → green).
+export async function submitPricedBatch(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || (me.role !== "manager" && me.role !== "owner")) return;
+  const visitId = String(formData.get("visit_id") ?? "");
+  const terms = String(formData.get("payment_terms") ?? "").trim();
+  if (!visitId || !terms) return;
+
+  const supabase = await createClient();
+  // Need at least one priced line (the batch total is the sum of line prices).
+  const { count } = await supabase
+    .from("visit_materials")
+    .select("id", { count: "exact", head: true })
+    .eq("visit_id", visitId)
+    .not("unit_price", "is", null);
+  if (!count) return;
+
+  const { data: existing } = await supabase.from("pricing").select("id").eq("visit_id", visitId).maybeSingle();
+  if (existing) {
+    await supabase.from("pricing")
+      .update({ agreement_status: "agreed", payment_terms: terms, priced_by: me.id })
+      .eq("id", existing.id);
+  } else {
+    await supabase.from("pricing").insert({
+      visit_id: visitId, agreement_status: "agreed", payment_terms: terms, priced_by: me.id,
+    });
+  }
+  revalidatePath(`/visits/${visitId}`);
+  revalidatePath("/manager");
+  revalidatePath("/owner/approvals");
+  revalidatePath("/owner");
+}
+
 // Owner approves the manager's price → finalizes every line + releases to
 // accounting (#1/#5). Reject sends it back to the manager to re-price.
 export async function approvePricing(formData: FormData): Promise<void> {
