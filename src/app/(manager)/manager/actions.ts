@@ -32,14 +32,25 @@ export async function submitPricing(
     return { error: "Invalid payment terms" };
   }
 
-  if (status === "agreed") {
-    if (unitPrice == null || !(unitPrice >= 0)) {
-      return { error: "Unit price is required for an agreed deal" };
-    }
-    if (!terms) return { error: "Payment terms are required for an agreed deal" };
+  if (status === "agreed" && !terms) {
+    return { error: "Payment terms are required for an agreed deal" };
   }
 
   const supabase = await createClient();
+
+  // Agreed deals need a price: either a per-visit unit price, or priced material
+  // lines (multi-material / skipped batches, where the amount is the line sum).
+  if (status === "agreed" && (unitPrice == null || !(unitPrice >= 0))) {
+    const vId = visitId || (recordId
+      ? String((await supabase.from("pricing").select("visit_id").eq("id", recordId).maybeSingle()).data?.visit_id ?? "")
+      : "");
+    const { count } = await supabase
+      .from("visit_materials")
+      .select("id", { count: "exact", head: true })
+      .eq("visit_id", vId)
+      .not("unit_price", "is", null);
+    if (!count) return { error: "Set a unit price, or price the material lines first." };
+  }
 
   if (recordId) {
     const patch: Record<string, unknown> = {

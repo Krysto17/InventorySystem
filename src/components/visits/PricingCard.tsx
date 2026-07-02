@@ -19,7 +19,7 @@ export function PricingCard({
   existing,
 }: {
   visitId: string;
-  analysisWeight: number;
+  analysisWeight: number | null;
   existing?: ExistingPricing | null;
 }) {
   const [state, action, pending] = useActionState(submitPricing, initial);
@@ -27,33 +27,40 @@ export function PricingCard({
   const [status, setStatus] = useState(existing?.agreement_status ?? "pending");
   const [terms, setTerms] = useState<string>(existing?.payment_terms ?? "");
 
-  const purchaseAmount = unitPrice ? Number(unitPrice) * analysisWeight : null;
+  // Multi-material / skipped batches have no single analysis weight — prices are
+  // set per material line above; here the manager only agrees + submits.
+  const multiMaterial = analysisWeight == null;
+  const purchaseAmount = !multiMaterial && unitPrice ? Number(unitPrice) * analysisWeight : null;
 
   return (
     <form action={action} className="space-y-3 max-w-lg">
       <input type="hidden" name="visit_id" value={visitId} />
       {existing && <input type="hidden" name="record_id" value={existing.id} />}
 
-      <div className="text-sm text-gray-600">
-        Analysis weight: {formatWeight(analysisWeight)}
-      </div>
-
-      <label className="flex flex-col text-sm">
-        Unit price (₦ per kg)
-        <input
-          name="unit_price"
-          type="number"
-          step="0.01"
-          min="0"
-          value={unitPrice}
-          onChange={(e) => setUnitPrice(e.target.value)}
-          className="border rounded px-2 py-1"
-        />
-      </label>
-
-      <div className="text-sm">
-        Purchase amount: <strong>{formatNaira(purchaseAmount)}</strong>
-      </div>
+      {multiMaterial ? (
+        <div className="text-sm text-gray-600">
+          Prices are set per material line above. Agree and submit to send the priced batch to the owner.
+        </div>
+      ) : (
+        <>
+          <div className="text-sm text-gray-600">Analysis weight: {formatWeight(analysisWeight)}</div>
+          <label className="flex flex-col text-sm">
+            Unit price (₦ per kg)
+            <input
+              name="unit_price"
+              type="number"
+              step="0.01"
+              min="0"
+              value={unitPrice}
+              onChange={(e) => setUnitPrice(e.target.value)}
+              className="border rounded px-2 py-1"
+            />
+          </label>
+          <div className="text-sm">
+            Purchase amount: <strong>{formatNaira(purchaseAmount)}</strong>
+          </div>
+        </>
+      )}
 
       <fieldset className="flex gap-4 text-sm">
         <label className="flex items-center gap-2">
@@ -114,7 +121,7 @@ export function PricingCard({
         disabled={pending}
         className="px-3 py-2 bg-black text-white rounded"
       >
-        {pending ? "Saving..." : existing ? "Update pricing" : "Submit pricing"}
+        {pending ? "Saving..." : status === "agreed" ? "Submit priced batch to owner" : existing ? "Update pricing" : "Submit pricing"}
       </button>
     </form>
   );

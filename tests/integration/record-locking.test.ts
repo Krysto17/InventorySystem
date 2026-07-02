@@ -63,26 +63,32 @@ describe("hybrid record locking (integration)", () => {
     expect(Number(row!.weight_kg)).toBe(120);
   });
 
-  it("QC edits its XRF until pricing acts, then only owner can", async () => {
-    const { lineId } = await batchInQc();
+  it("QC edits its XRF through the pricing stages, then is locked at accounting (owner can)", async () => {
+    const { visitId, lineId } = await batchInQc();
     const { error } = await qc.client.from("xrf_records").insert({
       visit_material_id: lineId, result: "v1", recorded_by: qc.userId,
     });
     expect(error).toBeNull();
     const { data: x } = await adminClient().from("xrf_records").select("id").eq("visit_material_id", lineId).single();
 
-    // Before pricing acts: QC can edit
+    // in_qc: QC can edit
     await qc.client.from("xrf_records").update({ result: "v2" }).eq("id", x!.id);
     let { data: row } = await adminClient().from("xrf_records").select("result").eq("id", x!.id).single();
     expect(row!.result).toBe("v2");
 
-    // Manager prices the line → pricing has acted → QC locked out
-    await adminClient().from("visit_materials").update({ unit_price: 50 }).eq("id", lineId);
+    // Even in pricing (e.g. after a manager skipped analysis) QC can still analyse (#4)
+    await adminClient().from("visit_materials").update({ requires_analysis: false }).eq("id", lineId);
+    await adminClient().from("visits").update({ state: "pricing" }).eq("id", visitId);
     await qc.client.from("xrf_records").update({ result: "v3" }).eq("id", x!.id);
     ({ data: row } = await adminClient().from("xrf_records").select("result").eq("id", x!.id).single());
-    expect(row!.result).toBe("v2");
+    expect(row!.result).toBe("v3");
 
-    // Owner can still correct
+    // Once the batch reaches accounting, QC is locked; only owner can correct.
+    await adminClient().from("visits").update({ state: "in_accounting" }).eq("id", visitId);
+    await qc.client.from("xrf_records").update({ result: "v4" }).eq("id", x!.id);
+    ({ data: row } = await adminClient().from("xrf_records").select("result").eq("id", x!.id).single());
+    expect(row!.result).toBe("v3"); // locked at accounting
+
     await owner.client.from("xrf_records").update({ result: "owner-fix" }).eq("id", x!.id);
     ({ data: row } = await adminClient().from("xrf_records").select("result").eq("id", x!.id).single());
     expect(row!.result).toBe("owner-fix");

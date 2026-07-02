@@ -51,7 +51,6 @@ export function PriceSlipPdf({ data, docId }: { data: PdfPriceSlipData; docId: s
           <View style={s.cols}>
             <View style={s.col}>
               <View style={s.line}><Text style={s.lbl}>Date:</Text><Text style={s.val}>{formatTs(data.visit_created_at)}</Text></View>
-              <View style={s.line}><Text style={s.lbl}>Receipt:</Text><Text style={s.val}>{data.receipt_no}</Text></View>
               <View style={s.line}><Text style={s.lbl}>Supplier:</Text><Text style={s.val}>{supplier}</Text></View>
               <View style={s.line}><Text style={s.lbl}>Supplier ID:</Text><Text style={s.val}>{data.supplier_code ?? "—"}</Text></View>
               <View style={s.line}><Text style={s.lbl}>Site:</Text><Text style={s.val}>{data.site_name ?? "—"}</Text></View>

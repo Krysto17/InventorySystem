@@ -212,12 +212,14 @@ export function VisitTimeline(props: VisitTimelineProps) {
               )}
             </div>
           </div>
-        ) : visit.state === "pricing" &&
-          (viewer.role === "manager" || isOwner) &&
-          analysis ? (
+        ) : visit.state === "awaiting_price_approval" ? (
+          <p className="text-sm text-green-700">Priced batch submitted — awaiting owner approval.</p>
+        ) : visit.state === "pricing" && (viewer.role === "manager" || isOwner) ? (
+          // Shown even without an analysis_records row (multi-material / skipped
+          // batches) so the manager can submit the priced batch to the owner (#3).
           <PricingCard
             visitId={visit.id}
-            analysisWeight={analysis.weight}
+            analysisWeight={analysis?.weight ?? null}
             existing={
               pricing
                 ? {

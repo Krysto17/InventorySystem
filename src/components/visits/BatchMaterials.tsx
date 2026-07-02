@@ -67,7 +67,11 @@ export async function BatchMaterials({
   if (lines.length === 0 && visitState !== "in_receiving") return null;
 
   const canReceive = (viewerRole === "receiving" || viewerRole === "owner") && visitState === "in_receiving";
-  const canQc = (viewerRole === "qc" || viewerRole === "owner") && visitState === "in_qc";
+  // QC can analyse a line through the pricing stages too — so a supplier's
+  // several materials can each be analysed separately, even after a manager
+  // skipped analysis to pricing (#2/#4).
+  const canQc = (viewerRole === "qc" || viewerRole === "owner")
+    && ["in_qc", "pricing", "awaiting_price_approval"].includes(visitState);
   const canPrice = (viewerRole === "manager" || viewerRole === "owner") && visitState === "pricing";
   const canSeeXrf = viewerRole === "owner" || viewerRole === "manager" || viewerRole === "qc";
   // Manager may bypass XRF from analysis straight to pricing (#3).
@@ -206,9 +210,10 @@ export async function BatchMaterials({
                   </div>
                 )}
 
-                {/* QC: record / submit XRF for this line. Submitting requires a
-                    result + confirmation; Save draft bypasses validation. */}
-                {canQc && l.requires_analysis && (
+                {/* QC: record / submit XRF for this line. Shown for every line
+                    (each material analysed separately), even ones the manager
+                    marked exempt/skipped (#2/#4). */}
+                {canQc && (
                   <form action={recordXrf} className="mt-2 space-y-2">
                     <input type="hidden" name="visit_id" value={visitId} />
                     <input type="hidden" name="visit_material_id" value={l.id} />
