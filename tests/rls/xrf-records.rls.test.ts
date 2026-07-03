@@ -45,12 +45,12 @@ describe("xrf_records RLS (confidential QC results)", () => {
     expect(error).toBeNull();
   });
 
-  it("QC at site B cannot record an XRF for a site A line", async () => {
+  it("QC (cross-site) can record an XRF for another site's line", async () => {
     const { lineId } = await newVisitWithLine(siteAId);
     const { error } = await qcB.client.from("xrf_records").insert({
-      visit_material_id: lineId, result: "hack", recorded_by: qcB.userId,
+      visit_material_id: lineId, result: "cross-site", recorded_by: qcB.userId,
     });
-    expect(error).not.toBeNull();
+    expect(error).toBeNull(); // the New-Site QC analyses every site (#cross-site QC)
   });
 
   it("receiving cannot record an XRF result", async () => {
@@ -85,12 +85,12 @@ describe("xrf_records RLS (confidential QC results)", () => {
     }
   });
 
-  it("QC at site B cannot read a site A XRF result", async () => {
+  it("QC (cross-site) can read another site's XRF result", async () => {
     const { lineId } = await newVisitWithLine(siteAId);
     await adminClient().from("xrf_records").insert({
       visit_material_id: lineId, result: "secret", submitted: true, recorded_by: qcA.userId,
     });
     const { data } = await qcB.client.from("xrf_records").select("result").eq("visit_material_id", lineId);
-    expect(data ?? []).toHaveLength(0);
+    expect(data ?? []).toHaveLength(1); // cross-site QC reads every site's XRF
   });
 });

@@ -9,7 +9,7 @@ export function SupplyInvoicePdf({ data, docId }: { data: PdfSupplyInvoiceData; 
   const generatedAt = new Date().toISOString();
   return (
     <Document title={`Supply Invoice — ${data.visit_id.slice(0, 8)}`}>
-      <Page size="A4" style={shared.page}>
+      <Page size="A5" style={shared.page}>
         <BrandHeader siteName={data.site_name} docType="Supply Invoice" />
         <Text style={shared.docTitle}>Supply Invoice</Text>
         <Text style={shared.docSubtitle}>

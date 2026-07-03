@@ -18,7 +18,7 @@ export function BulkSaleReceiptPdf({ data, docId }: { data: PdfBulkSaleData; doc
   const generatedAt = new Date().toISOString();
   return (
     <Document title={`Bulk Sale Receipt — ${data.id.slice(0, 8)}`}>
-      <Page size="A4" style={shared.page}>
+      <Page size="A5" style={shared.page}>
         <BrandHeader siteName={data.site_name} docType="Bulk Sale Receipt" />
         <Text style={shared.docTitle}>Bulk Sale Receipt</Text>
         <Text style={shared.docSubtitle}>

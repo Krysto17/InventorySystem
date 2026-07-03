@@ -9,7 +9,7 @@ export function LotSaleBreakdownPdf({ data, docId }: { data: PdfLotSaleData; doc
   const generatedAt = new Date().toISOString();
   return (
     <Document title={`Bulk Sale Breakdown — ${data.id.slice(0, 8)}`}>
-      <Page size="A4" style={shared.page}>
+      <Page size="A5" style={shared.page}>
         <BrandHeader siteName={data.site_name} docType="Bulk Sale Breakdown" />
         <Text style={shared.docTitle}>Bulk Sale Material: {data.material_type_name ?? "—"}</Text>
         <Text style={shared.docSubtitle}>

@@ -30,7 +30,7 @@ export function PaymentStatementPdf({ data, docId }: { data: PdfVisitData; docId
 
   return (
     <Document title={`Payment Statement — ${data.id.slice(0, 8)}`}>
-      <Page size="A4" style={shared.page}>
+      <Page size="A5" style={shared.page}>
         <BrandHeader siteName={data.site_name} docType="Payment Statement" />
         <Text style={shared.docTitle}>Payment Statement</Text>
         <Text style={shared.docSubtitle}>

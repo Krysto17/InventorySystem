@@ -9,7 +9,7 @@ export function UtilityInvoicePdf({ data, docId }: { data: PdfUtilityData; docId
   const generatedAt = new Date().toISOString();
   return (
     <Document title={`Processing Invoice — ${data.visit_id.slice(0, 8)}`}>
-      <Page size="A4" style={shared.page}>
+      <Page size="A5" style={shared.page}>
         <BrandHeader siteName={data.site_name} docType="Processing Invoice" />
         <Text style={shared.docTitle}>Processing Invoice</Text>
         <Text style={shared.docSubtitle}>
