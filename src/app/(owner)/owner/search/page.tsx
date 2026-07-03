@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getProfile } from "@/lib/auth/get-profile";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge, stateVariant } from "@/components/ui/badge";
 import { STATE_LABELS } from "@/lib/visits/state-machine";
@@ -10,6 +12,12 @@ export default async function SearchPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  // Cross-site search: owner and the general manager (both cross-site readers).
+  const me = await getProfile();
+  if (!me) redirect("/login");
+  if (me.role !== "owner" && !me.is_general_manager) redirect(`/${me.role}`);
+  const homeHref = me.role === "owner" ? "/owner" : "/manager";
+
   const params = await searchParams;
   const q = String(params.q ?? "").trim();
 
@@ -39,7 +47,7 @@ export default async function SearchPage({
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/owner" className="text-sm text-gray-500 hover:underline">
+        <Link href={homeHref} className="text-sm text-gray-500 hover:underline">
           ← Dashboard
         </Link>
         <h1 className="text-2xl font-bold">Cross-site search</h1>

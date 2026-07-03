@@ -61,6 +61,14 @@ describe("role-aware navigation", () => {
     expect(general).toContain("/manager/gate-passes");
     expect(general).toContain("/manager/cost-price");
     expect(general).toContain("/manager/reports");
+    expect(general).toContain("/owner/search");  // cross-site search (GM only)
+    expect(site).not.toContain("/owner/search");
+  });
+
+  it("every role can reach the supplier directory", () => {
+    for (const r of ["manager", "owner", "qc", "receiving", "accounting", "inventory", "processing"] as const) {
+      expect(navForRole(r, { isGeneralManager: r === "manager" }).map((n) => n.href)).toContain("/suppliers");
+    }
   });
 
   describe("isActivePath", () => {
