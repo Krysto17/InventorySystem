@@ -3,7 +3,7 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 
 describe("advances RLS", () => {
   let siteAId: string, siteBId: string;
-  let mgrA: TestUser, acctA: TestUser, invA: TestUser, mgrB: TestUser, owner: TestUser;
+  let mgrA: TestUser, acctA: TestUser, invA: TestUser, mgrB: TestUser, gm: TestUser, owner: TestUser;
   let supplierId: string;
 
   async function insertPending(siteId: string, userId: string) {
@@ -23,13 +23,18 @@ describe("advances RLS", () => {
   }
 
   beforeAll(async () => {
-    const { data: sites } = await adminClient().from("sites").select("id").limit(2);
-    siteAId = sites![0].id as string;
-    siteBId = sites![1].id as string;
+    // siteA/siteB are plain (non-New-Site) sites so their managers are site-scoped;
+    // the general manager (New-Site) is the cross-site read/write authority.
+    const { data: sites } = await adminClient().from("sites").select("id, name");
+    const plain = sites!.filter((s) => s.name !== "New-Site");
+    siteAId = plain[0].id as string;
+    siteBId = plain[1].id as string;
+    const newSiteId = sites!.find((s) => s.name === "New-Site")!.id as string;
     mgrA  = await makeUser({ username: "adv-mgr-a",  role: "manager",    siteId: siteAId });
     acctA = await makeUser({ username: "adv-acct-a", role: "accounting", siteId: siteAId });
     invA  = await makeUser({ username: "adv-inv-a",  role: "inventory",  siteId: siteAId });
     mgrB  = await makeUser({ username: "adv-mgr-b",  role: "manager",    siteId: siteBId });
+    gm    = await makeUser({ username: "adv-gm",     role: "manager",    siteId: newSiteId });
     owner = await makeUser({ username: "adv-owner",  role: "owner",      siteId: null });
     const { data: s } = await adminClient()
       .from("suppliers")
@@ -72,7 +77,7 @@ describe("advances RLS", () => {
     expect(error).not.toBeNull();
   });
 
-  it("manager at site B cannot record an advance for site A", async () => {
+  it("a site manager at site B cannot record an advance for site A", async () => {
     const { error } = await mgrB.client.from("advances").insert({
       supplier_id: supplierId,
       site_id: siteAId,
@@ -83,10 +88,23 @@ describe("advances RLS", () => {
     expect(error).not.toBeNull();
   });
 
-  it("manager at site B CAN read site A advances (Phase 10 cross-site read)", async () => {
+  it("the general manager (New-Site) CAN record an advance cross-site", async () => {
+    const { error } = await gm.client.from("advances").insert({
+      supplier_id: supplierId,
+      site_id: siteAId,
+      purpose: "GM cross-site advance",
+      amount_naira: 5000,
+      recorded_by: gm.userId,
+    });
+    expect(error).toBeNull();
+  });
+
+  it("the general manager reads other-site advances; a site manager cannot", async () => {
     const id = await insertPending(siteAId, mgrA.userId);
-    const { data } = await mgrB.client.from("advances").select("id").eq("id", id);
-    expect(data ?? []).toHaveLength(1);
+    const gmRead = await gm.client.from("advances").select("id").eq("id", id);
+    expect(gmRead.data ?? []).toHaveLength(1);
+    const siteMgrRead = await mgrB.client.from("advances").select("id").eq("id", id);
+    expect(siteMgrRead.data ?? []).toHaveLength(0);
   });
 
   it("inventory role still cannot read other-site advances", async () => {

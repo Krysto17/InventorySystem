@@ -79,15 +79,22 @@ describe("cross-site read RLS (manager + accountant)", () => {
     expect(stock ?? []).toHaveLength(0);
   });
 
-  it("cross-site WRITE is still denied for manager and accountant", async () => {
-    // Manager cannot record an advance on site B.
-    const { error: advErr } = await mgrA.client.from("advances").insert({
-      supplier_id: supplierId, site_id: siteBId, purpose: "hack", amount_naira: 1,
+  it("cross-site WRITE: general manager allowed; site manager + accountant denied", async () => {
+    // The general manager (New-Site = siteA) CAN record an advance on site B.
+    const { error: gmErr } = await mgrA.client.from("advances").insert({
+      supplier_id: supplierId, site_id: siteBId, purpose: "gm cross-site", amount_naira: 1,
       recorded_by: mgrA.userId,
     });
-    expect(advErr).not.toBeNull();
+    expect(gmErr).toBeNull();
 
-    // Accountant cannot record a payment on a site B visit.
+    // A plain site manager cannot write on another site.
+    const { error: siteErr } = await siteMgrB.client.from("advances").insert({
+      supplier_id: supplierId, site_id: siteAId, purpose: "hack", amount_naira: 1,
+      recorded_by: siteMgrB.userId,
+    });
+    expect(siteErr).not.toBeNull();
+
+    // Accountant (cross-site read only) cannot record a payment on a site B visit.
     await adminClient().from("visits").update({ state: "pricing" }).eq("id", visitBId).then(() => {});
     const { error: payErr } = await acctA.client.from("payments").insert({
       visit_id: visitBId, direction: "processing_fee_in", amount: 1, recorded_by: acctA.userId,

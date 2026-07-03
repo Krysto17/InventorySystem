@@ -10,9 +10,12 @@ describe("manager corrects a batch line after receiving", () => {
   let supplierId: string, monaziteId: string;
 
   beforeAll(async () => {
+    // Use two NON-New-Site sites so both managers are plain site managers — the
+    // general (New-Site) manager can write cross-site and would break the boundary.
     const { data: sites } = await adminClient().from("sites").select("id, name").order("name");
-    siteId = sites![0].id as string;
-    otherSiteId = sites!.find((s) => s.id !== siteId)!.id as string;
+    const siteMgrSites = sites!.filter((s) => s.name !== "New-Site");
+    siteId = siteMgrSites[0].id as string;
+    otherSiteId = siteMgrSites[1].id as string;
     recv = await makeUser({ username: "mel-recv", role: "receiving", siteId });
     mgr = await makeUser({ username: "mel-mgr", role: "manager", siteId });
     mgr2 = await makeUser({ username: "mel-mgr2", role: "manager", siteId: otherSiteId });

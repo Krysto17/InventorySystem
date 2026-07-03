@@ -13,9 +13,11 @@ export default async function ManagerAnalysesPage() {
   const [raw, samples] = await Promise.all([fetchAllAnalyses(), fetchSamples()]);
   // The GM may price lines at their own site (New-Site); other sites are read-only
   // here (cross-site writes belong to the owner).
+  // The general manager prices lines at any site; a site manager only its own.
+  const gm = me?.is_general_manager ?? false;
   const rows: AnalysisRow[] = raw.map((r) => ({
     ...r,
-    canPrice: r.state === "pricing" && r.settlementStatus !== "unsettled" && r.site === (me?.site_name ?? ""),
+    canPrice: r.state === "pricing" && r.settlementStatus !== "unsettled" && (gm || r.site === (me?.site_name ?? "")),
     agreed: AGREED_STATES.includes(r.state),
   }));
 
@@ -24,7 +26,7 @@ export default async function ManagerAnalysesPage() {
       <header>
         <h1 className="text-2xl font-bold">XRF analyses</h1>
         <p className="text-sm text-gray-500">
-          {rows.length} analyses across all sites. You can price {me?.site_name ?? "your site"} lines here.
+          {rows.length} analyses across all sites. You can price {gm ? "any site's" : `${me?.site_name ?? "your site"}`} lines here.
         </p>
       </header>
       <Card>

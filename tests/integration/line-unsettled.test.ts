@@ -9,9 +9,12 @@ describe("unsettle / re-settle / remove a material line (integration)", () => {
   let supplierId: string, monaziteId: string;
 
   beforeAll(async () => {
+    // Two NON-New-Site sites so mgr2 is a plain site manager (denied cross-site);
+    // the general (New-Site) manager can write cross-site.
     const { data: sites } = await adminClient().from("sites").select("id, name").order("name");
-    siteId = sites![0].id as string;
-    otherSiteId = sites!.find((s) => s.id !== siteId)!.id as string;
+    const siteMgrSites = sites!.filter((s) => s.name !== "New-Site");
+    siteId = siteMgrSites[0].id as string;
+    otherSiteId = siteMgrSites[1].id as string;
     recv = await makeUser({ username: "uns-recv", role: "receiving", siteId });
     mgr = await makeUser({ username: "uns-mgr", role: "manager", siteId });
     mgr2 = await makeUser({ username: "uns-mgr2", role: "manager", siteId: otherSiteId });
