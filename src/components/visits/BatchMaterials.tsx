@@ -29,10 +29,12 @@ export async function BatchMaterials({
   visitId,
   visitState,
   viewerRole,
+  isGeneralManager = false,
 }: {
   visitId: string;
   visitState: VisitState;
   viewerRole: Role;
+  isGeneralManager?: boolean;
 }) {
   const supabase = await createClient();
 
@@ -66,7 +68,8 @@ export async function BatchMaterials({
   // Nothing to show for legacy single-material visits with no batch lines.
   if (lines.length === 0 && visitState !== "in_receiving") return null;
 
-  const canReceive = (viewerRole === "receiving" || viewerRole === "owner") && visitState === "in_receiving";
+  // The general (New-Site) manager runs the receiving module too.
+  const canReceive = (viewerRole === "receiving" || viewerRole === "owner" || isGeneralManager) && visitState === "in_receiving";
   // Only QC records/edits an XRF (read-only for owner et al.). QC can analyse
   // through the pricing stages, so a supplier's several materials can each be
   // analysed separately, even after a manager skipped analysis to pricing.

@@ -55,6 +55,9 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Reports", href: "/manager/reports", icon: "reports", generalOnly: true },
     { label: "Cost price", href: "/manager/cost-price", icon: "pricing", generalOnly: true },
     { label: "Analyses", href: "/manager/analyses", icon: "qc", generalOnly: true },
+    // General (New-Site) manager also runs the receiving module (queue + intake).
+    { label: "Receiving", href: "/receiving", icon: "receiving", generalOnly: true },
+    { label: "New processed", href: "/receiving/intake", icon: "intake", generalOnly: true },
     // Supplier search + edit lives in the shared "Suppliers" directory (appended
     // below for every role); no separate cross-site search button here.
   ],

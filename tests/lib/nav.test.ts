@@ -55,12 +55,15 @@ describe("role-aware navigation", () => {
     expect(site).not.toContain("/manager/gate-passes");
     expect(site).not.toContain("/manager/cost-price");
     expect(site).not.toContain("/manager/reports");
+    expect(site).not.toContain("/receiving"); // receiving module is GM-only
     expect(site).toContain("/manager"); // pricing queue stays
 
     const general = navForRole("manager", { isGeneralManager: true }).map((n) => n.href);
     expect(general).toContain("/manager/gate-passes");
     expect(general).toContain("/manager/cost-price");
     expect(general).toContain("/manager/reports");
+    expect(general).toContain("/receiving"); // receiving queue
+    expect(general).toContain("/receiving/intake"); // new processed intake
     // The separate cross-site "Search" button was removed — supplier search +
     // edit is the shared "Suppliers" directory (below), available to every role.
     expect(general).not.toContain("/owner/search");

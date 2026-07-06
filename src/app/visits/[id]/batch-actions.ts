@@ -22,11 +22,12 @@ export async function deleteBatch(formData: FormData): Promise<void> {
   redirect(me.role === "owner" ? "/owner" : "/manager");
 }
 
-// Receiving adds a material line to an in_receiving batch.
+// Receiving adds a material line to an in_receiving batch. The general (New-Site)
+// manager runs the receiving module too.
 export async function addMaterialLine(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me) return;
-  if (me.role !== "receiving" && me.role !== "owner") return;
+  if (me.role !== "receiving" && me.role !== "owner" && !me.is_general_manager) return;
 
   const visitId = String(formData.get("visit_id") ?? "");
   const materialTypeId = String(formData.get("material_type_id") ?? "");
@@ -77,11 +78,12 @@ export async function updateMaterialLine(formData: FormData): Promise<void> {
   if (visitId) revalidatePath(`/visits/${visitId}`);
 }
 
-// Receiving deletes a draft material line while the visit is in receiving.
+// Receiving deletes a draft material line while the visit is in receiving; the
+// general manager may too.
 export async function deleteMaterialLine(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me) return;
-  if (me.role !== "receiving" && me.role !== "owner") return;
+  if (me.role !== "receiving" && me.role !== "owner" && !me.is_general_manager) return;
 
   const visitId = String(formData.get("visit_id") ?? "");
   const lineId = String(formData.get("visit_material_id") ?? "");

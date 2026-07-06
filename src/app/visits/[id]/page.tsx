@@ -324,6 +324,7 @@ export default async function VisitDetailPage({
         visitId={visitNorm.id}
         visitState={visitNorm.state}
         viewerRole={me.role as Role}
+        isGeneralManager={!!me.is_general_manager}
       />
     )}
     <UtilityChargesCard

@@ -42,7 +42,10 @@ export async function createVisit(
   const me = await getProfile();
   if (!me) return { error: "Not signed in" };
   const isOwner = me.role === "owner";
-  if (!isOwner && me.role !== "processing" && me.role !== "receiving") {
+  // The general (New-Site) manager also runs the receiving module and may create
+  // pre-processed (receiving) intake visits.
+  const isGeneral = me.is_general_manager;
+  if (!isOwner && !isGeneral && me.role !== "processing" && me.role !== "receiving") {
     return { error: "Only processing or receiving can create visits" };
   }
   if (!me.site_id && !isOwner) {

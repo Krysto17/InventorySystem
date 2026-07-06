@@ -26,7 +26,9 @@ const SHARED_AUTHENTICATED_PREFIXES = ["/visits/", "/suppliers"];
 // Extra subtrees a role may enter beyond its own home. The manager owns
 // inventory (blueprint: no standalone inventory role), so it reaches /inventory.
 const EXTRA_ROLE_PREFIXES: Record<string, string[]> = {
-  manager: ["/inventory"],
+  // The manager owns inventory; the general (New-Site) manager also runs the
+  // receiving module. Nav + action guards restrict receiving use to the GM.
+  manager: ["/inventory", "/receiving"],
 };
 
 function isSharedAuthenticatedPath(path: string): boolean {
