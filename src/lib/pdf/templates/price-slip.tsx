@@ -78,7 +78,7 @@ export function PriceSlipPdf({ data, docId }: { data: PdfPriceSlipData; docId: s
             <View style={s.col}>
               <View style={s.line}><Text style={s.lbl}>Material :</Text><Text style={s.val}>{material}</Text></View>
               <View style={s.line}><Text style={s.lbl}>Qty (Kg) :</Text><Text style={s.val}>{Number(data.weight_kg).toFixed(2)}</Text></View>
-              <View style={s.line}><Text style={s.lbl}>Rate :</Text><Text style={s.val}>{ngn(data.unit_price)}</Text></View>
+              <View style={s.line}><Text style={s.lbl}>Unit price :</Text><Text style={s.val}>{ngn(data.unit_price)}</Text></View>
             </View>
             <View style={s.col}>
               {/* Grade + RA are written by hand after printing. */}
