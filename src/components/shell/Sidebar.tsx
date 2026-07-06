@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, PackagePlus, Factory, FlaskConical, Tags, Wallet,
   Boxes, ShoppingCart, Droplets, Users, Settings2, Layers, ScrollText,
-  Search, LogOut, X, Microscope, BarChart3, ShieldCheck,
+  Search, LogOut, X, Microscope, BarChart3, ShieldCheck, Contact,
 } from "lucide-react";
 import { navForRole, isActivePath, type NavIcon } from "@/lib/nav";
 import type { Role } from "@/lib/auth/roles";
@@ -29,6 +29,7 @@ const ICONS: Record<NavIcon, React.ComponentType<{ size?: number }>> = {
   materials: Layers,
   visits: ScrollText,
   search: Search,
+  suppliers: Contact,
 };
 
 const ROLE_LABEL: Record<Role, string> = {

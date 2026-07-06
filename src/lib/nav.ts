@@ -18,7 +18,8 @@ export type NavIcon =
   | "machines"
   | "materials"
   | "visits"
-  | "search";
+  | "search"
+  | "suppliers";
 
 export type NavItem = {
   label: string;
@@ -87,14 +88,21 @@ const NAV: Record<Role, NavItem[]> = {
   ],
 };
 
-// Every role can search the shared supplier directory (#4).
-const SUPPLIERS_ITEM: NavItem = { label: "Suppliers", href: "/suppliers", icon: "search" };
+// Every role can search the shared supplier directory (#4). Distinct icon so it
+// isn't mistaken for the (removed) cross-site search button.
+const SUPPLIERS_ITEM: NavItem = { label: "Suppliers", href: "/suppliers", icon: "suppliers" };
 
 export function navForRole(role: Role, opts?: { isGeneralManager?: boolean }): NavItem[] {
   const base = NAV[role] ?? [];
   const items = role === "manager" && !opts?.isGeneralManager
     ? base.filter((i) => !i.generalOnly)
     : base;
+  // Managers work in the supplier directory constantly (search + edit names /
+  // account details), so surface it right below the pricing queue rather than
+  // at the very bottom of a long list; other roles get it appended.
+  if (role === "manager") {
+    return [items[0], SUPPLIERS_ITEM, ...items.slice(1)];
+  }
   return [...items, SUPPLIERS_ITEM];
 }
 
