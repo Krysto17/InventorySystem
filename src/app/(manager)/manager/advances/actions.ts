@@ -16,6 +16,8 @@ export async function recordAdvance(formData: FormData): Promise<void> {
   const comment = String(formData.get("comment") ?? "").trim() || null;
   const accountNumber = String(formData.get("account_number") ?? "").trim() || null;
   if (!supplierId || !purpose || !(amount > 0)) return;
+  // Account number, when given, must be exactly 10 digits (all positive integers).
+  if (accountNumber && !/^\d{10}$/.test(accountNumber)) return;
 
   const supabase = await createClient();
   const { data: profile } = await supabase.from("profiles").select("site_id").eq("id", me.id).single();

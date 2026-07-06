@@ -61,8 +61,10 @@ describe("role-aware navigation", () => {
     expect(general).toContain("/manager/gate-passes");
     expect(general).toContain("/manager/cost-price");
     expect(general).toContain("/manager/reports");
-    expect(general).toContain("/owner/search");  // cross-site search (GM only)
-    expect(site).not.toContain("/owner/search");
+    // The separate cross-site "Search" button was removed — supplier search +
+    // edit is the shared "Suppliers" directory (below), available to every role.
+    expect(general).not.toContain("/owner/search");
+    expect(general).toContain("/suppliers");
   });
 
   it("every role can reach the supplier directory", () => {

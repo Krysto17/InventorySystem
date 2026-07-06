@@ -54,8 +54,8 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Reports", href: "/manager/reports", icon: "reports", generalOnly: true },
     { label: "Cost price", href: "/manager/cost-price", icon: "pricing", generalOnly: true },
     { label: "Analyses", href: "/manager/analyses", icon: "qc", generalOnly: true },
-    // Cross-site search (like the owner's) — general manager only.
-    { label: "Search", href: "/owner/search", icon: "search", generalOnly: true },
+    // Supplier search + edit lives in the shared "Suppliers" directory (appended
+    // below for every role); no separate cross-site search button here.
   ],
   accounting: [
     { label: "Settlements", href: "/accounting", icon: "accounting" },

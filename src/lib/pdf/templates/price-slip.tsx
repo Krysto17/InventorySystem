@@ -24,6 +24,17 @@ const s = StyleSheet.create({
   amount: { fontSize: 14, fontFamily: "Helvetica-Bold", marginTop: 6 },
   note: { fontSize: 7, textAlign: "right", maxWidth: 200 },
   commentBox: { borderWidth: 1, borderColor: "#000", height: 62, marginTop: 3 },
+  // Split comment section: comments on the left, bank/payment details on the right.
+  splitRow: { flexDirection: "row", justifyContent: "space-between" },
+  commentCol: { flex: 1, marginRight: 10 },
+  bankCol: { width: 168 },
+  bankTitle: { fontFamily: "Helvetica-Bold", marginBottom: 3 },
+  bankLine: { flexDirection: "row", alignItems: "flex-end", marginBottom: 3 },
+  bankLbl: { fontFamily: "Helvetica-Bold", fontSize: 8 },
+  bankVal: { flex: 1, marginLeft: 4, fontSize: 8, borderBottomWidth: 1, borderBottomColor: "#000", paddingBottom: 1, minHeight: 10 },
+  acctBoxes: { flexDirection: "row", marginTop: 2 },
+  acctCell: { width: 15, height: 17, borderWidth: 1, borderColor: "#000", marginRight: 1, alignItems: "center", justifyContent: "center" },
+  acctDigit: { fontSize: 10, fontFamily: "Helvetica-Bold" },
   decl: { fontFamily: "Helvetica-Bold", marginBottom: 2 },
   declText: { fontSize: 8, lineHeight: 1.3 },
   thanks: { fontSize: 8, fontStyle: "italic", marginTop: 3, color: "#555" },
@@ -80,11 +91,35 @@ export function PriceSlipPdf({ data, docId }: { data: PdfPriceSlipData; docId: s
 
           <View style={s.hr} />
 
-          <View style={s.cols}>
-            <Text style={s.lbl}>COMMENTS:</Text>
-            <Text style={s.note}>NOTE: Price is valid until today, {validDate} 5:00pm</Text>
+          <View style={s.splitRow}>
+            <View style={s.commentCol}>
+              <View style={s.cols}>
+                <Text style={s.lbl}>COMMENTS:</Text>
+                <Text style={s.note}>NOTE: Price is valid until today, {validDate} 5:00pm</Text>
+              </View>
+              <View style={s.commentBox} />
+            </View>
+
+            <View style={s.bankCol}>
+              <Text style={s.bankTitle}>PAYMENT DETAILS:</Text>
+              <View style={s.bankLine}>
+                <Text style={s.bankLbl}>Account name:</Text>
+                <Text style={s.bankVal}>{data.account_name ?? ""}</Text>
+              </View>
+              <View style={s.bankLine}>
+                <Text style={s.bankLbl}>Bank name:</Text>
+                <Text style={s.bankVal}>{data.bank_name ?? ""}</Text>
+              </View>
+              <Text style={[s.bankLbl, { marginTop: 3 }]}>Account number:</Text>
+              <View style={s.acctBoxes}>
+                {Array.from({ length: 10 }, (_, i) => (
+                  <View key={i} style={s.acctCell}>
+                    <Text style={s.acctDigit}>{(data.account_number ?? "")[i] ?? ""}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
           </View>
-          <View style={s.commentBox} />
 
           <View style={s.hr} />
 

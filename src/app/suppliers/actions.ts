@@ -6,6 +6,9 @@ import { getProfile } from "@/lib/auth/get-profile";
 
 export type SupplierEditState = { error?: string; ok?: string };
 
+// A Nigerian bank account number is exactly 10 digits (all positive integers).
+const ACCOUNT_NUMBER_RE = /^\d{10}$/;
+
 // Manager or owner renames a supplier (old name kept in former_names).
 export async function renameSupplier(_prev: SupplierEditState, formData: FormData): Promise<SupplierEditState> {
   const me = await getProfile();
@@ -31,11 +34,20 @@ export async function saveSupplierAccount(_prev: SupplierEditState, formData: Fo
   const id = String(formData.get("supplier_id") ?? "");
   if (!id) return { error: "Missing supplier" };
 
+  const accountName = String(formData.get("account_name") ?? "").trim();
+  const accountNumber = String(formData.get("account_number") ?? "").trim();
+  const bankName = String(formData.get("bank_name") ?? "").trim();
+
+  // Account number, when given, must be exactly 10 digits (all positive integers).
+  if (accountNumber && !ACCOUNT_NUMBER_RE.test(accountNumber)) {
+    return { error: "Account number must be exactly 10 digits (0-9)." };
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.from("suppliers").update({
-    account_name: String(formData.get("account_name") ?? "").trim() || null,
-    account_number: String(formData.get("account_number") ?? "").trim() || null,
-    bank_name: String(formData.get("bank_name") ?? "").trim() || null,
+    account_name: accountName || null,
+    account_number: accountNumber || null,
+    bank_name: bankName || null,
   }).eq("id", id);
   if (error) return { error: error.message };
   revalidatePath(`/suppliers/${id}`);

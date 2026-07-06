@@ -39,7 +39,16 @@ export function SupplierEditForms({ supplier }: { supplier: Supplier }) {
         <div className="text-xs font-medium text-ink-2">Bank account details (editable — changes are kept in history)</div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <input name="account_name" placeholder="Account name" defaultValue={supplier.account_name ?? ""} className="rounded border px-2 py-1 text-sm" />
-          <input name="account_number" placeholder="Account number" defaultValue={supplier.account_number ?? ""} className="rounded border px-2 py-1 text-sm" />
+          <input
+            name="account_number"
+            placeholder="Account number (10 digits)"
+            defaultValue={supplier.account_number ?? ""}
+            inputMode="numeric"
+            pattern="\d{10}"
+            maxLength={10}
+            title="Exactly 10 digits (0-9)"
+            className="rounded border px-2 py-1 text-sm"
+          />
           <input name="bank_name" placeholder="Bank" defaultValue={supplier.bank_name ?? ""} className="rounded border px-2 py-1 text-sm" />
         </div>
         <button type="submit" disabled={savingAcct} className="rounded border px-3 py-1 text-sm hover:bg-zinc-50 disabled:opacity-50">

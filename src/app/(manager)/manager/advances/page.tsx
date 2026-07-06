@@ -55,8 +55,16 @@ export default async function ManagerAdvancesPage() {
             <label className="text-sm">Amount (₦)
               <input type="number" name="amount_naira" min="1" step="0.01" required className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
             </label>
-            <label className="text-sm sm:col-span-2">Account number <span className="font-normal text-gray-400">(where to pay)</span>
-              <input type="text" name="account_number" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+            <label className="text-sm sm:col-span-2">Account number <span className="font-normal text-gray-400">(where to pay — 10 digits)</span>
+              <input
+                type="text"
+                name="account_number"
+                inputMode="numeric"
+                pattern="\d{10}"
+                maxLength={10}
+                title="Exactly 10 digits (0-9)"
+                className="mt-1 block w-full rounded border px-2 py-1 text-sm"
+              />
             </label>
             <label className="text-sm sm:col-span-2">Comment
               <input type="text" name="comment" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
