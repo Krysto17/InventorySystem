@@ -25,7 +25,7 @@ export async function submitBatchSettlement(formData: FormData): Promise<void> {
   const [{ data: lines }, { data: charges }, { data: deds }, { data: debt }, { data: existing }] =
     await Promise.all([
       supabase.from("visit_materials").select("purchase_amount").eq("visit_id", visitId),
-      supabase.from("utility_charges").select("amount").eq("visit_id", visitId),
+      supabase.from("utility_charges").select("kind, amount").eq("visit_id", visitId),
       supabase.from("advance_deductions").select("amount").eq("ref_visit_id", visitId),
       supabase.rpc("supplier_outstanding_debt", { _supplier_id: visit.supplier_id }),
       supabase.from("batch_settlements").select("id, status").eq("visit_id", visitId).maybeSingle(),
@@ -35,7 +35,11 @@ export async function submitBatchSettlement(formData: FormData): Promise<void> {
   if (existing) await supabase.from("batch_settlements").delete().eq("id", existing.id);
 
   const materials = sum(lines, "purchase_amount");
-  const light = sum(charges, "amount");
+  // Processing fee (light bill) only — "other" charges are separate deductions,
+  // not part of the processing fee. Both still reduce the net payout.
+  const chargeRows = (charges ?? []) as { kind?: string; amount?: unknown }[];
+  const light = chargeRows.filter((c) => c.kind === "light_bill").reduce((s, c) => s + Number(c.amount ?? 0), 0);
+  const other = chargeRows.filter((c) => c.kind === "other").reduce((s, c) => s + Number(c.amount ?? 0), 0);
   const advance = sum(deds, "amount");
 
   // The owner already approved the price, so the settlement no longer needs a
@@ -47,7 +51,7 @@ export async function submitBatchSettlement(formData: FormData): Promise<void> {
     materials_total: materials,
     light_bill_total: light,
     advance_deducted: advance,
-    net_balance: materials - light - advance,
+    net_balance: materials - light - other - advance,
     remaining_debt: Number(debt ?? 0),
     submitted_by: me.id,
     status: "approved",

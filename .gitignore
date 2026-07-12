@@ -41,3 +41,6 @@ supabase/.temp
 # playwright debug artifacts
 .playwright-mcp/
 .vercel
+
+# Local DB backups — contain real business data, never commit
+/backups/

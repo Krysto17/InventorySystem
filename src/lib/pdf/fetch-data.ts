@@ -349,6 +349,10 @@ export type PdfUtilityData = {
   created_at: string;
   machines: { machine_name: string; charge_basis: string; measurement: number; rate: number; line_cost: number }[];
   charges: { kind: string; description: string | null; amount: number }[];
+  // "Other" deductions are itemised by their own type (description), never folded
+  // into the processing fee.
+  other_charges: { description: string; amount: number }[];
+  other_total: number;
   processing_fee_total: number;
   utility_total: number;
   grand_total: number;
@@ -395,13 +399,16 @@ export async function fetchUtilityInvoiceData(visitId: string): Promise<PdfUtili
   });
 
   const machineFeeTotal = machines.reduce((s, m) => s + m.line_cost, 0);
-  const chargesTotal = charges.reduce((s, c) => s + c.amount, 0);
-
-  // The processing fee IS the utility charge on the visit (auto-billed from the
-  // machine usage). Total due = the processing fee — not machine-fee + charges,
-  // which would double-count the same money. Fall back to the machine total
-  // only when no charge has been recorded yet.
-  const processingFee = chargesTotal > 0 ? chargesTotal : machineFeeTotal;
+  // The processing fee IS the light-bill utility charge (auto-billed from the
+  // machine usage); fall back to the machine total when none is recorded yet.
+  // "Other" charges are separate deductions, itemised by their own type — never
+  // added to the processing fee.
+  const lightBillTotal = charges.filter((c) => c.kind === "light_bill").reduce((s, c) => s + c.amount, 0);
+  const otherCharges = charges
+    .filter((c) => c.kind === "other")
+    .map((c) => ({ description: (c.description ?? "").trim() || "Other deduction", amount: c.amount }));
+  const otherTotal = otherCharges.reduce((s, c) => s + c.amount, 0);
+  const processingFee = lightBillTotal > 0 ? lightBillTotal : machineFeeTotal;
 
   return {
     visit_id: v.id as string,
@@ -411,9 +418,11 @@ export async function fetchUtilityInvoiceData(visitId: string): Promise<PdfUtili
     created_at: v.created_at as string,
     machines,
     charges,
+    other_charges: otherCharges,
+    other_total: otherTotal,
     processing_fee_total: processingFee,
-    utility_total: chargesTotal,
-    grand_total: processingFee,
+    utility_total: lightBillTotal,
+    grand_total: processingFee + otherTotal,
   };
 }
 

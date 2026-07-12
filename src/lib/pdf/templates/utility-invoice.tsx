@@ -48,19 +48,26 @@ export function UtilityInvoicePdf({ data, docId }: { data: PdfUtilityData; docId
             </View>
           )}
 
-          {data.charges.length > 0 && (
+          <View style={shared.section}>
+            <View style={shared.row}>
+              <Text style={shared.label}>Processing fee</Text>
+              <Text style={shared.value}>{formatNgn(data.processing_fee_total)}</Text>
+            </View>
+          </View>
+
+          {/* Any "other" charge is a separate deduction, itemised by its own type
+              (description) rather than folded into the processing fee. */}
+          {data.other_charges.length > 0 && (
             <View style={shared.section}>
-              <Text style={shared.sectionTitle}>Processing fees</Text>
+              <Text style={shared.sectionTitle}>Other charges</Text>
               <View style={shared.table}>
                 <View style={shared.tableHeader}>
-                  <Text style={[shared.tableHeaderCell, { flex: 1 }]}>Kind</Text>
-                  <Text style={[shared.tableHeaderCell, { flex: 2 }]}>Description</Text>
+                  <Text style={[shared.tableHeaderCell, { flex: 3 }]}>Type</Text>
                   <Text style={[shared.tableHeaderCell, { flex: 1, textAlign: "right" }]}>Amount</Text>
                 </View>
-                {data.charges.map((c, i) => (
+                {data.other_charges.map((c, i) => (
                   <View style={shared.tableRow} key={i}>
-                    <Text style={{ flex: 1 }}>{c.kind === "light_bill" ? "Processing fee" : "Other"}</Text>
-                    <Text style={{ flex: 2 }}>{c.description ?? "—"}</Text>
+                    <Text style={{ flex: 3 }}>{c.description}</Text>
                     <Text style={{ flex: 1, textAlign: "right" }}>{formatNgn(c.amount)}</Text>
                   </View>
                 ))}
@@ -69,7 +76,7 @@ export function UtilityInvoicePdf({ data, docId }: { data: PdfUtilityData; docId
           )}
 
           <View style={shared.highlight}>
-            <Text style={shared.label}>Total due (processing fee)</Text>
+            <Text style={shared.label}>Total due</Text>
             <Text style={[shared.bold, { fontSize: 16, marginTop: 2 }]}>{formatNgn(data.grand_total)}</Text>
           </View>
         </View>
