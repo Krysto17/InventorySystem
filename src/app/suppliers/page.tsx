@@ -2,6 +2,10 @@ import { getProfile } from "@/lib/auth/get-profile";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SupplierSearchList, type SupplierListRow } from "@/components/suppliers/SupplierSearchList";
+import { NewSupplierForm } from "@/components/suppliers/NewSupplierForm";
+
+// Roles that may register a supplier without a visit.
+const SUPPLIER_CREATORS = ["owner", "manager", "processing", "receiving"];
 
 // Shared supplier directory, searchable by every role (#4).
 export default async function SuppliersPage() {
@@ -28,6 +32,7 @@ export default async function SuppliersPage() {
         <h1 className="text-2xl font-bold">Suppliers</h1>
         <p className="text-sm text-gray-500">{suppliers.length} suppliers — search across all sites.</p>
       </header>
+      {SUPPLIER_CREATORS.includes(me.role) && <NewSupplierForm />}
       <SupplierSearchList suppliers={suppliers} />
     </main>
   );
