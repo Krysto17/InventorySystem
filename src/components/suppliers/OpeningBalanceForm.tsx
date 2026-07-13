@@ -12,10 +12,13 @@ export function OpeningBalanceForm({
   supplierId,
   outstandingDebt,
   hasOpeningBalance,
+  canRecord,
 }: {
   supplierId: string;
   outstandingDebt: number;
   hasOpeningBalance: boolean;
+  // Only the owner may record/seed the opening balance; others see it read-only.
+  canRecord: boolean;
 }) {
   const [state, action, pending] = useActionState(recordOpeningBalance, init);
   const today = new Date().toISOString().slice(0, 10);
@@ -26,7 +29,13 @@ export function OpeningBalanceForm({
         Current outstanding debt: <strong>{ngn(outstandingDebt)}</strong>
       </div>
 
-      {hasOpeningBalance ? (
+      {!canRecord ? (
+        <p className="text-xs text-gray-500">
+          {hasOpeningBalance
+            ? "A pre-software opening balance is on file for this supplier."
+            : "No pre-software opening balance recorded. Only the owner can add one."}
+        </p>
+      ) : hasOpeningBalance ? (
         <p className="text-xs text-gray-500">
           An opening balance has already been recorded for this supplier. Adjustments beyond
           this should go through normal advances / deductions.

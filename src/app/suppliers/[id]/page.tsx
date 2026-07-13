@@ -29,11 +29,13 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
 
   const formerNames = (s.former_names as string[] | null) ?? [];
   const formerAccounts = (s.former_accounts as FormerAccount[] | null) ?? [];
-  const canEdit = me.role === "manager" || me.role === "owner";
+  const isOwner = me.role === "owner";
+  const canEdit = me.role === "manager" || isOwner; // rename + account edits
+  // Manager, owner AND accounting see the full record (visits / advances / lots /
+  // debt) — RLS-scoped to what they may read. Accounting has cross-site read.
+  const canViewRecords = canEdit || me.role === "accounting";
 
-  // Manager + owner get the full profile the owner sees (visits / advances /
-  // lots), RLS-scoped to what they may read (site managers → own site).
-  const [{ data: visits }, { data: advances }, { data: lots }] = canEdit
+  const [{ data: visits }, { data: advances }, { data: lots }] = canViewRecords
     ? await Promise.all([
         supabase.from("visits").select("id, state, entry_path, created_at, site:sites(name)")
           .eq("supplier_id", id).order("created_at", { ascending: false }).limit(50),
@@ -50,11 +52,11 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
   // also re-checks every reference server-side).
   const hasRecords = (visits?.length ?? 0) > 0 || (advances?.length ?? 0) > 0 || (lots?.length ?? 0) > 0;
 
-  // Owner-only opening-balance entry (pre-software debt).
-  const isOwner = me.role === "owner";
+  // Outstanding debt + opening balance — visible to every record viewer; only
+  // the owner may record/seed the opening balance.
   let outstandingDebt = 0;
   let hasOpeningBalance = false;
-  if (isOwner) {
+  if (canViewRecords) {
     const [{ data: debt }, { data: ob }] = await Promise.all([
       supabase.rpc("supplier_outstanding_debt", { _supplier_id: id }),
       supabase.from("advances").select("id").eq("supplier_id", id).eq("purpose", "Opening balance (pre-software)").maybeSingle(),
@@ -76,7 +78,8 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
         <CardContent className="space-y-1 text-sm">
           <div>Phone: {(s.phone as string | null) ?? "—"}</div>
           {formerNames.length > 0 && <div className="text-gray-500">Previous names: {formerNames.join(", ")}</div>}
-          {canEdit && <div>Approved advances to date: <strong>{ngn(approvedAdvances)}</strong></div>}
+          {canViewRecords && <div>Approved advances to date: <strong>{ngn(approvedAdvances)}</strong></div>}
+          {canViewRecords && <div>Outstanding debt: <strong>{ngn(outstandingDebt)}</strong></div>}
         </CardContent>
       </Card>
 
@@ -124,8 +127,20 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
         </CardContent>
       </Card>
 
-      {canEdit && (
+      {canViewRecords && (
         <>
+          <Card>
+            <CardHeader><h2 className="text-sm font-semibold">Supplier debt &amp; opening balance</h2></CardHeader>
+            <CardContent>
+              <OpeningBalanceForm
+                supplierId={s.id as string}
+                outstandingDebt={outstandingDebt}
+                hasOpeningBalance={hasOpeningBalance}
+                canRecord={isOwner}
+              />
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader><h2 className="text-sm font-semibold">Visits ({visits?.length ?? 0})</h2></CardHeader>
             <CardContent className="p-0">
@@ -195,26 +210,16 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
             </CardContent>
           </Card>
 
-          {isOwner && (
-            <Card>
-              <CardHeader><h2 className="text-sm font-semibold">Opening balance (pre-software debt)</h2></CardHeader>
-              <CardContent>
-                <OpeningBalanceForm
-                  supplierId={s.id as string}
-                  outstandingDebt={outstandingDebt}
-                  hasOpeningBalance={hasOpeningBalance}
-                />
-              </CardContent>
-            </Card>
-          )}
-
-          <Card>
-            <CardHeader><h2 className="text-sm font-semibold">Delete supplier</h2></CardHeader>
-            <CardContent>
-              <DeleteSupplierButton supplierId={s.id as string} hasRecords={hasRecords} />
-            </CardContent>
-          </Card>
         </>
+      )}
+
+      {canEdit && (
+        <Card>
+          <CardHeader><h2 className="text-sm font-semibold">Delete supplier</h2></CardHeader>
+          <CardContent>
+            <DeleteSupplierButton supplierId={s.id as string} hasRecords={hasRecords} />
+          </CardContent>
+        </Card>
       )}
     </main>
   );
