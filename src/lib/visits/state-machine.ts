@@ -40,6 +40,23 @@ export function isVisitOpen(state: VisitState): boolean {
   return !TERMINAL_STATES.has(state);
 }
 
+// Pipeline progress rank (lower = earlier stage, higher = further along). Used
+// to arrange the live workflow in the order of progress. Branch/terminal states
+// slot in at the point they leave the main line.
+export const PROGRESS_ORDER: Record<VisitState, number> = {
+  in_processing: 0,
+  in_receiving: 1,
+  awaiting_manager: 2,
+  in_qc: 3,
+  pricing: 4,
+  awaiting_price_approval: 5,
+  awaiting_gate_exit: 6,
+  in_accounting: 7,
+  awaiting_stock_intake: 8,
+  exited: 9,
+  stocked: 10,
+};
+
 export const STATE_LABELS: Record<VisitState, string> = {
   in_processing: "Processing",
   in_receiving: "Receiving / magnetic analysis",
