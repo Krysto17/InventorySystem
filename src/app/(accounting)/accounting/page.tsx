@@ -15,7 +15,8 @@ export default async function AccountingHomePage() {
         id, created_at, state, processing_deducted,
         supplier:suppliers(name, phone),
         declared_material_type:material_types(name),
-        pricing:pricing(purchase_amount, payment_terms)
+        pricing:pricing(payment_terms),
+        settlement:batch_settlements(net_balance, status)
       `)
       .eq("state", "in_accounting")
       .order("created_at", { ascending: true }),
@@ -78,10 +79,15 @@ export default async function AccountingHomePage() {
                 const sup = v.supplier as unknown as { name?: string } | null;
                 const mat = v.declared_material_type as unknown as { name?: string } | null;
                 const pr = v.pricing as unknown as
-                  | { purchase_amount?: number; payment_terms?: string }
-                  | { purchase_amount?: number; payment_terms?: string }[]
-                  | null;
+                  | { payment_terms?: string } | { payment_terms?: string }[] | null;
                 const pricing = Array.isArray(pr) ? pr[0] : pr;
+                const st = v.settlement as unknown as
+                  | { net_balance?: number } | { net_balance?: number }[] | null;
+                const settlement = Array.isArray(st) ? st[0] : st;
+                // Show only the NET pay (after processing fee + deductions + advances)
+                // so the accountant sees exactly what to disburse. Before the manager
+                // assembles the settlement there is no net yet.
+                const net = settlement?.net_balance;
                 return (
                   <li key={v.id}>
                     <Link href={`/visits/${v.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
@@ -92,8 +98,14 @@ export default async function AccountingHomePage() {
                         </div>
                       </div>
                       <div className="text-right text-sm">
-                        <div className="font-medium">{formatNaira(pricing?.purchase_amount ?? null)}</div>
-                        <div className="text-xs text-gray-500">{pricing?.payment_terms ?? "—"}</div>
+                        {net != null ? (
+                          <>
+                            <div className="font-medium">{formatNaira(Number(net))}</div>
+                            <div className="text-xs text-gray-500">net to pay{pricing?.payment_terms ? ` · ${pricing.payment_terms}` : ""}</div>
+                          </>
+                        ) : (
+                          <div className="text-xs text-gray-500">Awaiting settlement</div>
+                        )}
                       </div>
                     </Link>
                   </li>
