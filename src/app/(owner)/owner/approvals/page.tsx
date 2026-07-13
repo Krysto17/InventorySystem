@@ -7,7 +7,6 @@ import { formatTimestamp } from "@/lib/visits/format";
 import { setAdvanceApproval } from "@/app/(manager)/manager/advances/actions";
 import { reviewExpense } from "@/app/(inventory)/inventory/consumables/actions";
 import { approvePricing, rejectPricing } from "@/app/visits/[id]/batch-actions";
-import { setSettlementStatus } from "@/app/visits/[id]/settlement-actions";
 
 import { one as g1 } from "@/lib/db/relation";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -36,14 +35,6 @@ export default async function OwnerApprovalsPage() {
     .from("visits")
     .select("id, created_at, supplier:suppliers(name), declared_material_type:material_types(name), site:sites(name), pricing:pricing(purchase_amount)")
     .eq("state", "awaiting_price_approval")
-    .order("created_at", { ascending: true });
-
-  // Settlements (supplier payments) awaiting the director's approval — only
-  // approved payments reach the accountant's to-pay queue.
-  const { data: pendingSettlements } = await supabase
-    .from("batch_settlements")
-    .select("id, visit_id, net_balance, created_at, visit:visits(supplier:suppliers(name, supplier_code), site:sites(name))")
-    .eq("status", "pending")
     .order("created_at", { ascending: true });
 
   // Overview: materials on hand (ledger balance), light bills deducted, advances out.
@@ -75,7 +66,7 @@ export default async function OwnerApprovalsPage() {
         </Card>
         <Card>
           <CardHeader><h2 className="text-sm font-semibold">Pending approvals</h2></CardHeader>
-          <CardContent><div className="mono text-2xl font-bold text-ore">{(pendingPrices?.length ?? 0) + (pendingSettlements?.length ?? 0) + (pendingAdvances?.length ?? 0) + (pendingExpenses?.length ?? 0)}</div></CardContent>
+          <CardContent><div className="mono text-2xl font-bold text-ore">{(pendingPrices?.length ?? 0) + (pendingAdvances?.length ?? 0) + (pendingExpenses?.length ?? 0)}</div></CardContent>
         </Card>
       </div>
 
@@ -140,53 +131,9 @@ export default async function OwnerApprovalsPage() {
         </CardContent>
       </Card>
 
-      {/* Supplier payments awaiting the director's approval — only approved ones
-          reach the accountant's to-pay queue. */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Supplier payments awaiting approval</h2>
-            <Badge variant={pendingSettlements?.length ? "yellow" : "default"}>{pendingSettlements?.length ?? 0}</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {(pendingSettlements?.length ?? 0) === 0 ? (
-            <p className="px-4 py-3 text-sm text-ink-2">No payments pending approval.</p>
-          ) : (
-            <ul className="divide-y divide-line">
-              {(pendingSettlements ?? []).map((s) => {
-                const visit = g1<{ supplier: unknown; site: unknown }>((s as { visit: unknown }).visit);
-                const sup = g1<{ name: string; supplier_code: string | null }>(visit?.supplier);
-                const site = g1<{ name: string }>(visit?.site);
-                return (
-                  <li key={s.id as string} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
-                    <Link href={`/visits/${s.visit_id}`} className="flex flex-wrap items-center gap-2 hover:underline">
-                      <strong>{sup?.name ?? "—"}</strong>
-                      {sup?.supplier_code && <Stamp>{sup.supplier_code}</Stamp>}
-                      <span className="text-ink-2">· {site?.name ?? "—"} · {formatTimestamp(s.created_at as string)}</span>
-                      <span className="font-medium">{ngn(Number(s.net_balance))}</span>
-                    </Link>
-                    <div className="flex shrink-0 gap-2">
-                      <form action={setSettlementStatus}>
-                        <input type="hidden" name="visit_id" value={s.visit_id as string} />
-                        <input type="hidden" name="settlement_id" value={s.id as string} />
-                        <input type="hidden" name="status" value="approved" />
-                        <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve</button>
-                      </form>
-                      <form action={setSettlementStatus}>
-                        <input type="hidden" name="visit_id" value={s.visit_id as string} />
-                        <input type="hidden" name="settlement_id" value={s.id as string} />
-                        <input type="hidden" name="status" value="rejected" />
-                        <button type="submit" className="rounded border border-line px-3 py-1 text-xs font-semibold text-ink-2 hover:bg-zinc-50">Reject</button>
-                      </form>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      {/* Supplier payments need no separate approval — the owner's price approval
+          counts as the payment approval, so an assembled settlement goes straight
+          to accounting. */}
 
       {/* Pending advances */}
       <Card>

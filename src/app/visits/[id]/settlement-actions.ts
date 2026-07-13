@@ -19,8 +19,12 @@ export async function submitBatchSettlement(formData: FormData): Promise<void> {
 
   const supabase = await createClient();
   const { data: visit } = await supabase
-    .from("visits").select("site_id, supplier_id").eq("id", visitId).single();
+    .from("visits").select("site_id, supplier_id, state").eq("id", visitId).single();
   if (!visit) return;
+  // A settlement can only be assembled once the owner has approved the pricing
+  // (visit is in_accounting). That price approval IS the director's payment
+  // approval — so the settlement goes straight to accounting.
+  if (visit.state !== "in_accounting") return;
 
   const [{ data: lines }, { data: charges }, { data: deds }, { data: debt }, { data: existing }] =
     await Promise.all([
@@ -42,9 +46,9 @@ export async function submitBatchSettlement(formData: FormData): Promise<void> {
   const other = chargeRows.filter((c) => c.kind === "other").reduce((s, c) => s + Number(c.amount ?? 0), 0);
   const advance = sum(deds, "amount");
 
-  // Submitted as PENDING — the director (owner) must approve the payment before
-  // it reaches the accountant's to-pay queue. Only owner-approved settlements
-  // appear on the accounting dashboard.
+  // The owner already approved the price (visit is in_accounting), which counts
+  // as the payment approval — so the settlement is created as APPROVED and goes
+  // straight to the accountant's to-pay queue.
   await supabase.from("batch_settlements").insert({
     visit_id: visitId,
     site_id: visit.site_id,
@@ -54,10 +58,11 @@ export async function submitBatchSettlement(formData: FormData): Promise<void> {
     net_balance: materials - light - other - advance,
     remaining_debt: Number(debt ?? 0),
     submitted_by: me.id,
-    status: "pending",
+    status: "approved",
+    approved_by: me.id,
+    approved_at: new Date().toISOString(),
   });
   revalidatePath(`/visits/${visitId}`);
-  revalidatePath("/owner/approvals");
   revalidatePath("/accounting/payouts");
 }
 
