@@ -15,6 +15,8 @@ export async function recordAdvance(formData: FormData): Promise<void> {
   const amount = Number(formData.get("amount_naira"));
   const comment = String(formData.get("comment") ?? "").trim() || null;
   const accountNumber = String(formData.get("account_number") ?? "").trim() || null;
+  const accountName = String(formData.get("account_name") ?? "").trim() || null;
+  const bankName = String(formData.get("bank_name") ?? "").trim() || null;
   if (!supplierId || !purpose || !(amount > 0)) return;
   // Account number, when given, must be exactly 10 digits (all positive integers).
   if (accountNumber && !/^\d{10}$/.test(accountNumber)) return;
@@ -26,7 +28,8 @@ export async function recordAdvance(formData: FormData): Promise<void> {
 
   await supabase.from("advances").insert({
     supplier_id: supplierId, site_id: siteId, purpose, amount_naira: amount,
-    comment, account_number: accountNumber, recorded_by: me.id,
+    comment, account_number: accountNumber, account_name: accountName, bank_name: bankName,
+    recorded_by: me.id,
   });
   revalidatePath("/manager/advances");
 }

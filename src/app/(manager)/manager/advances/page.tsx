@@ -22,7 +22,7 @@ export default async function ManagerAdvancesPage() {
   const { data: advances } = await supabase
     .from("advances")
     .select(`
-      id, purpose, amount_naira, approval_status, created_at, account_number,
+      id, purpose, amount_naira, approval_status, created_at, account_number, account_name, bank_name,
       supplier:suppliers(name, supplier_code)
     `)
     .order("created_at", { ascending: false })
@@ -55,7 +55,13 @@ export default async function ManagerAdvancesPage() {
             <label className="text-sm">Amount (₦)
               <input type="number" name="amount_naira" min="1" step="0.01" required className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
             </label>
-            <label className="text-sm sm:col-span-2">Account number <span className="font-normal text-gray-400">(where to pay — 10 digits)</span>
+            <label className="text-sm">Account name <span className="font-normal text-gray-400">(where to pay)</span>
+              <input type="text" name="account_name" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+            </label>
+            <label className="text-sm">Bank name
+              <input type="text" name="bank_name" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+            </label>
+            <label className="text-sm sm:col-span-2">Account number <span className="font-normal text-gray-400">(10 digits)</span>
               <input
                 type="text"
                 name="account_number"
@@ -95,8 +101,12 @@ export default async function ManagerAdvancesPage() {
                       </div>
                       <div className="text-xs text-gray-500">
                         {a.purpose as string} · {formatTimestamp(a.created_at as string)}
-                        {a.account_number ? <> · Acct <span className="mono">{a.account_number as string}</span></> : null}
                       </div>
+                      {(a.account_number || a.account_name || a.bank_name) && (
+                        <div className="text-xs text-gray-500">
+                          {(a.account_name as string | null) ?? "—"} · <span className="mono">{(a.account_number as string | null) ?? "—"}</span> · {(a.bank_name as string | null) ?? "—"}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{ngn(Number(a.amount_naira))}</span>
