@@ -19,10 +19,10 @@ export default async function AccountingPayoutsPage() {
       .select("id, visit_id, net_balance, created_at, visit:visits(supplier:suppliers(name, account_name, account_number, bank_name))")
       .eq("status", "approved").order("created_at", { ascending: true }),
     supabase.from("advances")
-      .select("id, purpose, amount_naira, created_at, supplier:suppliers(name, supplier_code)")
+      .select("id, purpose, amount_naira, created_at, comment, account_name, account_number, bank_name, supplier:suppliers(name, supplier_code, account_name, account_number, bank_name)")
       .eq("approval_status", "approved").order("created_at", { ascending: true }),
     supabase.from("consumables")
-      .select("id, name, category, amount_naira, entry_date")
+      .select("id, name, category, amount_naira, entry_date, comment, created_at")
       .eq("approval_status", "approved").order("entry_date", { ascending: true }),
   ]);
 
@@ -79,21 +79,34 @@ export default async function AccountingPayoutsPage() {
           ) : (
             <ul className="divide-y divide-line">
               {(advances ?? []).map((a) => {
-                const sup = g1<{ name: string; supplier_code: string | null }>((a as { supplier: unknown }).supplier);
+                const sup = g1<{ name: string; supplier_code: string | null; account_name: string | null; account_number: string | null; bank_name: string | null }>((a as { supplier: unknown }).supplier);
+                // Prefer the account details recorded on the advance itself; fall
+                // back to the supplier's stored account.
+                const acctName = (a.account_name as string | null) ?? sup?.account_name ?? null;
+                const acctNo = (a.account_number as string | null) ?? sup?.account_number ?? null;
+                const bank = (a.bank_name as string | null) ?? sup?.bank_name ?? null;
                 return (
-                  <li key={a.id as string} className="flex items-center justify-between px-4 py-3 text-sm">
-                    <span className="flex items-center gap-2">
-                      <strong>{sup?.name ?? "—"}</strong>
-                      {sup?.supplier_code && <Stamp>{sup.supplier_code}</Stamp>}
-                      <span className="text-ink-2">{a.purpose as string}</span>
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <span className="font-medium">{ngn(Number(a.amount_naira))}</span>
-                      <form action={markAdvancePaid}>
+                  <li key={a.id as string}>
+                    <details className="px-4 py-3 text-sm">
+                      <summary className="flex cursor-pointer items-center justify-between gap-2">
+                        <span className="flex items-center gap-2">
+                          <strong>{sup?.name ?? "—"}</strong>
+                          {sup?.supplier_code && <Stamp>{sup.supplier_code}</Stamp>}
+                          <span className="text-ink-2">{a.purpose as string}</span>
+                        </span>
+                        <span className="font-medium">{ngn(Number(a.amount_naira))}</span>
+                      </summary>
+                      <div className="mt-2 space-y-1 border-l-2 border-line pl-3 text-xs text-ink-2">
+                        <div>Purpose: {a.purpose as string}</div>
+                        <div>Pay to: {acctName ?? "—"} · <span className="mono">{acctNo ?? "—"}</span> · {bank ?? "—"}</div>
+                        {a.comment ? <div>Comment: {a.comment as string}</div> : null}
+                        <div>Logged: {formatTimestamp(a.created_at as string)}</div>
+                      </div>
+                      <form action={markAdvancePaid} className="mt-2">
                         <input type="hidden" name="advance_id" value={a.id as string} />
                         <button type="submit" className="rounded bg-ink px-3 py-1 text-xs font-semibold text-white">Mark paid</button>
                       </form>
-                    </span>
+                    </details>
                   </li>
                 );
               })}
@@ -110,18 +123,26 @@ export default async function AccountingPayoutsPage() {
           ) : (
             <ul className="divide-y divide-line">
               {(expenses ?? []).map((e) => (
-                <li key={e.id as string} className="flex items-center justify-between px-4 py-3 text-sm">
-                  <span>
-                    <strong>{e.name as string}</strong>
-                    <span className="text-ink-2"> · {String(e.category).replace(/_/g, " ")} · {e.entry_date as string}</span>
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <span className="font-medium">{e.amount_naira != null ? ngn(Number(e.amount_naira)) : "—"}</span>
-                    <form action={markConsumablePaid}>
+                <li key={e.id as string}>
+                  <details className="px-4 py-3 text-sm">
+                    <summary className="flex cursor-pointer items-center justify-between gap-2">
+                      <span>
+                        <strong>{e.name as string}</strong>
+                        <span className="text-ink-2"> · {String(e.category).replace(/_/g, " ")}</span>
+                      </span>
+                      <span className="font-medium">{e.amount_naira != null ? ngn(Number(e.amount_naira)) : "—"}</span>
+                    </summary>
+                    <div className="mt-2 space-y-1 border-l-2 border-line pl-3 text-xs text-ink-2">
+                      <div>Category: {String(e.category).replace(/_/g, " ")}</div>
+                      <div>Date: {e.entry_date as string}</div>
+                      {e.comment ? <div>Comment: {e.comment as string}</div> : null}
+                      <div>Logged: {formatTimestamp(e.created_at as string)}</div>
+                    </div>
+                    <form action={markConsumablePaid} className="mt-2">
                       <input type="hidden" name="consumable_id" value={e.id as string} />
                       <button type="submit" className="rounded bg-ink px-3 py-1 text-xs font-semibold text-white">Mark paid</button>
                     </form>
-                  </span>
+                  </details>
                 </li>
               ))}
             </ul>
