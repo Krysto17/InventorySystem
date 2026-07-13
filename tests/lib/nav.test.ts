@@ -70,9 +70,11 @@ describe("role-aware navigation", () => {
     expect(general).toContain("/suppliers");
   });
 
-  it("every role can reach the supplier directory", () => {
+  it("every role can reach the supplier directory and the stocked-materials log", () => {
     for (const r of ["manager", "owner", "qc", "receiving", "accounting", "inventory", "processing"] as const) {
-      expect(navForRole(r, { isGeneralManager: r === "manager" }).map((n) => n.href)).toContain("/suppliers");
+      const hrefs = navForRole(r, { isGeneralManager: r === "manager" }).map((n) => n.href);
+      expect(hrefs).toContain("/suppliers");
+      expect(hrefs).toContain("/stocked-materials");
     }
   });
 

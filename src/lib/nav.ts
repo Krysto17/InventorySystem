@@ -94,6 +94,8 @@ const NAV: Record<Role, NavItem[]> = {
 // Every role can search the shared supplier directory (#4). Distinct icon so it
 // isn't mistaken for the (removed) cross-site search button.
 const SUPPLIERS_ITEM: NavItem = { label: "Suppliers", href: "/suppliers", icon: "suppliers" };
+// Every role can view the shared stocked-materials log (track operations).
+const STOCKED_ITEM: NavItem = { label: "Stocked materials", href: "/stocked-materials", icon: "inventory" };
 
 export function navForRole(role: Role, opts?: { isGeneralManager?: boolean }): NavItem[] {
   const base = NAV[role] ?? [];
@@ -104,9 +106,9 @@ export function navForRole(role: Role, opts?: { isGeneralManager?: boolean }): N
   // account details), so surface it right below the pricing queue rather than
   // at the very bottom of a long list; other roles get it appended.
   if (role === "manager") {
-    return [items[0], SUPPLIERS_ITEM, ...items.slice(1)];
+    return [items[0], SUPPLIERS_ITEM, ...items.slice(1), STOCKED_ITEM];
   }
-  return [...items, SUPPLIERS_ITEM];
+  return [...items, SUPPLIERS_ITEM, STOCKED_ITEM];
 }
 
 // The home path's first segment, used to decide which nav item is "active".

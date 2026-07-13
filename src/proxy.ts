@@ -21,7 +21,7 @@ const PUBLIC_PATHS = ["/login", "/set-password"];
 // Paths any authenticated role may enter, beyond their own home subtree. The
 // supplier directory (search + per-supplier detail) is shared by every role
 // (#4), so it must not be confined to the owner's subtree.
-const SHARED_AUTHENTICATED_PREFIXES = ["/visits/", "/suppliers"];
+const SHARED_AUTHENTICATED_PREFIXES = ["/visits/", "/suppliers", "/stocked-materials"];
 
 // Extra subtrees a role may enter beyond its own home. The manager owns
 // inventory (blueprint: no standalone inventory role), so it reaches /inventory.
