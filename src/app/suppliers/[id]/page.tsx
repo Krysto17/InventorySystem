@@ -6,6 +6,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge, stateVariant } from "@/components/ui/badge";
 import { SupplierEditForms } from "@/components/suppliers/SupplierEditForms";
 import { DeleteSupplierButton } from "@/components/suppliers/DeleteSupplierButton";
+import { OpeningBalanceForm } from "@/components/suppliers/OpeningBalanceForm";
 import { formatTimestamp } from "@/lib/visits/format";
 import { STATE_LABELS, type VisitState } from "@/lib/visits/state-machine";
 import { one as g1 } from "@/lib/db/relation";
@@ -48,6 +49,19 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
   // A supplier with any visit, advance or stock lot cannot be deleted (the RPC
   // also re-checks every reference server-side).
   const hasRecords = (visits?.length ?? 0) > 0 || (advances?.length ?? 0) > 0 || (lots?.length ?? 0) > 0;
+
+  // Owner-only opening-balance entry (pre-software debt).
+  const isOwner = me.role === "owner";
+  let outstandingDebt = 0;
+  let hasOpeningBalance = false;
+  if (isOwner) {
+    const [{ data: debt }, { data: ob }] = await Promise.all([
+      supabase.rpc("supplier_outstanding_debt", { _supplier_id: id }),
+      supabase.from("advances").select("id").eq("supplier_id", id).eq("purpose", "Opening balance (pre-software)").maybeSingle(),
+    ]);
+    outstandingDebt = Number(debt ?? 0);
+    hasOpeningBalance = !!ob;
+  }
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-6">
@@ -180,6 +194,19 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
               )}
             </CardContent>
           </Card>
+
+          {isOwner && (
+            <Card>
+              <CardHeader><h2 className="text-sm font-semibold">Opening balance (pre-software debt)</h2></CardHeader>
+              <CardContent>
+                <OpeningBalanceForm
+                  supplierId={s.id as string}
+                  outstandingDebt={outstandingDebt}
+                  hasOpeningBalance={hasOpeningBalance}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader><h2 className="text-sm font-semibold">Delete supplier</h2></CardHeader>

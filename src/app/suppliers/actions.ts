@@ -39,6 +39,29 @@ export async function createSupplier(_prev: SupplierEditState, formData: FormDat
   redirect(`/suppliers/${data.id as string}`);
 }
 
+// Owner records a supplier's pre-software opening debt as a one-off paid advance
+// dated to the opening date. The record_opening_balance RPC enforces owner-only
+// and one-per-supplier.
+export async function recordOpeningBalance(_prev: SupplierEditState, formData: FormData): Promise<SupplierEditState> {
+  const me = await getProfile();
+  if (!me || me.role !== "owner") return { error: "Only the owner can record an opening balance." };
+  const id = String(formData.get("supplier_id") ?? "");
+  const amount = Number(formData.get("amount"));
+  const asOf = String(formData.get("as_of") ?? "").trim() || null;
+  if (!id) return { error: "Missing supplier" };
+  if (!(amount > 0)) return { error: "Amount must be greater than zero." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("record_opening_balance", {
+    p_supplier_id: id,
+    p_amount: amount,
+    ...(asOf ? { p_as_of: asOf } : {}),
+  });
+  if (error) return { error: error.message.replace(/^.*?:\s*/, "") };
+  revalidatePath(`/suppliers/${id}`);
+  return { ok: "Opening balance recorded." };
+}
+
 // Manager or owner deletes a supplier that has no records (no visits, advances,
 // stock lots, gate passes, …). The delete_supplier RPC re-checks the role and
 // refuses when anything references the supplier.
