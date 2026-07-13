@@ -255,6 +255,48 @@ export type Database = {
           },
         ]
       }
+      batch_comments: {
+        Row: {
+          id: string
+          visit_id: string
+          site_id: string
+          body: string
+          author: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          visit_id: string
+          site_id: string
+          body: string
+          author?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          visit_id?: string
+          site_id?: string
+          body?: string
+          author?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "batch_comments_author_fkey"
+            columns: ["author"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "batch_comments_visit_id_fkey"
+            columns: ["visit_id"]
+            isOneToOne: false
+            referencedRelation: "visits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       batch_settlements: {
         Row: {
           advance_deducted: number

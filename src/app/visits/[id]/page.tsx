@@ -13,6 +13,7 @@ import { SupplierFinanceCard } from "@/components/visits/SupplierFinanceCard";
 import { BatchSettlementCard } from "@/components/visits/BatchSettlementCard";
 import { GateExitCard } from "@/components/visits/GateExitCard";
 import { PdfDownloadBar } from "@/components/visits/PdfDownloadBar";
+import { BatchComments } from "@/components/visits/BatchComments";
 import { one as get1 } from "@/lib/db/relation";
 import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
@@ -332,6 +333,7 @@ export default async function VisitDetailPage({
       visitState={visitNorm.state}
       viewerRole={me.role as Role}
     />
+    <BatchComments visitId={visitNorm.id} viewerRole={me.role as Role} />
     <BatchSettlementCard
       visitId={visitNorm.id}
       supplierId={(visit as { supplier_id?: string }).supplier_id ?? null}

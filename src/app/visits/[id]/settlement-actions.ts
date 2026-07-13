@@ -62,6 +62,24 @@ export async function submitBatchSettlement(formData: FormData): Promise<void> {
   revalidatePath("/accounting/payouts");
 }
 
+// Manager (or owner) leaves a note on a supply/batch — visible to the owner
+// (approving) and the accountant (before paying).
+export async function addBatchComment(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || (me.role !== "manager" && me.role !== "owner")) return;
+  const visitId = String(formData.get("visit_id") ?? "");
+  const body = String(formData.get("body") ?? "").trim();
+  if (!visitId || !body) return;
+
+  const supabase = await createClient();
+  const { data: visit } = await supabase.from("visits").select("site_id").eq("id", visitId).single();
+  if (!visit) return;
+  await supabase.from("batch_comments").insert({
+    visit_id: visitId, site_id: visit.site_id as string, body, author: me.id,
+  });
+  revalidatePath(`/visits/${visitId}`);
+}
+
 // Manager records the supplier's bank/account details before submitting the
 // batch settlement. Saved on the global supplier record.
 export async function updateSupplierAccount(formData: FormData): Promise<void> {
