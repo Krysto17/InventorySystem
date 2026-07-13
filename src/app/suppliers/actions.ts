@@ -39,6 +39,22 @@ export async function createSupplier(_prev: SupplierEditState, formData: FormDat
   redirect(`/suppliers/${data.id as string}`);
 }
 
+// Manager or owner deletes a supplier that has no records (no visits, advances,
+// stock lots, gate passes, …). The delete_supplier RPC re-checks the role and
+// refuses when anything references the supplier.
+export async function deleteSupplier(_prev: SupplierEditState, formData: FormData): Promise<SupplierEditState> {
+  const me = await getProfile();
+  if (!me || (me.role !== "manager" && me.role !== "owner")) return { error: "Not authorized" };
+  const id = String(formData.get("supplier_id") ?? "");
+  if (!id) return { error: "Missing supplier" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("delete_supplier", { p_supplier_id: id });
+  if (error) return { error: error.message.replace(/^.*?:\s*/, "") };
+  revalidatePath("/suppliers");
+  redirect("/suppliers");
+}
+
 // Manager or owner renames a supplier (old name kept in former_names).
 export async function renameSupplier(_prev: SupplierEditState, formData: FormData): Promise<SupplierEditState> {
   const me = await getProfile();

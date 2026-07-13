@@ -5,6 +5,7 @@ import { getProfile } from "@/lib/auth/get-profile";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge, stateVariant } from "@/components/ui/badge";
 import { SupplierEditForms } from "@/components/suppliers/SupplierEditForms";
+import { DeleteSupplierButton } from "@/components/suppliers/DeleteSupplierButton";
 import { formatTimestamp } from "@/lib/visits/format";
 import { STATE_LABELS, type VisitState } from "@/lib/visits/state-machine";
 import { one as g1 } from "@/lib/db/relation";
@@ -44,6 +45,9 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
   const approvedAdvances = (advances ?? [])
     .filter((a) => a.approval_status === "approved")
     .reduce((sum, a) => sum + Number(a.amount_naira), 0);
+  // A supplier with any visit, advance or stock lot cannot be deleted (the RPC
+  // also re-checks every reference server-side).
+  const hasRecords = (visits?.length ?? 0) > 0 || (advances?.length ?? 0) > 0 || (lots?.length ?? 0) > 0;
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-6">
@@ -174,6 +178,13 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
                   })}
                 </ul>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><h2 className="text-sm font-semibold">Delete supplier</h2></CardHeader>
+            <CardContent>
+              <DeleteSupplierButton supplierId={s.id as string} hasRecords={hasRecords} />
             </CardContent>
           </Card>
         </>

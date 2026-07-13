@@ -1925,6 +1925,7 @@ export type Database = {
       resettle_line: { Args: { p_line_id: string }; Returns: undefined }
       remove_line: { Args: { p_line_id: string }; Returns: undefined }
       delete_batch: { Args: { p_visit_id: string }; Returns: undefined }
+      delete_supplier: { Args: { p_supplier_id: string }; Returns: undefined }
       current_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
