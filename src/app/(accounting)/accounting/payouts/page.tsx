@@ -22,7 +22,7 @@ export default async function AccountingPayoutsPage() {
       .select("id, purpose, amount_naira, created_at, comment, account_name, account_number, bank_name, supplier:suppliers(name, supplier_code, account_name, account_number, bank_name)")
       .eq("approval_status", "approved").order("created_at", { ascending: true }),
     supabase.from("consumables")
-      .select("id, name, category, amount_naira, entry_date, comment, created_at")
+      .select("id, name, category, amount_naira, entry_date, comment, created_at, account_name, account_number, bank_name")
       .eq("approval_status", "approved").order("entry_date", { ascending: true }),
   ]);
 
@@ -135,6 +135,9 @@ export default async function AccountingPayoutsPage() {
                     <div className="mt-2 space-y-1 border-l-2 border-line pl-3 text-xs text-ink-2">
                       <div>Category: {String(e.category).replace(/_/g, " ")}</div>
                       <div>Date: {e.entry_date as string}</div>
+                      {(e.account_number || e.account_name || e.bank_name) && (
+                        <div>Pay to: {(e.account_name as string | null) ?? "—"} · <span className="mono">{(e.account_number as string | null) ?? "—"}</span> · {(e.bank_name as string | null) ?? "—"}</div>
+                      )}
                       {e.comment ? <div>Comment: {e.comment as string}</div> : null}
                       <div>Logged: {formatTimestamp(e.created_at as string)}</div>
                     </div>

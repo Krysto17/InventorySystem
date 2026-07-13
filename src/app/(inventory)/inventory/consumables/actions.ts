@@ -16,8 +16,13 @@ export async function createConsumable(formData: FormData): Promise<void> {
   const comment = String(formData.get("comment") ?? "").trim() || null;
   const amountRaw = String(formData.get("amount_naira") ?? "").trim();
   const amount = amountRaw === "" ? null : Number(amountRaw);
+  const accountName = String(formData.get("account_name") ?? "").trim() || null;
+  const accountNumber = String(formData.get("account_number") ?? "").trim() || null;
+  const bankName = String(formData.get("bank_name") ?? "").trim() || null;
   if (!name) return;
   if (!CONSUMABLE_CATEGORIES.includes(category)) return;
+  // Account number, when given, must be exactly 10 digits (all positive integers).
+  if (accountNumber && !/^\d{10}$/.test(accountNumber)) return;
 
   const supabase = await createClient();
   const { data: profile } = await supabase
@@ -36,6 +41,9 @@ export async function createConsumable(formData: FormData): Promise<void> {
     entry_date: entryDate ?? undefined,
     comment,
     amount_naira: amount,
+    account_name: accountName,
+    account_number: accountNumber,
+    bank_name: bankName,
     recorded_by: me.id,
   });
 

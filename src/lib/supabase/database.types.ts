@@ -443,6 +443,9 @@ export type Database = {
       consumables: {
         Row: {
           amount_naira: number | null
+          account_name: string | null
+          account_number: string | null
+          bank_name: string | null
           approval_status: string
           approved_at: string | null
           approved_by: string | null
@@ -459,6 +462,9 @@ export type Database = {
         }
         Insert: {
           amount_naira?: number | null
+          account_name?: string | null
+          account_number?: string | null
+          bank_name?: string | null
           approval_status?: string
           approved_at?: string | null
           approved_by?: string | null
@@ -475,6 +481,9 @@ export type Database = {
         }
         Update: {
           amount_naira?: number | null
+          account_name?: string | null
+          account_number?: string | null
+          bank_name?: string | null
           approval_status?: string
           approved_at?: string | null
           approved_by?: string | null

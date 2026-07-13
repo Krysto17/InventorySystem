@@ -84,6 +84,28 @@ export default async function ConsumablesPage() {
               className="mt-1 block w-full border rounded px-2 py-1 text-sm"
             />
           </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-sm font-medium">
+              Account name <span className="font-normal text-gray-400">(where to pay)</span>
+              <input type="text" name="account_name" className="mt-1 block w-full border rounded px-2 py-1 text-sm" />
+            </label>
+            <label className="block text-sm font-medium">
+              Bank name
+              <input type="text" name="bank_name" className="mt-1 block w-full border rounded px-2 py-1 text-sm" />
+            </label>
+          </div>
+          <label className="block text-sm font-medium">
+            Account number <span className="font-normal text-gray-400">(10 digits)</span>
+            <input
+              type="text"
+              name="account_number"
+              inputMode="numeric"
+              pattern="\d{10}"
+              maxLength={10}
+              title="Exactly 10 digits (0-9)"
+              className="mt-1 block w-full border rounded px-2 py-1 text-sm"
+            />
+          </label>
           <label className="block text-sm font-medium">
             Comment
             <textarea
