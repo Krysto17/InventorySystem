@@ -8,16 +8,26 @@ import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
 export default async function AccountingHomePage() {
   const supabase = await createClient();
 
-  const { data: visits } = await supabase
-    .from("visits")
-    .select(`
-      id, created_at, state, processing_deducted,
-      supplier:suppliers(name, phone),
-      declared_material_type:material_types(name),
-      pricing:pricing(purchase_amount, payment_terms)
-    `)
-    .eq("state", "in_accounting")
-    .order("created_at", { ascending: true });
+  const [{ data: visits }, { data: supplies }, { data: advances }, { data: expenses }] = await Promise.all([
+    supabase
+      .from("visits")
+      .select(`
+        id, created_at, state, processing_deducted,
+        supplier:suppliers(name, phone),
+        declared_material_type:material_types(name),
+        pricing:pricing(purchase_amount, payment_terms)
+      `)
+      .eq("state", "in_accounting")
+      .order("created_at", { ascending: true }),
+    supabase.from("batch_settlements").select("net_balance").eq("status", "approved"),
+    supabase.from("advances").select("amount_naira").eq("approval_status", "approved"),
+    supabase.from("consumables").select("amount_naira").eq("approval_status", "approved"),
+  ]);
+
+  const sum = (rows: Array<Record<string, unknown>> | null, key: "net_balance" | "amount_naira") =>
+    (rows ?? []).reduce((s, r) => s + Number(r[key] ?? 0), 0);
+  const payoutCount = (supplies?.length ?? 0) + (advances?.length ?? 0) + (expenses?.length ?? 0);
+  const payoutTotal = sum(supplies, "net_balance") + sum(advances, "amount_naira") + sum(expenses, "amount_naira");
 
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
@@ -25,6 +35,30 @@ export default async function AccountingHomePage() {
         <h1 className="text-2xl font-bold">Accounting</h1>
         <p className="text-sm text-gray-500">{visits?.length ?? 0} visit{(visits?.length ?? 0) !== 1 ? "s" : ""} pending settlement</p>
       </header>
+
+      {/* To pay — approved items awaiting payment, above the supply pipeline. */}
+      <Link href="/accounting/payouts" className="block">
+        <Card className="border-ore/40 transition-colors hover:border-ore">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Approved — to pay</h2>
+              <Badge variant={payoutCount ? "yellow" : "default"}>{payoutCount}</Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {payoutCount === 0 ? (
+              <p className="text-sm text-gray-500">Nothing approved to pay right now.</p>
+            ) : (
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                <div><span className="text-gray-500">Supplier payouts</span> <span className="font-semibold">{supplies?.length ?? 0}</span> · {formatNaira(sum(supplies, "net_balance"))}</div>
+                <div><span className="text-gray-500">Advances</span> <span className="font-semibold">{advances?.length ?? 0}</span> · {formatNaira(sum(advances, "amount_naira"))}</div>
+                <div><span className="text-gray-500">Expenses</span> <span className="font-semibold">{expenses?.length ?? 0}</span> · {formatNaira(sum(expenses, "amount_naira"))}</div>
+                <div className="ml-auto font-semibold">Total: {formatNaira(payoutTotal)}</div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </Link>
 
       <LiveWorkflow />
 
