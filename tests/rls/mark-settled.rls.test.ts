@@ -1,19 +1,20 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
 
-// The accountant (central role) marks settlements paid at any site — the payouts
-// queue is cross-site, so paying must be cross-site too.
+// The general accountant (New-Site) pays every site's transactions; a site
+// accountant elsewhere is scoped to their own site.
 describe("accountant marks settlement paid", () => {
-  let siteA: string, siteB: string, monazite: string;
-  let acct: TestUser, recv: TestUser;
+  let newSite: string, otherSite: string, monazite: string;
+  let genAcct: TestUser, siteAcct: TestUser, recv: TestUser;
   let supplierId: string;
 
   beforeAll(async () => {
     const { data: sites } = await adminClient().from("sites").select("id, name");
-    siteA = sites!.find((s) => s.name === "New-Site")!.id as string;
-    siteB = sites!.find((s) => s.name !== "New-Site")!.id as string;
-    acct = await makeUser({ username: "ms-acct", role: "accounting", siteId: siteA });
-    recv = await makeUser({ username: "ms-recv", role: "receiving", siteId: siteA });
+    newSite = sites!.find((s) => s.name === "New-Site")!.id as string;
+    otherSite = sites!.find((s) => s.name !== "New-Site")!.id as string;
+    genAcct = await makeUser({ username: "ms-gacct", role: "accounting", siteId: newSite });   // general
+    siteAcct = await makeUser({ username: "ms-sacct", role: "accounting", siteId: otherSite }); // site-scoped
+    recv = await makeUser({ username: "ms-recv", role: "receiving", siteId: newSite });
     const { data: s } = await adminClient().from("suppliers").insert({ name: `MS ${Date.now()}` }).select("id").single();
     supplierId = s!.id as string;
     const { data: mz } = await adminClient().from("material_types").select("id").eq("name", "Monazite").single();
@@ -35,21 +36,26 @@ describe("accountant marks settlement paid", () => {
     return { visitId: v!.id as string, settlementId: st!.id as string };
   }
 
-  it("marks an OWN-site settlement paid → visit stocked", async () => {
-    const { visitId, settlementId } = await seed(siteA);
-    const { error } = await acct.client.from("batch_settlements").update({ status: "paid" }).eq("id", settlementId);
+  it("general accountant pays an OWN-site (New-Site) settlement → stocked", async () => {
+    const { visitId, settlementId } = await seed(newSite);
+    const { error } = await genAcct.client.from("batch_settlements").update({ status: "paid" }).eq("id", settlementId);
     expect(error).toBeNull();
     const { data: v } = await adminClient().from("visits").select("state").eq("id", visitId).single();
     expect(v!.state).toBe("stocked");
   });
 
-  it("marks a CROSS-site settlement paid → visit stocked", async () => {
-    const { visitId, settlementId } = await seed(siteB);
-    const { error } = await acct.client.from("batch_settlements").update({ status: "paid" }).eq("id", settlementId);
+  it("general accountant pays a CROSS-site settlement → stocked", async () => {
+    const { visitId, settlementId } = await seed(otherSite);
+    const { error } = await genAcct.client.from("batch_settlements").update({ status: "paid" }).eq("id", settlementId);
     expect(error).toBeNull();
-    const { data: st } = await adminClient().from("batch_settlements").select("status").eq("id", settlementId).single();
-    expect(st!.status).toBe("paid");
     const { data: v } = await adminClient().from("visits").select("state").eq("id", visitId).single();
     expect(v!.state).toBe("stocked");
+  });
+
+  it("a site accountant cannot pay another site's settlement", async () => {
+    const { settlementId } = await seed(newSite); // New-Site settlement
+    await siteAcct.client.from("batch_settlements").update({ status: "paid" }).eq("id", settlementId); // siteAcct is at otherSite
+    const { data: st } = await adminClient().from("batch_settlements").select("status").eq("id", settlementId).single();
+    expect(st!.status).toBe("approved"); // unchanged — RLS blocked it
   });
 });
