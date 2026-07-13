@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +68,18 @@ export async function BatchMaterials({
 
   // Nothing to show for legacy single-material visits with no batch lines.
   if (lines.length === 0 && visitState !== "in_receiving") return null;
+
+  // Once the manager submits the priced batch to the owner, the supply invoice
+  // is generated (agreed prices − deductions). Available from that point on to
+  // manager/owner (and accounting downstream).
+  const batchSubmitted = ["awaiting_price_approval", "in_accounting", "awaiting_stock_intake", "stocked"].includes(visitState);
+  const canSeeInvoice = batchSubmitted && ["manager", "owner", "accounting"].includes(viewerRole);
+  let invoiceUrl = "";
+  if (canSeeInvoice) {
+    const h = await headers();
+    const origin = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host") ?? "localhost:3000"}`;
+    invoiceUrl = `${origin}/api/pdf/supply-invoice/${visitId}`;
+  }
 
   // The general (New-Site) manager runs the receiving module too.
   const canReceive = (viewerRole === "receiving" || viewerRole === "owner" || isGeneralManager) && visitState === "in_receiving";
@@ -389,6 +402,15 @@ export async function BatchMaterials({
         )}
         {visitState === "awaiting_price_approval" && viewerRole === "manager" && (
           <p className="border-t border-line pt-3 text-xs text-green-700">Priced batch submitted — awaiting owner approval.</p>
+        )}
+
+        {/* Supply invoice — generated once the manager submits the priced batch. */}
+        {canSeeInvoice && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
+            <span className="text-xs text-ink-2">Supply invoice:</span>
+            <a href={invoiceUrl} target="_blank" rel="noreferrer"
+              className="rounded border px-3 py-1 text-xs hover:bg-paper">Download / print invoice</a>
+          </div>
         )}
         </>
         )}
