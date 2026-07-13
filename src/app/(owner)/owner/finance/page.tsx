@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { SortableFinanceTable, type FinanceItem } from "@/components/finance/SortableFinanceTable";
 
 import { one as g1 } from "@/lib/db/relation";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -18,7 +19,7 @@ const periodKey = (iso: string, gran: "week" | "month"): string => {
   return gran === "month" ? iso.slice(0, 7) : isoWeekKey(d);
 };
 
-type Row = { date: string; site_id: string; site: string; amount: number; machine_id?: string; machine?: string };
+type Row = { date: string; site_id: string; site: string; amount: number; machine_id?: string; machine?: string; supplier?: string };
 
 export default async function OwnerFinancePage({
   searchParams,
@@ -44,10 +45,10 @@ export default async function OwnerFinancePage({
         .select("amount_naira, entry_date, created_at, site_id, category, site:sites(name)")
         .eq("approval_status", "paid"),
       supabase.from("advances")
-        .select("amount_naira, paid_at, created_at, site_id, approval_status, site:sites(name)")
+        .select("amount_naira, paid_at, created_at, site_id, approval_status, site:sites(name), supplier:suppliers(name)")
         .eq("approval_status", "paid"),
       supabase.from("processing_machine_usage")
-        .select("line_cost, machine:machines(name, site_id, site:sites(name)), record:processing_records!inner(completed_at)")
+        .select("line_cost, machine:machines(name, site_id, site:sites(name)), record:processing_records!inner(completed_at, visit:visits(supplier:suppliers(name)))")
         .limit(2000),
     ]);
 
@@ -70,22 +71,32 @@ export default async function OwnerFinancePage({
       site_id: a.site_id as string,
       site: g1<{ name: string }>((a as { site: unknown }).site)?.name ?? "—",
       amount: Number(a.amount_naira),
+      supplier: g1<{ name: string }>((a as { supplier: unknown }).supplier)?.name ?? "—",
     }))
     .filter((r) => inRange(r.date) && passSite(r.site_id));
 
   const processing: Row[] = (pmuRaw ?? [])
     .map((u) => {
       const m = g1<{ name: string; site_id: string; site: unknown }>((u as { machine: unknown }).machine);
-      const rec = g1<{ completed_at: string }>((u as { record: unknown }).record);
+      const rec = g1<{ completed_at: string; visit: unknown }>((u as { record: unknown }).record);
+      const sup = g1<{ name: string }>(g1<{ supplier: unknown }>(rec?.visit)?.supplier);
       return {
         date: rec?.completed_at ?? "",
         site_id: (m?.site_id as string) ?? "",
         site: g1<{ name: string }>(m?.site)?.name ?? "—",
         amount: Number(u.line_cost),
         machine: m?.name ?? "—",
+        supplier: sup?.name ?? "—",
       } as Row;
     })
     .filter((r) => inRange(r.date) && passSite(r.site_id) && (!machineFilter || r.machine === machineFilter));
+
+  // Itemised rows for the sortable breakdown (by date / site / supplier).
+  const items: FinanceItem[] = [
+    ...advances.map((r) => ({ type: "Advance" as const, date: r.date, site: r.site, supplier: r.supplier ?? "—", amount: r.amount })),
+    ...processing.map((r) => ({ type: "Processing fee" as const, date: r.date, site: r.site, supplier: r.supplier ?? "—", amount: r.amount })),
+    ...expenses.map((r) => ({ type: "Consumable" as const, date: r.date, site: r.site, supplier: "—", amount: r.amount })),
+  ];
 
   const sum = (rows: Row[]) => rows.reduce((s, r) => s + r.amount, 0);
 
@@ -157,6 +168,14 @@ export default async function OwnerFinancePage({
           <div><span className="text-zinc-500">Expenses</span><div className="text-lg font-bold">{ngn(sum(expenses))}</div></div>
           <div><span className="text-zinc-500">Advances (paid)</span><div className="text-lg font-bold">{ngn(sum(advances))}</div></div>
           <div><span className="text-zinc-500">Processing fees</span><div className="text-lg font-bold">{ngn(sum(processing))}</div></div>
+        </CardContent>
+      </Card>
+
+      {/* Itemised — sortable by date / site / supplier */}
+      <Card>
+        <CardHeader><h2 className="text-sm font-semibold">Itemised breakdown</h2></CardHeader>
+        <CardContent className="p-0 pb-3">
+          <SortableFinanceTable items={items} />
         </CardContent>
       </Card>
 

@@ -46,7 +46,6 @@ export default async function OwnerDashboard({
     { data: pendingBulkSales },
     { data: salePrices },
     { data: recentMovements },
-    { data: accountingVisits },
   ] = await Promise.all([
     supabase.from("sites").select("id, name").order("name"),
 
@@ -120,23 +119,6 @@ export default async function OwnerDashboard({
         `)
         .order("created_at", { ascending: false })
         .limit(12);
-      if (siteFilter) q = q.eq("site_id", siteFilter);
-      return q;
-    })(),
-
-    (() => {
-      let q = supabase
-        .from("visits")
-        .select(`
-          id, state,
-          supplier:suppliers(name),
-          site:sites(name),
-          pricing:pricing(purchase_amount),
-          payments:payments(direction, amount),
-          utility_charges:utility_charges(kind, amount),
-          processing_records:processing_records(usage:processing_machine_usage(line_cost))
-        `)
-        .in("state", ["in_accounting", "awaiting_stock_intake"]);
       if (siteFilter) q = q.eq("site_id", siteFilter);
       return q;
     })(),
@@ -224,44 +206,6 @@ export default async function OwnerDashboard({
   }
   const machineRows = Array.from(machineMap.values()).sort((a, b) => b.totalFee - a.totalFee);
 
-  // ── Outstanding balances (top 5) ──────────────────────────────────────────
-  type BalanceRow = { id: string; supplier: string; site: string; processingOwed: number; purchaseOwed: number; processingPaid: number; purchasePaid: number };
-  const balanceRows: BalanceRow[] = [];
-  for (const v of accountingVisits ?? []) {
-    const sup = g1<{ name?: string }>(v.supplier);
-    const site = g1<{ name?: string }>(v.site);
-    const pr = g1<{ purchase_amount?: number }>(v.pricing);
-    const prRecsRaw = (v as { processing_records: unknown }).processing_records;
-    const prRecs: unknown[] = Array.isArray(prRecsRaw) ? prRecsRaw : prRecsRaw ? [prRecsRaw] : [];
-    const rawProcessing = prRecs.reduce((s: number, rec: unknown) => {
-      const r = rec as { usage?: { line_cost?: number }[] };
-      return s + (r.usage ?? []).reduce((ss: number, u: { line_cost?: number }) => ss + Number(u.line_cost ?? 0), 0);
-    }, 0);
-    // The processing fee the client owes is the "light bill" utility charge, which
-    // the manager may adjust/discount (#1). Fall back to the raw machine total only
-    // when no light-bill charge exists (e.g. legacy/processed visits).
-    const utilRaw = (v as { utility_charges: unknown }).utility_charges;
-    const utilCharges: { kind?: string; amount?: number }[] = Array.isArray(utilRaw)
-      ? utilRaw : utilRaw ? [utilRaw] : [];
-    const lightBill = utilCharges
-      .filter((u) => u.kind === "light_bill")
-      .reduce((s, u) => s + Number(u.amount ?? 0), 0);
-    const processingOwed = utilCharges.some((u) => u.kind === "light_bill") ? lightBill : rawProcessing;
-    const pmts = (v as { payments: { direction: string; amount: number }[] }).payments ?? [];
-    const processingPaid = pmts.filter((p) => p.direction === "processing_fee_in").reduce((s, p) => s + Number(p.amount), 0);
-    const purchasePaid = pmts.filter((p) => p.direction === "purchase_amount_out").reduce((s, p) => s + Number(p.amount), 0);
-    balanceRows.push({
-      id: v.id as string,
-      supplier: sup?.name ?? "—",
-      site: site?.name ?? "—",
-      processingOwed,
-      purchaseOwed: Number(pr?.purchase_amount ?? 0),
-      processingPaid,
-      purchasePaid,
-    });
-  }
-  balanceRows.sort((a, b) => (b.purchaseOwed - b.purchasePaid) - (a.purchaseOwed - a.purchasePaid));
-
   const sitesTyped = (sites ?? []) as { id: string; name: string }[];
 
   return (
@@ -301,60 +245,28 @@ export default async function OwnerDashboard({
         <ActivityFeed items={activity} />
       </div>
 
-      {/* Visit pipeline + Outstanding balances */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <h2 className="text-sm font-semibold">Visit pipeline</h2>
-          </CardHeader>
-          <CardContent className="space-y-1.5">
-            {Object.entries(stateCounts).length === 0 ? (
-              <p className="text-sm text-zinc-500">No visits in this period.</p>
-            ) : (
-              Object.entries(stateCounts)
-                .sort((a, b) => b[1] - a[1])
-                .map(([state, count]) => (
-                  <div key={state} className="flex items-center justify-between text-sm">
-                    <Badge variant={stateVariant(state)}>
-                      {STATE_LABELS[state as keyof typeof STATE_LABELS] ?? state}
-                    </Badge>
-                    <span className="font-semibold">{count}</span>
-                  </div>
-                ))
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <h2 className="text-sm font-semibold">Outstanding balances (top 5)</h2>
-          </CardHeader>
-          <CardContent>
-            {balanceRows.length === 0 ? (
-              <p className="text-sm text-zinc-500">No outstanding balances.</p>
-            ) : (
-              <ul className="space-y-2 text-sm">
-                {balanceRows.slice(0, 5).map((r) => {
-                  const purchaseBalance = r.purchaseOwed - r.purchasePaid;
-                  const procBalance = r.processingOwed - r.processingPaid;
-                  return (
-                    <li key={r.id} className="flex items-start justify-between gap-2">
-                      <div>
-                        <Link href={`/visits/${r.id}`} className="font-medium hover:underline">{r.supplier}</Link>
-                        <div className="text-xs text-zinc-500">{r.site}</div>
-                      </div>
-                      <div className="space-y-0.5 text-right text-xs">
-                        {purchaseBalance > 0 && <div className="text-red-600 dark:text-red-400">Owe: {formatNaira(purchaseBalance)}</div>}
-                        {procBalance > 0 && <div className="text-blue-600 dark:text-blue-400">Fee due: {formatNaira(procBalance)}</div>}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      {/* Visit pipeline */}
+      <Card>
+        <CardHeader>
+          <h2 className="text-sm font-semibold">Visit pipeline</h2>
+        </CardHeader>
+        <CardContent className="space-y-1.5">
+          {Object.entries(stateCounts).length === 0 ? (
+            <p className="text-sm text-zinc-500">No visits in this period.</p>
+          ) : (
+            Object.entries(stateCounts)
+              .sort((a, b) => b[1] - a[1])
+              .map(([state, count]) => (
+                <div key={state} className="flex items-center justify-between text-sm">
+                  <Badge variant={stateVariant(state)}>
+                    {STATE_LABELS[state as keyof typeof STATE_LABELS] ?? state}
+                  </Badge>
+                  <span className="font-semibold">{count}</span>
+                </div>
+              ))
+          )}
+        </CardContent>
+      </Card>
 
       {/* Machine utilization + Consumables */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
