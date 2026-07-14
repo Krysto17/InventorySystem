@@ -24,16 +24,27 @@ export async function recordPurchaseIntake(
 
   const supabase = await createClient();
 
-  // Fetch visit to get site_id + material_type_id + state (prevent state tampering from form)
+  // Fetch visit to get site_id + material_type_id + supplier + state (prevent
+  // state tampering from form)
   const { data: visit } = await supabase
     .from("visits")
-    .select("site_id, declared_material_type_id, state")
+    .select("site_id, declared_material_type_id, supplier_id, state")
     .eq("id", visitId)
     .single();
 
   if (!visit) return { error: "Visit not found" };
   if (visit.state !== "awaiting_stock_intake")
     return { error: "Visit is not awaiting stock intake" };
+
+  // A lot mirrors the settlement-paid intake path so this stock shows in the
+  // stocked-materials log too (single, consistent representation).
+  await supabase.from("stock_lots").insert({
+    site_id: visit.site_id,
+    material_type_id: visit.declared_material_type_id,
+    supplier_id: visit.supplier_id,
+    weight_kg: weight,
+    recorded_by: me.id,
+  });
 
   const { error } = await supabase.from("stock_movements").insert({
     site_id: visit.site_id,
