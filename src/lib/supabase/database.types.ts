@@ -820,6 +820,7 @@ export type Database = {
           status: string
           stock_lot_id: string | null
           supplier_id: string | null
+          visit_material_id: string | null
           weight_kg: number | null
         }
         Insert: {
@@ -838,6 +839,7 @@ export type Database = {
           status?: string
           stock_lot_id?: string | null
           supplier_id?: string | null
+          visit_material_id?: string | null
           weight_kg?: number | null
         }
         Update: {
@@ -856,6 +858,7 @@ export type Database = {
           status?: string
           stock_lot_id?: string | null
           supplier_id?: string | null
+          visit_material_id?: string | null
           weight_kg?: number | null
         }
         Relationships: [

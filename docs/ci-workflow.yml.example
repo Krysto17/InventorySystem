@@ -1,0 +1,35 @@
+# CI workflow for this project.
+# The bot token lacks GitHub "workflow" scope, so move this to
+# .github/workflows/ci.yml yourself (or push it with a scoped token).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-types:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      # Bring up the local Supabase stack so migrations define the real schema,
+      # then fail the build if database.types.ts has drifted from it.
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase start
+      - name: Check generated types match the schema
+        run: npm run check:types
+        env:
+          SUPA_DB_CONTAINER: supabase_db_InventorySystem
+
+      # Type-safety gate.
+      - run: npm run build
