@@ -23,11 +23,12 @@ export async function deleteBatch(formData: FormData): Promise<void> {
 }
 
 // Receiving adds a material line to an in_receiving batch. The general (New-Site)
-// manager runs the receiving module too.
+// manager runs the receiving module too; any manager may also add a missing line
+// while pricing (RLS enforces state = pricing for a site manager).
 export async function addMaterialLine(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me) return;
-  if (me.role !== "receiving" && me.role !== "owner" && !me.is_general_manager) return;
+  if (me.role !== "receiving" && me.role !== "owner" && me.role !== "manager" && !me.is_general_manager) return;
 
   const visitId = String(formData.get("visit_id") ?? "");
   const materialTypeId = String(formData.get("material_type_id") ?? "");

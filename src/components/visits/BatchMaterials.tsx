@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { recordXrf, setLinePrice, finalizeLinePrice, skipToPricing, unsettleLine, resettleLine, removeLineAsManager, updateMaterialLine, submitPricedBatch, approvePricing, rejectPricing } from "@/app/visits/[id]/batch-actions";
+import { recordXrf, setLinePrice, finalizeLinePrice, skipToPricing, unsettleLine, resettleLine, removeLineAsManager, updateMaterialLine, addMaterialLine, submitPricedBatch, approvePricing, rejectPricing } from "@/app/visits/[id]/batch-actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { ReceivingLines, type RxLine } from "@/components/visits/ReceivingLines";
 import type { Role } from "@/lib/auth/roles";
@@ -358,6 +358,30 @@ export async function BatchMaterials({
               </div>
             ))}
           </div>
+        )}
+
+        {/* Manager: add a missing material line while pricing (before submitting). */}
+        {canPrice && (
+          <details className="border-t border-line pt-3">
+            <summary className="cursor-pointer text-xs font-semibold text-ink-2">+ Add a material line</summary>
+            <form action={addMaterialLine} className="mt-2 flex flex-wrap items-end gap-2">
+              <input type="hidden" name="visit_id" value={visitId} />
+              <label className="text-xs font-medium">
+                Material
+                <select name="material_type_id" required defaultValue="" className="mt-1 block rounded border px-2 py-1 text-sm">
+                  <option value="" disabled>Select…</option>
+                  {((materialTypes ?? []) as { id: string; name: string }[]).map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs font-medium">
+                Weight (kg)
+                <input type="number" name="weight_kg" min="0" step="0.001" required className="mt-1 block w-28 rounded border px-2 py-1 text-sm" />
+              </label>
+              <SubmitButton pendingText="Adding…" className="rounded border px-3 py-1 text-xs font-semibold hover:bg-zinc-50 disabled:opacity-50">Add line</SubmitButton>
+            </form>
+          </details>
         )}
 
         {lines.length > 0 && totalPurchase > 0 && (
