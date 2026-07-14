@@ -52,36 +52,3 @@ export async function submitAnalysis(
   return {};
 }
 
-export async function updateAnalysis(
-  _prev: AnalysisState,
-  formData: FormData,
-): Promise<AnalysisState> {
-  const me = await getProfile();
-  if (!me) return { error: "Not signed in" };
-  if (me.role !== "receiving" && me.role !== "owner") return { error: "Forbidden" };
-
-  const recordId = String(formData.get("record_id") ?? "");
-  if (!recordId) return { error: "Missing record id" };
-
-  const patch: Record<string, unknown> = {};
-  const weightRaw = formData.get("weight");
-  if (weightRaw != null && String(weightRaw).trim() !== "") patch.weight = Number(weightRaw);
-  const grade = formData.get("grade"); if (grade != null) patch.grade = String(grade).trim() || null;
-  const purity = formData.get("purity");
-  if (purity != null && String(purity).trim() !== "") patch.purity = Number(purity);
-  const sample = formData.get("sample_id");
-  if (sample != null) patch.sample_id = String(sample).trim() || null;
-  const xrfRaw = String(formData.get("xrf_result") ?? "");
-  if (xrfRaw.trim()) {
-    const j = parseXrfJson(xrfRaw);
-    if (j === null) return { error: "XRF result must be valid JSON" };
-    patch.xrf_result = j;
-  }
-  const qc = formData.get("qc_observations");
-  if (qc != null) patch.qc_observations = String(qc).trim() || null;
-
-  const supabase = await createClient();
-  const { error } = await supabase.from("analysis_records").update(patch as never).eq("id", recordId);
-  if (error) return { error: error.message };
-  return {};
-}

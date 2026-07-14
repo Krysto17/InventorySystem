@@ -7,28 +7,6 @@ import { getProfile } from "@/lib/auth/get-profile";
 
 export type ProcessingState = { error?: string };
 
-// Processing records a material line (e.g. iron weight + comment) while the
-// visit is in processing. A supplier/visit can have several lines.
-export async function addProcessingMaterialLine(formData: FormData): Promise<void> {
-  const me = await getProfile();
-  if (!me || (me.role !== "processing" && me.role !== "owner")) return;
-
-  const visitId = String(formData.get("visit_id") ?? "");
-  const materialTypeId = String(formData.get("material_type_id") ?? "");
-  const weight = Number(formData.get("weight_kg"));
-  if (!visitId || !materialTypeId || !(weight >= 0)) return;
-  const comment = String(formData.get("receiving_comment") ?? "").trim() || null;
-
-  const supabase = await createClient();
-  await supabase.from("visit_materials").insert({
-    visit_id: visitId,
-    material_type_id: materialTypeId,
-    weight_kg: weight,
-    receiving_comment: comment,
-    recorded_by: me.id,
-  });
-  revalidatePath(`/visits/${visitId}`);
-}
 
 type UsageLine = { machine_id: string; measurement: number };
 
@@ -120,31 +98,6 @@ export async function createVisit(
   redirect(`/visits/${visit.id}`);
 }
 
-export async function updateVisitOrigin(
-  _prev: IntakeState,
-  formData: FormData,
-): Promise<IntakeState> {
-  const me = await getProfile();
-  if (!me) return { error: "Not signed in" };
-  if (me.role !== "processing" && me.role !== "owner") return { error: "Forbidden" };
-
-  const visitId = String(formData.get("visit_id") ?? "");
-  if (!visitId) return { error: "Missing visit id" };
-
-  const patch: Record<string, string | null> = {};
-  const v = (k: string) => {
-    const raw = formData.get(k);
-    return raw == null ? null : String(raw).trim();
-  };
-  const dm = v("declared_material_type_id"); if (dm) patch.declared_material_type_id = dm;
-  const sup = v("supplier_id"); if (sup) patch.supplier_id = sup;
-
-  const supabase = await createClient();
-  const { error } = await supabase.from("visits").update(patch as never).eq("id", visitId);
-  if (error) return { error: error.message };
-  revalidatePath(`/visits/${visitId}`);
-  return {};
-}
 
 export async function submitProcessing(
   _prev: ProcessingState,

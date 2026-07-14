@@ -29,7 +29,7 @@ export default async function QcSamplesPage() {
 
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">Recorded samples</h2></CardHeader>
-        <CardContent><SampleAnalysesTable rows={samples} /></CardContent>
+        <CardContent><SampleAnalysesTable rows={samples} canDelete /></CardContent>
       </Card>
     </main>
   );
