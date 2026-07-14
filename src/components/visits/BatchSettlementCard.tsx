@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { recordDeduction, removeDeduction, removeUtilityCharge } from "@/app/visits/[id]/finance-actions";
-import { submitBatchSettlement, setSettlementStatus, updateSupplierAccount } from "@/app/visits/[id]/settlement-actions";
+import { setSettlementStatus, updateSupplierAccount } from "@/app/visits/[id]/settlement-actions";
 import type { Role } from "@/lib/auth/roles";
 
 import { one as g1 } from "@/lib/db/relation";
@@ -206,14 +206,12 @@ export async function BatchSettlementCard({
           </div>
         )}
 
-        {(isManager || isOwner) && !locked && (
-          <form action={submitBatchSettlement} className="border-t border-line pt-3">
-            <input type="hidden" name="visit_id" value={visitId} />
-            <button type="submit" className="w-full rounded bg-ore px-3 py-2 text-sm font-semibold text-white hover:bg-ore-strong">
-              {status ? "Re-submit batch to accounting" : "Submit batch to accounting for payment"}
-            </button>
-            <p className="mt-1 text-center text-[11px] text-ink-2">The owner approved the price — this goes straight to accounting.</p>
-          </form>
+        {/* No manual submit: the owner's price approval auto-creates this
+            settlement and sends it straight to accounting. */}
+        {(isManager || isOwner) && !status && (
+          <p className="border-t border-line pt-3 text-[11px] text-ink-2">
+            Apply any deductions here, then submit the priced batch to the owner — on approval this goes straight to accounting.
+          </p>
         )}
 
         {/* Accountant: pay once approved (only the accountant marks paid) */}
