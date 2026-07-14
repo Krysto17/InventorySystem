@@ -76,7 +76,7 @@ export default async function OwnerDashboard({
       .select(`
         measurement, line_cost,
         machine:machines(name, charge_basis, site_id),
-        processing_record:processing_records(completed_at, visit:visits(site_id))
+        processing_record:processing_records(completed_at, discount_percent, visit:visits(site_id))
       `)
       .gte("processing_records.completed_at", dateFromISO)
       .lte("processing_records.completed_at", dateToISO),
@@ -190,18 +190,21 @@ export default async function OwnerDashboard({
   // ── Machine utilization ───────────────────────────────────────────────────
   const machineMap = new Map<string, { name: string; totalMeasurement: number; totalFee: number; charge_basis: string }>();
   for (const u of machineUsage ?? []) {
-    const pr = g1<{ visit?: unknown }>((u as { processing_record: unknown }).processing_record);
+    const pr = g1<{ visit?: unknown; discount_percent?: number }>((u as { processing_record: unknown }).processing_record);
     if (!pr) continue;
     const visit = g1<{ site_id?: string }>(pr.visit);
     if (siteFilter && visit?.site_id !== siteFilter) continue;
     const machine = g1<{ name?: string; charge_basis?: string }>((u as { machine: unknown }).machine);
     const name = machine?.name ?? "—";
+    // The fee actually deducted from the supplier is net of the per-batch
+    // discount (= the light-bill charge), not the gross machine cost.
+    const netFee = Number(u.line_cost) * (1 - (Number(pr.discount_percent) || 0) / 100);
     const existing = machineMap.get(name);
     if (existing) {
       existing.totalMeasurement += Number(u.measurement);
-      existing.totalFee += Number(u.line_cost);
+      existing.totalFee += netFee;
     } else {
-      machineMap.set(name, { name, totalMeasurement: Number(u.measurement), totalFee: Number(u.line_cost), charge_basis: machine?.charge_basis ?? "" });
+      machineMap.set(name, { name, totalMeasurement: Number(u.measurement), totalFee: netFee, charge_basis: machine?.charge_basis ?? "" });
     }
   }
   const machineRows = Array.from(machineMap.values()).sort((a, b) => b.totalFee - a.totalFee);
@@ -283,7 +286,7 @@ export default async function OwnerDashboard({
                   <tr className="border-b border-zinc-200 text-xs text-zinc-500 dark:border-zinc-800">
                     <th className="py-1 text-left">Machine</th>
                     <th className="py-1 text-right">Processed</th>
-                    <th className="py-1 text-right">Fee generated</th>
+                    <th className="py-1 text-right">Fee deducted</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
