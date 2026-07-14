@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { recordXrf, setLinePrice, finalizeLinePrice, skipToPricing, unsettleLine, resettleLine, removeLineAsManager, updateMaterialLine, addMaterialLine, submitPricedBatch, approvePricing, rejectPricing } from "@/app/visits/[id]/batch-actions";
+import { recordXrf, setLinePrice, finalizeLinePrice, skipToPricing, unsettleLine, resettleLine, removeLineAsManager, updateMaterialLine, addMaterialLine, approvePricing, rejectPricing } from "@/app/visits/[id]/batch-actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { ReceivingLines, type RxLine } from "@/components/visits/ReceivingLines";
 import type { Role } from "@/lib/auth/roles";
@@ -412,25 +412,8 @@ export async function BatchMaterials({
           )
         )}
 
-        {/* Manager: submit the priced batch to the owner (→ awaiting approval,
-            Pricing node green). One click, amount from the line prices. */}
-        {canPrice && totalPurchase > 0 && (
-          <form action={submitPricedBatch} className="flex flex-wrap items-end gap-2 border-t border-line pt-3">
-            <input type="hidden" name="visit_id" value={visitId} />
-            <label className="text-xs font-medium">
-              Payment terms
-              <select name="payment_terms" defaultValue="immediate" className="mt-1 block rounded border px-2 py-1 text-sm">
-                <option value="immediate">Immediate</option>
-                <option value="deferred">Deferred (pay later)</option>
-                <option value="installment">Installments</option>
-                <option value="deducted">Deduct from processing fee</option>
-              </select>
-            </label>
-            <SubmitButton pendingText="Submitting…" className="rounded bg-ore px-3 py-2 text-sm font-semibold text-white hover:bg-ore-strong disabled:opacity-50">
-              Submit priced batch to owner →
-            </SubmitButton>
-          </form>
-        )}
+        {/* The manager submits the priced batch below the batch supply settlement
+            (SubmitPricedBatchForm), so they review the net payable first. */}
 
         {/* Owner: approve (finalize + release to accounting) or send back. */}
         {viewerRole === "owner" && visitState === "awaiting_price_approval" && (

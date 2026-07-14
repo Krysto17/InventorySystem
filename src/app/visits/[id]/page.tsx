@@ -12,6 +12,8 @@ import { UtilityChargesCard } from "@/components/visits/UtilityChargesCard";
 import { SupplierFinanceCard } from "@/components/visits/SupplierFinanceCard";
 import { BatchSettlementCard } from "@/components/visits/BatchSettlementCard";
 import { ProcessingFeeReopen } from "@/components/visits/ProcessingFeeReopen";
+import { SubmitPricedBatchForm } from "@/components/visits/SubmitPricedBatchForm";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { GateExitCard } from "@/components/visits/GateExitCard";
 import { PdfDownloadBar } from "@/components/visits/PdfDownloadBar";
 import { BatchComments } from "@/components/visits/BatchComments";
@@ -105,6 +107,15 @@ export default async function VisitDetailPage({
 
   // Owner-finalised price → green "Director OK" node in the chain.
   const priceApproved = (finalizedCount ?? 0) > 0;
+
+  // The manager submits the priced batch below the settlement (once lines are
+  // priced). settlement_totals.materials = the priced total.
+  const { data: totalsRow } = await supabase.rpc("settlement_totals", { p_visit_id: id });
+  const pricedMaterials = Number((totalsRow ?? [])[0]?.materials ?? 0);
+  const canSubmitPrice =
+    (me.role === "manager" || me.role === "owner") &&
+    (visit.state as string) === "pricing" &&
+    pricedMaterials > 0;
 
   // Batch delete gate (#4/#5): general manager may delete until owner-approval,
   // owner until paid. Mirrors the delete_batch RPC, which re-checks server-side.
@@ -294,6 +305,15 @@ export default async function VisitDetailPage({
       supplierId={(visit as { supplier_id?: string }).supplier_id ?? null}
       viewerRole={me.role as Role}
     />
+    {canSubmitPrice && (
+      <Card>
+        <CardHeader><h2 className="text-sm font-semibold">Submit pricing</h2></CardHeader>
+        <CardContent>
+          <p className="mb-2 text-xs text-ink-2">Review the net payable above, then submit the priced batch to the owner for approval.</p>
+          <SubmitPricedBatchForm visitId={visitNorm.id} />
+        </CardContent>
+      </Card>
+    )}
     <SupplierFinanceCard
       visitId={visitNorm.id}
       supplierId={(visit as { supplier_id?: string }).supplier_id ?? null}
