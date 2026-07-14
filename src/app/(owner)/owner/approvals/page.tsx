@@ -104,30 +104,43 @@ export default async function OwnerApprovalsPage() {
                 const sup = g1<{ name: string }>((v as { supplier: unknown }).supplier);
                 const site = g1<{ name: string }>((v as { site: unknown }).site);
                 const pr = g1<{ purchase_amount: number }>((v as { pricing: unknown }).pricing);
-                const lines = ((v as { materials: unknown }).materials ?? []) as { weight_kg: number; material: unknown }[];
-                const totalWeight = lines.reduce((s, l) => s + Number(l.weight_kg ?? 0), 0);
-                const matNames = Array.from(new Set(lines.map((l) => g1<{ name: string }>(l.material)?.name ?? "—")));
-                const matLabel = matNames.length ? matNames.join(", ") : (g1<{ name: string }>((v as { declared_material_type: unknown }).declared_material_type)?.name ?? "—");
+                const lines = ((v as { materials: unknown }).materials ?? []) as { weight_kg: number; unit_price: number | null; material: unknown }[];
                 return (
-                  <li key={v.id as string} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
-                    <Link href={`/visits/${v.id}`} className="flex flex-wrap items-center gap-2 hover:underline">
-                      <Stamp>{(v.id as string).slice(0, 8).toUpperCase()}</Stamp>
-                      <strong>{sup?.name ?? "—"}</strong>
-                      <span className="text-ink-2">· {matLabel}</span>
-                      <span className="font-medium">{totalWeight.toLocaleString(undefined, { maximumFractionDigits: 3 })} kg</span>
-                      {pr?.purchase_amount != null && <span className="font-medium">· {ngn(Number(pr.purchase_amount))}</span>}
-                      <span className="text-ink-2">· {site?.name ?? "—"} · {formatTimestamp(v.created_at as string)}</span>
-                    </Link>
-                    <div className="flex shrink-0 gap-2">
-                      <form action={approvePricing}>
-                        <input type="hidden" name="visit_id" value={v.id as string} />
-                        <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve &amp; finalize</button>
-                      </form>
-                      <form action={rejectPricing}>
-                        <input type="hidden" name="visit_id" value={v.id as string} />
-                        <button type="submit" className="rounded border border-line px-3 py-1 text-xs font-semibold text-ink-2 hover:bg-zinc-50">Send back</button>
-                      </form>
+                  <li key={v.id as string} className="px-4 py-3 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Link href={`/visits/${v.id}`} className="flex flex-wrap items-center gap-2 hover:underline">
+                        <Stamp>{(v.id as string).slice(0, 8).toUpperCase()}</Stamp>
+                        <strong>{sup?.name ?? "—"}</strong>
+                        <span className="text-ink-2">· {site?.name ?? "—"} · {formatTimestamp(v.created_at as string)}</span>
+                        {pr?.purchase_amount != null && <span className="font-medium">· Total {ngn(Number(pr.purchase_amount))}</span>}
+                      </Link>
+                      <div className="flex shrink-0 gap-2">
+                        <form action={approvePricing}>
+                          <input type="hidden" name="visit_id" value={v.id as string} />
+                          <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve &amp; finalize</button>
+                        </form>
+                        <form action={rejectPricing}>
+                          <input type="hidden" name="visit_id" value={v.id as string} />
+                          <button type="submit" className="rounded border border-line px-3 py-1 text-xs font-semibold text-ink-2 hover:bg-zinc-50">Send back</button>
+                        </form>
+                      </div>
                     </div>
+                    {/* Per-material breakdown: type · kg · unit price */}
+                    <ul className="mt-2 space-y-0.5 border-l-2 border-line pl-3 text-xs text-ink-2">
+                      {lines.length === 0 ? (
+                        <li>No material lines.</li>
+                      ) : lines.map((l, i) => {
+                        const name = g1<{ name: string }>(l.material)?.name ?? "—";
+                        const kg = Number(l.weight_kg ?? 0);
+                        return (
+                          <li key={i}>
+                            <span className="font-medium text-ink">{name}</span>
+                            {" · "}{kg.toLocaleString(undefined, { maximumFractionDigits: 3 })} kg
+                            {" · "}{l.unit_price != null ? `${ngn(Number(l.unit_price))}/kg` : "unpriced"}
+                          </li>
+                        );
+                      })}
+                    </ul>
                   </li>
                 );
               })}

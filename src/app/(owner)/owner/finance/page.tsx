@@ -37,7 +37,7 @@ export default async function OwnerFinancePage({
   const toEnd = `${to}T23:59:59`;
 
   const supabase = await createClient();
-  const [{ data: sites }, { data: machines }, { data: expRaw }, { data: advRaw }, { data: pmuRaw }] =
+  const [{ data: sites }, { data: machines }, { data: expRaw }, { data: advRaw }, { data: pmuRaw }, { data: feeRaw }] =
     await Promise.all([
       supabase.from("sites").select("id, name").order("name"),
       supabase.from("machines").select("id, name, site_id").order("name"),
@@ -48,8 +48,13 @@ export default async function OwnerFinancePage({
         .select("amount_naira, paid_at, created_at, site_id, approval_status, site:sites(name), supplier:suppliers(name)")
         .eq("approval_status", "paid"),
       supabase.from("processing_machine_usage")
-        .select("line_cost, machine:machines(name, site_id, site:sites(name)), record:processing_records!inner(completed_at, visit:visits(supplier:suppliers(name)))")
+        .select("line_cost, machine:machines(name, site_id, site:sites(name)), record:processing_records!inner(completed_at, discount_percent)")
         .limit(2000),
+      // The processing fee actually deducted from a supplier's batch is the
+      // light-bill utility charge (net of discount / any adjustment).
+      supabase.from("utility_charges")
+        .select("amount, created_at, kind, visit:visits(site_id, site:sites(name), supplier:suppliers(name))")
+        .eq("kind", "light_bill"),
     ]);
 
   const inRange = (iso: string | null) => !!iso && iso.slice(0, 10) >= from && iso <= toEnd;
@@ -75,18 +80,32 @@ export default async function OwnerFinancePage({
     }))
     .filter((r) => inRange(r.date) && passSite(r.site_id));
 
-  const processing: Row[] = (pmuRaw ?? [])
+  // Processing fees = the light-bill charges actually deducted from suppliers.
+  const processing: Row[] = (feeRaw ?? [])
+    .map((c) => {
+      const v = g1<{ site_id: string; site: unknown; supplier: unknown }>((c as { visit: unknown }).visit);
+      return {
+        date: c.created_at as string,
+        site_id: (v?.site_id as string) ?? "",
+        site: g1<{ name: string }>(v?.site)?.name ?? "—",
+        amount: Number(c.amount),
+        supplier: g1<{ name: string }>(v?.supplier)?.name ?? "—",
+      } as Row;
+    })
+    .filter((r) => inRange(r.date) && passSite(r.site_id));
+
+  // Machine usage (net of discount) — for the machine-utilization view only.
+  const machineUsage: Row[] = (pmuRaw ?? [])
     .map((u) => {
       const m = g1<{ name: string; site_id: string; site: unknown }>((u as { machine: unknown }).machine);
-      const rec = g1<{ completed_at: string; visit: unknown }>((u as { record: unknown }).record);
-      const sup = g1<{ name: string }>(g1<{ supplier: unknown }>(rec?.visit)?.supplier);
+      const rec = g1<{ completed_at: string; discount_percent: number }>((u as { record: unknown }).record);
+      const netFee = Number(u.line_cost) * (1 - (Number(rec?.discount_percent) || 0) / 100);
       return {
         date: rec?.completed_at ?? "",
         site_id: (m?.site_id as string) ?? "",
         site: g1<{ name: string }>(m?.site)?.name ?? "—",
-        amount: Number(u.line_cost),
+        amount: netFee,
         machine: m?.name ?? "—",
-        supplier: sup?.name ?? "—",
       } as Row;
     })
     .filter((r) => inRange(r.date) && passSite(r.site_id) && (!machineFilter || r.machine === machineFilter));
@@ -113,9 +132,9 @@ export default async function OwnerFinancePage({
   bump(expenses, "exp"); bump(advances, "adv"); bump(processing, "proc");
   const periodRows = Array.from(periods.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
 
-  // ── Processing fees by machine ──────────────────────────────────────────────
+  // ── Machine utilization (net fee generated per machine) ─────────────────────
   const byMachine = new Map<string, { site: string; total: number; count: number }>();
-  for (const r of processing) {
+  for (const r of machineUsage) {
     const cur = byMachine.get(r.machine ?? "—") ?? { site: r.site, total: 0, count: 0 };
     cur.total += r.amount; cur.count += 1;
     byMachine.set(r.machine ?? "—", cur);
@@ -206,7 +225,7 @@ export default async function OwnerFinancePage({
 
       {/* By machine */}
       <Card>
-        <CardHeader><h2 className="text-sm font-semibold">Processing fees by machine</h2></CardHeader>
+        <CardHeader><h2 className="text-sm font-semibold">Machine utilization (fee generated)</h2></CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead className="border-b border-line text-left text-xs text-zinc-500">
