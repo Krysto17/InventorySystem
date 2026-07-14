@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { recordDeduction } from "@/app/visits/[id]/finance-actions";
+import { recordDeduction, removeDeduction, removeUtilityCharge } from "@/app/visits/[id]/finance-actions";
 import { submitBatchSettlement, setSettlementStatus, updateSupplierAccount } from "@/app/visits/[id]/settlement-actions";
 import type { Role } from "@/lib/auth/roles";
 
@@ -34,8 +34,8 @@ export async function BatchSettlementCard({
       supabase.from("visit_materials")
         .select("id, weight_kg, unit_price, purchase_amount, material:material_types(name)")
         .eq("visit_id", visitId).order("created_at", { ascending: true }),
-      supabase.from("utility_charges").select("kind, description, amount").eq("visit_id", visitId),
-      supabase.from("advance_deductions").select("amount, notes, created_at").eq("ref_visit_id", visitId),
+      supabase.from("utility_charges").select("id, kind, description, amount").eq("visit_id", visitId),
+      supabase.from("advance_deductions").select("id, amount, notes, created_at").eq("ref_visit_id", visitId),
       supabase.rpc("supplier_outstanding_debt", { _supplier_id: supplierId }),
       supabase.from("batch_settlements").select("*").eq("visit_id", visitId).maybeSingle(),
     ]);
@@ -58,6 +58,9 @@ export async function BatchSettlementCard({
   const isAccounting = viewerRole === "accounting";
   const status = (settlement?.status as string | undefined) ?? null;
   const locked = status === "approved" || status === "paid";
+  // Manager/owner may remove an applied deduction (mistake) before the batch is
+  // approved/paid.
+  const canEditDeductions = (isManager || isOwner) && !locked;
 
   // Supply invoice (downloadable + WhatsApp-shareable) once the batch is submitted.
   const h = await headers();
@@ -104,14 +107,40 @@ export async function BatchSettlementCard({
         <div className="space-y-1 border-t border-line pt-3 text-sm">
           <Row label="Materials total" value={ngn(materials)} />
           <Row label="Processing fee" value={`− ${ngn(lightBill)}`} />
-          {otherCharges.map((c, i) => (
-            <Row
-              key={i}
-              label={(c.description as string | null)?.trim() || "Other deduction"}
-              value={`− ${ngn(Number(c.amount))}`}
-            />
+          {otherCharges.map((c) => (
+            <div key={c.id as string} className="flex items-center justify-between">
+              <span className="text-ink-2">{(c.description as string | null)?.trim() || "Other deduction"}</span>
+              <span className="flex items-center gap-2">
+                − {ngn(Number(c.amount))}
+                {canEditDeductions && (
+                  <form action={removeUtilityCharge}>
+                    <input type="hidden" name="visit_id" value={visitId} />
+                    <input type="hidden" name="charge_id" value={c.id as string} />
+                    <button type="submit" title="Remove this deduction" className="rounded border border-reject px-1.5 text-[11px] leading-4 text-reject hover:bg-reject-soft">✕</button>
+                  </form>
+                )}
+              </span>
+            </div>
           ))}
-          <Row label="Advance deducted" value={`− ${ngn(advance)}`} />
+          {(deds ?? []).length === 0 ? (
+            <Row label="Advance deducted" value={`− ${ngn(advance)}`} />
+          ) : (
+            (deds ?? []).map((d) => (
+              <div key={d.id as string} className="flex items-center justify-between">
+                <span className="text-ink-2">Advance deducted{(d.notes as string | null)?.trim() ? ` · ${(d.notes as string).trim()}` : ""}</span>
+                <span className="flex items-center gap-2">
+                  − {ngn(Number(d.amount))}
+                  {canEditDeductions && (
+                    <form action={removeDeduction}>
+                      <input type="hidden" name="visit_id" value={visitId} />
+                      <input type="hidden" name="deduction_id" value={d.id as string} />
+                      <button type="submit" title="Remove this deduction" className="rounded border border-reject px-1.5 text-[11px] leading-4 text-reject hover:bg-reject-soft">✕</button>
+                    </form>
+                  )}
+                </span>
+              </div>
+            ))
+          )}
           <div className="flex items-center justify-between border-t border-line pt-1 font-semibold">
             <span>Net balance payable</span><span>{ngn(net)}</span>
           </div>

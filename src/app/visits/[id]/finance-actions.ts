@@ -79,6 +79,39 @@ export async function recordDeduction(formData: FormData): Promise<void> {
   if (visitId) revalidatePath(`/visits/${visitId}`);
 }
 
+// Manager/accounting/owner removes an advance deduction applied by mistake. The
+// supplier's outstanding debt is recomputed automatically. Blocked once the
+// batch is paid (locked).
+export async function removeDeduction(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || !["manager", "accounting", "owner"].includes(me.role)) return;
+  const visitId = String(formData.get("visit_id") ?? "") || null;
+  const deductionId = String(formData.get("deduction_id") ?? "");
+  if (!deductionId) return;
+
+  const supabase = await createClient();
+  if (visitId) {
+    const { data: st } = await supabase.from("batch_settlements").select("status").eq("visit_id", visitId).maybeSingle();
+    if (st?.status === "paid") return; // already disbursed — locked
+  }
+  await supabase.from("advance_deductions").delete().eq("id", deductionId);
+  if (visitId) revalidatePath(`/visits/${visitId}`);
+}
+
+// Manager/owner removes a utility deduction (processing fee / other charge)
+// applied by mistake, while the visit is still open.
+export async function removeUtilityCharge(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || !["manager", "owner"].includes(me.role)) return;
+  const visitId = String(formData.get("visit_id") ?? "") || null;
+  const chargeId = String(formData.get("charge_id") ?? "");
+  if (!chargeId) return;
+
+  const supabase = await createClient();
+  await supabase.from("utility_charges").delete().eq("id", chargeId);
+  if (visitId) revalidatePath(`/visits/${visitId}`);
+}
+
 // ─── Payment workflow (Phase 11 C) ───────────────────────────────────────────
 
 export async function raisePaymentRequest(formData: FormData): Promise<void> {

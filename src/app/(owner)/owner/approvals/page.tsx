@@ -33,7 +33,7 @@ export default async function OwnerApprovalsPage() {
   // Batches the manager has priced, awaiting the owner's approval (#1/#5).
   const { data: pendingPrices } = await supabase
     .from("visits")
-    .select("id, created_at, supplier:suppliers(name), declared_material_type:material_types(name), site:sites(name), pricing:pricing(purchase_amount)")
+    .select("id, created_at, supplier:suppliers(name), declared_material_type:material_types(name), site:sites(name), pricing:pricing(purchase_amount), materials:visit_materials(weight_kg, unit_price, purchase_amount, material:material_types(name))")
     .eq("state", "awaiting_price_approval")
     .order("created_at", { ascending: true });
 
@@ -102,16 +102,21 @@ export default async function OwnerApprovalsPage() {
             <ul className="divide-y divide-line">
               {(pendingPrices ?? []).map((v) => {
                 const sup = g1<{ name: string }>((v as { supplier: unknown }).supplier);
-                const mat = g1<{ name: string }>((v as { declared_material_type: unknown }).declared_material_type);
                 const site = g1<{ name: string }>((v as { site: unknown }).site);
                 const pr = g1<{ purchase_amount: number }>((v as { pricing: unknown }).pricing);
+                const lines = ((v as { materials: unknown }).materials ?? []) as { weight_kg: number; material: unknown }[];
+                const totalWeight = lines.reduce((s, l) => s + Number(l.weight_kg ?? 0), 0);
+                const matNames = Array.from(new Set(lines.map((l) => g1<{ name: string }>(l.material)?.name ?? "—")));
+                const matLabel = matNames.length ? matNames.join(", ") : (g1<{ name: string }>((v as { declared_material_type: unknown }).declared_material_type)?.name ?? "—");
                 return (
                   <li key={v.id as string} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
                     <Link href={`/visits/${v.id}`} className="flex flex-wrap items-center gap-2 hover:underline">
                       <Stamp>{(v.id as string).slice(0, 8).toUpperCase()}</Stamp>
                       <strong>{sup?.name ?? "—"}</strong>
-                      <span className="text-ink-2">· {mat?.name ?? "—"} · {site?.name ?? "—"} · {formatTimestamp(v.created_at as string)}</span>
-                      {pr?.purchase_amount != null && <span className="font-medium">{ngn(Number(pr.purchase_amount))}</span>}
+                      <span className="text-ink-2">· {matLabel}</span>
+                      <span className="font-medium">{totalWeight.toLocaleString(undefined, { maximumFractionDigits: 3 })} kg</span>
+                      {pr?.purchase_amount != null && <span className="font-medium">· {ngn(Number(pr.purchase_amount))}</span>}
+                      <span className="text-ink-2">· {site?.name ?? "—"} · {formatTimestamp(v.created_at as string)}</span>
                     </Link>
                     <div className="flex shrink-0 gap-2">
                       <form action={approvePricing}>
