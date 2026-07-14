@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
 import { markAdvancePaid, markConsumablePaid, markSettlementPaid } from "./actions";
+import { MarkPaidButton } from "@/components/accounting/MarkPaidButton";
 
 import { one as g1 } from "@/lib/db/relation";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -59,10 +60,7 @@ export default async function AccountingPayoutsPage() {
                           : "No account details on file"}
                       </span>
                     </span>
-                    <form action={markSettlementPaid}>
-                      <input type="hidden" name="settlement_id" value={s.id as string} />
-                      <button type="submit" className="rounded bg-ink px-3 py-1 text-xs font-semibold text-white">Mark paid</button>
-                    </form>
+                    <MarkPaidButton action={markSettlementPaid} inputName="settlement_id" id={s.id as string} />
                   </li>
                 );
               })}
@@ -102,10 +100,7 @@ export default async function AccountingPayoutsPage() {
                         {a.comment ? <div>Comment: {a.comment as string}</div> : null}
                         <div>Logged: {formatTimestamp(a.created_at as string)}</div>
                       </div>
-                      <form action={markAdvancePaid} className="mt-2">
-                        <input type="hidden" name="advance_id" value={a.id as string} />
-                        <button type="submit" className="rounded bg-ink px-3 py-1 text-xs font-semibold text-white">Mark paid</button>
-                      </form>
+                      <MarkPaidButton action={markAdvancePaid} inputName="advance_id" id={a.id as string} />
                     </details>
                   </li>
                 );
@@ -141,10 +136,7 @@ export default async function AccountingPayoutsPage() {
                       {e.comment ? <div>Comment: {e.comment as string}</div> : null}
                       <div>Logged: {formatTimestamp(e.created_at as string)}</div>
                     </div>
-                    <form action={markConsumablePaid} className="mt-2">
-                      <input type="hidden" name="consumable_id" value={e.id as string} />
-                      <button type="submit" className="rounded bg-ink px-3 py-1 text-xs font-semibold text-white">Mark paid</button>
-                    </form>
+                    <MarkPaidButton action={markConsumablePaid} inputName="consumable_id" id={e.id as string} />
                   </details>
                 </li>
               ))}
