@@ -1,12 +1,24 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getProfile } from "@/lib/auth/get-profile";
 import { formatWeight, formatTimestamp } from "@/lib/visits/format";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
+import { StockAdjustmentForm } from "@/components/inventory/StockAdjustmentForm";
 
 export default async function InventoryPage() {
+  const me = await getProfile();
+  const isOwner = me?.role === "owner";
   const supabase = await createClient();
+
+  // Owner-only manual stock adjustment needs the site + material lists.
+  const [{ data: adjSites }, { data: adjMaterials }] = isOwner
+    ? await Promise.all([
+        supabase.from("sites").select("id, name").order("name"),
+        supabase.from("material_types").select("id, name").eq("active", true).order("name"),
+      ])
+    : [{ data: null }, { data: null }];
 
   // Visits awaiting stock intake
   const { data: intakeQueue } = await supabase
@@ -157,6 +169,19 @@ export default async function InventoryPage() {
           )}
         </CardContent>
       </Card>
+
+      {isOwner && (
+        <Card>
+          <CardHeader><h2 className="font-semibold text-sm">Stock adjustment (owner)</h2></CardHeader>
+          <CardContent>
+            <p className="mb-3 text-xs text-gray-500">Manually correct on-hand stock — e.g. a recount, spoilage, or found discrepancy.</p>
+            <StockAdjustmentForm
+              sites={(adjSites ?? []) as { id: string; name: string }[]}
+              materialTypes={(adjMaterials ?? []) as { id: string; name: string }[]}
+            />
+          </CardContent>
+        </Card>
+      )}
     </main>
   );
 }

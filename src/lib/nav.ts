@@ -82,6 +82,7 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Ledger", href: "/owner/ledger", icon: "accounting" },
     { label: "Finance breakdown", href: "/owner/finance", icon: "reports" },
     { label: "Mixing batches", href: "/owner/cost-batches", icon: "bulkSales" },
+    { label: "Stock", href: "/inventory", icon: "inventory" },
     { label: "Gate oversight", href: "/owner/gate", icon: "gate" },
     { label: "All visits", href: "/owner/visits", icon: "visits" },
     { label: "Search", href: "/owner/search", icon: "search" },
