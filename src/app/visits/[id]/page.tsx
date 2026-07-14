@@ -40,7 +40,6 @@ export default async function VisitDetailPage({
     { data: machines },
     { count: finalizedCount },
     { data: settlement },
-    { data: paymentsRaw },
     { data: stockMovementRaw },
   ] = await Promise.all([
     supabase
@@ -92,14 +91,6 @@ export default async function VisitDetailPage({
       .eq("visit_id", id)
       .eq("price_finalized", true),
     supabase.from("batch_settlements").select("status").eq("visit_id", id).maybeSingle(),
-    supabase
-      .from("payments")
-      .select(`
-        id, direction, amount, method, notes, paid_at, status,
-        recorded_by_profile:profiles!payments_recorded_by_fkey(full_name)
-      `)
-      .eq("visit_id", id)
-      .order("paid_at", { ascending: true }),
     supabase
       .from("stock_movements")
       .select(`
@@ -225,48 +216,6 @@ export default async function VisitDetailPage({
     : null;
 
 
-  const paymentsNorm = (paymentsRaw ?? []).map((p) => ({
-    id: p.id as string,
-    direction: p.direction as "processing_fee_in" | "purchase_amount_out",
-    amount: Number(p.amount),
-    method: p.method as string | null,
-    notes: p.notes as string | null,
-    paid_at: p.paid_at as string,
-    recorded_by_name:
-      (
-        get1(
-          (p as { recorded_by_profile: unknown }).recorded_by_profile,
-        ) as { full_name?: string } | null
-      )?.full_name ?? null,
-  }));
-
-  // Compute processing fee owed from processing_machine_usage line costs
-  const processingFeeOwed =
-    processingNorm
-      ? processingNorm.usage.reduce((s, u) => s + Number(u.line_cost), 0)
-      : null;
-  // Only executed payments count toward balances (Phase 11: pending/approved/
-  // rejected rows are workflow states, not money moved).
-  const executed = new Set(["paid", "partially_paid"]);
-  const isExecuted = (p: { id: string }) => {
-    const raw = (paymentsRaw ?? []).find((r) => r.id === p.id);
-    return raw == null || executed.has((raw.status as string) ?? "paid");
-  };
-  const processingFeePaid = paymentsNorm
-    .filter((p) => p.direction === "processing_fee_in" && isExecuted(p))
-    .reduce((s, p) => s + p.amount, 0);
-  const purchaseAmountOwed = pricingNorm?.purchase_amount ?? null;
-  const purchaseAmountPaid = paymentsNorm
-    .filter((p) => p.direction === "purchase_amount_out" && isExecuted(p))
-    .reduce((s, p) => s + p.amount, 0);
-
-  const paymentBalance = {
-    processingFeeOwed,
-    processingFeePaid,
-    purchaseAmountOwed,
-    purchaseAmountPaid,
-    processingDeducted: !!(visit as { processing_deducted?: boolean }).processing_deducted,
-  };
 
   const stockMovementNorm = stockMovementRaw
     ? {
@@ -314,7 +263,6 @@ export default async function VisitDetailPage({
         hasProcessing={processingNorm !== null}
         hasAnalysis={analysisNorm !== null}
         hasPricing={pricingNorm !== null && pricingNorm.agreement_status !== "pending"}
-        hasPayments={paymentsNorm.length > 0}
       />
     <GateExitCard
       visitId={visitNorm.id}
@@ -356,8 +304,6 @@ export default async function VisitDetailPage({
       processing={processingNorm}
       analysis={analysisNorm}
       pricing={pricingNorm}
-      payments={paymentsNorm}
-      paymentBalance={paymentBalance}
       viewer={{ role: me.role as VisitTimelineProps["viewer"]["role"] }}
       machines={
         (machines ?? []) as {

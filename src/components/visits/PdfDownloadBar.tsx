@@ -10,7 +10,6 @@ type Props = {
   hasProcessing: boolean;
   hasAnalysis: boolean;
   hasPricing: boolean;
-  hasPayments: boolean;
 };
 
 function PdfLink({ href, label }: { href: string; label: string }) {
@@ -33,7 +32,6 @@ export function PdfDownloadBar({
   hasProcessing,
   hasAnalysis,
   hasPricing,
-  hasPayments,
 }: Props) {
   const base = `/api/pdf`;
   const v = visitId;
@@ -58,10 +56,6 @@ export function PdfDownloadBar({
           <PdfLink href={`${base}/pricing/${v}`} label="Pricing sheet" />
         )}
 
-        {/* Payments — accounting + owner only */}
-        {hasPayments && (viewerRole === "accounting" || isOwner) && (
-          <PdfLink href={`${base}/payments/${v}`} label="Payment statement" />
-        )}
 
         {/* Full dossier — owner only */}
         {isOwner && (
