@@ -13,6 +13,7 @@ import { SupplierFinanceCard } from "@/components/visits/SupplierFinanceCard";
 import { BatchSettlementCard } from "@/components/visits/BatchSettlementCard";
 import { ProcessingFeeReopen } from "@/components/visits/ProcessingFeeReopen";
 import { SubmitPricedBatchForm } from "@/components/visits/SubmitPricedBatchForm";
+import { PriceCorrections } from "@/components/visits/PriceCorrections";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { GateExitCard } from "@/components/visits/GateExitCard";
 import { PdfDownloadBar } from "@/components/visits/PdfDownloadBar";
@@ -314,6 +315,12 @@ export default async function VisitDetailPage({
         </CardContent>
       </Card>
     )}
+    <PriceCorrections
+      visitId={visitNorm.id}
+      viewerRole={me.role as Role}
+      isGeneralManager={!!me.is_general_manager}
+      settlementStatus={settlementStatus}
+    />
     <SupplierFinanceCard
       visitId={visitNorm.id}
       supplierId={(visit as { supplier_id?: string }).supplier_id ?? null}

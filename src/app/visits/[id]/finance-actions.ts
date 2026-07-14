@@ -3,6 +3,32 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
+import { fail, ok, type ActionResult } from "@/lib/actions/result";
+
+// Owner / general manager records a price correction on a paid visit (the
+// supplier's material turned out over- or under-priced). The RPC enforces the
+// role + that the settlement was paid; the paid settlement is left untouched.
+export async function recordPriceCorrection(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const me = await getProfile();
+  if (!me || !(me.role === "owner" || me.is_general_manager)) {
+    return fail("Only the owner or general manager can record a correction.");
+  }
+  const visitId = String(formData.get("visit_id") ?? "");
+  const direction = String(formData.get("direction") ?? "");
+  const amount = Number(formData.get("amount"));
+  const reason = String(formData.get("reason") ?? "").trim() || null;
+  if (!visitId) return fail("Missing visit.");
+  if (!["overpaid", "underpaid"].includes(direction)) return fail("Pick over- or under-paid.");
+  if (!(amount > 0)) return fail("Amount must be greater than zero.");
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("record_price_correction", {
+    p_visit_id: visitId, p_direction: direction, p_amount: amount, p_reason: reason ?? undefined,
+  });
+  if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
+  revalidatePath(`/visits/${visitId}`);
+  return ok();
+}
 
 // ─── Utility charges (Phase 11 B) ────────────────────────────────────────────
 

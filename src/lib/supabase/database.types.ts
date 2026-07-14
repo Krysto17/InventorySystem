@@ -1156,6 +1156,42 @@ export type Database = {
           },
         ]
       }
+      price_corrections: {
+        Row: {
+          amount: number
+          created_at: string
+          direction: string
+          id: string
+          reason: string | null
+          recorded_by: string | null
+          site_id: string
+          supplier_id: string | null
+          visit_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          direction: string
+          id?: string
+          reason?: string | null
+          recorded_by?: string | null
+          site_id: string
+          supplier_id?: string | null
+          visit_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          direction?: string
+          id?: string
+          reason?: string | null
+          recorded_by?: string | null
+          site_id?: string
+          supplier_id?: string | null
+          visit_id?: string
+        }
+        Relationships: []
+      }
       pricing: {
         Row: {
           agreement_status: string
@@ -1993,6 +2029,7 @@ export type Database = {
       delete_batch: { Args: { p_visit_id: string }; Returns: undefined }
       delete_supplier: { Args: { p_supplier_id: string }; Returns: undefined }
       reopen_processing_fee: { Args: { p_visit_id: string }; Returns: undefined }
+      record_price_correction: { Args: { p_visit_id: string; p_direction: string; p_amount: number; p_reason?: string }; Returns: string }
       settlement_totals: { Args: { p_visit_id: string }; Returns: { materials: number; processing_fee: number; other_deductions: number; advances: number; net: number; remaining_debt: number }[] }
       sync_processing_fee: { Args: { p_visit_id: string }; Returns: undefined }
       record_opening_balance: { Args: { p_supplier_id: string; p_amount: number; p_as_of?: string; p_site_id?: string }; Returns: string }
