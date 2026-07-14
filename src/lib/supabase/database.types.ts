@@ -1258,6 +1258,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           discount_percent: number
+          fee_reopened: boolean
           id: string
           recorded_by: string
           started_at: string | null
@@ -1268,6 +1269,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           discount_percent?: number
+          fee_reopened?: boolean
           id?: string
           recorded_by: string
           started_at?: string | null
@@ -1278,6 +1280,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           discount_percent?: number
+          fee_reopened?: boolean
           id?: string
           recorded_by?: string
           started_at?: string | null
@@ -1983,6 +1986,8 @@ export type Database = {
       remove_line: { Args: { p_line_id: string }; Returns: undefined }
       delete_batch: { Args: { p_visit_id: string }; Returns: undefined }
       delete_supplier: { Args: { p_supplier_id: string }; Returns: undefined }
+      reopen_processing_fee: { Args: { p_visit_id: string }; Returns: undefined }
+      sync_processing_fee: { Args: { p_visit_id: string }; Returns: undefined }
       record_opening_balance: { Args: { p_supplier_id: string; p_amount: number; p_as_of?: string; p_site_id?: string }; Returns: string }
       current_role: {
         Args: never

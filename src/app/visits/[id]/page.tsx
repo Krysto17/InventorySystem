@@ -11,6 +11,7 @@ import { DeleteBatchButton } from "@/components/visits/DeleteBatchButton";
 import { UtilityChargesCard } from "@/components/visits/UtilityChargesCard";
 import { SupplierFinanceCard } from "@/components/visits/SupplierFinanceCard";
 import { BatchSettlementCard } from "@/components/visits/BatchSettlementCard";
+import { ProcessingFeeReopen } from "@/components/visits/ProcessingFeeReopen";
 import { GateExitCard } from "@/components/visits/GateExitCard";
 import { PdfDownloadBar } from "@/components/visits/PdfDownloadBar";
 import { BatchComments } from "@/components/visits/BatchComments";
@@ -332,6 +333,12 @@ export default async function VisitDetailPage({
       visitId={visitNorm.id}
       visitState={visitNorm.state}
       viewerRole={me.role as Role}
+    />
+    <ProcessingFeeReopen
+      visitId={visitNorm.id}
+      visitState={visitNorm.state}
+      viewerRole={me.role as Role}
+      machines={(machines ?? []) as { id: string; name: string; charge_basis: string; rate: number }[]}
     />
     <BatchComments visitId={visitNorm.id} viewerRole={me.role as Role} />
     <BatchSettlementCard

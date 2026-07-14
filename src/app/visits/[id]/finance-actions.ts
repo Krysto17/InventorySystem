@@ -42,6 +42,19 @@ export async function adjustUtilityCharge(formData: FormData): Promise<void> {
   if (visitId) revalidatePath(`/visits/${visitId}`);
 }
 
+// Manager/owner sends the processing fee back to the processing employee for
+// correction (reopen in place — the visit stays where it is).
+export async function reopenProcessingFee(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || !["manager", "owner"].includes(me.role)) return;
+  const visitId = String(formData.get("visit_id") ?? "");
+  if (!visitId) return;
+  const supabase = await createClient();
+  await supabase.rpc("reopen_processing_fee", { p_visit_id: visitId });
+  revalidatePath(`/visits/${visitId}`);
+  revalidatePath("/processing");
+}
+
 // ─── Advance deductions (Phase 11 A) ─────────────────────────────────────────
 
 export async function recordDeduction(formData: FormData): Promise<void> {

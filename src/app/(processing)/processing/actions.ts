@@ -317,3 +317,67 @@ export async function updateProcessing(
 
   return {};
 }
+
+// Processing employee re-does the machine usage after the manager sent the fee
+// back (fee_reopened). Replaces the usage and recomputes the light-bill fee via
+// sync_processing_fee; the visit state is unchanged.
+export async function resaveProcessingFee(
+  _prev: ProcessingState,
+  formData: FormData,
+): Promise<ProcessingState> {
+  const me = await getProfile();
+  if (!me) return { error: "Not signed in" };
+  if (me.role !== "processing" && me.role !== "owner") return { error: "Forbidden" };
+
+  const visitId = String(formData.get("visit_id") ?? "");
+  if (!visitId) return { error: "Missing visit id" };
+
+  const supabase = await createClient();
+  const { data: rec } = await supabase
+    .from("processing_records")
+    .select("id, fee_reopened")
+    .eq("visit_id", visitId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!rec) return { error: "No processing record" };
+  if (!rec.fee_reopened && me.role !== "owner") return { error: "Fee is not open for correction" };
+  const recordId = rec.id as string;
+
+  const lines: UsageLine[] = [];
+  for (const [key, val] of formData.entries()) {
+    const m = key.match(/^usage\[(\d+)\]\[(machine_id|measurement)\]$/);
+    if (!m) continue;
+    const idx = Number(m[1]);
+    lines[idx] ??= { machine_id: "", measurement: 0 };
+    if (m[2] === "machine_id") lines[idx].machine_id = String(val);
+    else lines[idx].measurement = Number(val);
+  }
+  const cleaned = lines.filter((l) => l && l.machine_id && l.measurement > 0);
+
+  const { error: delErr } = await supabase
+    .from("processing_machine_usage").delete().eq("processing_record_id", recordId);
+  if (delErr) return { error: delErr.message };
+
+  if (cleaned.length > 0) {
+    const { data: machineRows } = await supabase
+      .from("machines").select("id, rate").in("id", cleaned.map((l) => l.machine_id));
+    const rates = new Map<string, number>((machineRows ?? []).map((r) => [r.id as string, Number(r.rate)]));
+    const rows = cleaned.map((l) => ({
+      processing_record_id: recordId,
+      machine_id: l.machine_id,
+      measurement: l.measurement,
+      rate_snapshot: rates.get(l.machine_id) ?? 0,
+    }));
+    const { error: insErr } = await supabase.from("processing_machine_usage").insert(rows);
+    if (insErr) return { error: insErr.message };
+  }
+
+  // Recompute the light-bill fee + clear the reopened flag (SECURITY DEFINER).
+  const { error: syncErr } = await supabase.rpc("sync_processing_fee", { p_visit_id: visitId });
+  if (syncErr) return { error: syncErr.message };
+
+  revalidatePath(`/visits/${visitId}`);
+  revalidatePath("/processing");
+  return {};
+}
