@@ -29,7 +29,7 @@ export async function BatchSettlementCard({
   if (!["manager", "accounting", "owner"].includes(viewerRole) || !supplierId) return null;
 
   const supabase = await createClient();
-  const [{ data: lines }, { data: charges }, { data: deds }, { data: debt }, { data: settlement }] =
+  const [{ data: lines }, { data: charges }, { data: deds }, { data: debt }, { data: settlement }, { data: totals }] =
     await Promise.all([
       supabase.from("visit_materials")
         .select("id, weight_kg, unit_price, purchase_amount, material:material_types(name)")
@@ -38,19 +38,23 @@ export async function BatchSettlementCard({
       supabase.from("advance_deductions").select("id, amount, notes, created_at").eq("ref_visit_id", visitId),
       supabase.rpc("supplier_outstanding_debt", { _supplier_id: supplierId }),
       supabase.from("batch_settlements").select("*").eq("visit_id", visitId).maybeSingle(),
+      supabase.rpc("settlement_totals", { p_visit_id: visitId }),
     ]);
 
   const { data: supplier } = await supabase
     .from("suppliers").select("account_name, account_number, bank_name").eq("id", supplierId).maybeSingle();
 
-  const materials = (lines ?? []).reduce((s, l) => s + Number(l.purchase_amount ?? 0), 0);
-  // Processing fee (light bill) vs. other deductions — each "other" charge is
-  // itemised by its own description as the deduction type.
-  const lightBill = (charges ?? []).filter((c) => c.kind === "light_bill").reduce((s, c) => s + Number(c.amount), 0);
+  // Totals come from a single source: the stored snapshot once a settlement
+  // exists (authoritative + reconciles), otherwise the live settlement_totals
+  // function. "other" charges stay itemised here for the per-line remove button.
   const otherCharges = (charges ?? []).filter((c) => c.kind === "other");
-  const otherTotal = otherCharges.reduce((s, c) => s + Number(c.amount), 0);
-  const advance = (deds ?? []).reduce((s, d) => s + Number(d.amount), 0);
-  const net = materials - lightBill - otherTotal - advance;
+  const t = (totals ?? [])[0] as { materials: number; processing_fee: number; other_deductions: number; advances: number; net: number } | undefined;
+  const snap = settlement as Record<string, unknown> | null;
+  const materials = snap ? Number(snap.materials_total) : Number(t?.materials ?? 0);
+  const lightBill = snap ? Number(snap.light_bill_total) : Number(t?.processing_fee ?? 0);
+  const otherTotal = snap ? Number(snap.other_deductions_total) : Number(t?.other_deductions ?? 0);
+  const advance = snap ? Number(snap.advance_deducted) : Number(t?.advances ?? 0);
+  const net = snap ? Number(snap.net_balance) : Number(t?.net ?? 0);
   const outstandingDebt = Number(debt ?? 0);
 
   const isManager = viewerRole === "manager";

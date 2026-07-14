@@ -300,6 +300,7 @@ export type Database = {
       batch_settlements: {
         Row: {
           advance_deducted: number
+          other_deductions_total: number
           approved_at: string | null
           approved_by: string | null
           created_at: string
@@ -319,6 +320,7 @@ export type Database = {
         }
         Insert: {
           advance_deducted?: number
+          other_deductions_total?: number
           approved_at?: string | null
           approved_by?: string | null
           created_at?: string
@@ -338,6 +340,7 @@ export type Database = {
         }
         Update: {
           advance_deducted?: number
+          other_deductions_total?: number
           approved_at?: string | null
           approved_by?: string | null
           created_at?: string
@@ -1987,6 +1990,7 @@ export type Database = {
       delete_batch: { Args: { p_visit_id: string }; Returns: undefined }
       delete_supplier: { Args: { p_supplier_id: string }; Returns: undefined }
       reopen_processing_fee: { Args: { p_visit_id: string }; Returns: undefined }
+      settlement_totals: { Args: { p_visit_id: string }; Returns: { materials: number; processing_fee: number; other_deductions: number; advances: number; net: number; remaining_debt: number }[] }
       sync_processing_fee: { Args: { p_visit_id: string }; Returns: undefined }
       record_opening_balance: { Args: { p_supplier_id: string; p_amount: number; p_as_of?: string; p_site_id?: string }; Returns: string }
       current_role: {

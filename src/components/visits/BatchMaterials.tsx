@@ -110,19 +110,17 @@ export async function BatchMaterials({
   // Unsettled lines are excluded from the batch purchase total.
   const totalPurchase = lines.reduce((s, l) => s + (l.settlement_status === "unsettled" ? 0 : l.purchase_amount ?? 0), 0);
 
-  // Net payable at pricing = materials − processing fee − other deductions −
-  // advance deductions. This is what the supplier is actually owed.
+  // Net payable = materials − processing fee − other deductions − advances, from
+  // the single settlement_totals source (same formula the snapshot/PDF use).
   let netPayable = totalPurchase;
   let feesAndDeductions = 0;
   if (canPrice) {
-    const [{ data: charges }, { data: deds }] = await Promise.all([
-      supabase.from("utility_charges").select("amount").eq("visit_id", visitId),
-      supabase.from("advance_deductions").select("amount").eq("ref_visit_id", visitId),
-    ]);
-    const fees = (charges ?? []).reduce((s, c) => s + Number((c as { amount?: unknown }).amount ?? 0), 0);
-    const adv = (deds ?? []).reduce((s, d) => s + Number((d as { amount?: unknown }).amount ?? 0), 0);
-    feesAndDeductions = fees + adv;
-    netPayable = totalPurchase - feesAndDeductions;
+    const { data: totals } = await supabase.rpc("settlement_totals", { p_visit_id: visitId });
+    const t = (totals ?? [])[0] as { processing_fee: number; other_deductions: number; advances: number; net: number } | undefined;
+    if (t) {
+      netPayable = Number(t.net);
+      feesAndDeductions = Number(t.processing_fee) + Number(t.other_deductions) + Number(t.advances);
+    }
   }
 
   // The receiving stage (add/edit/delete draft lines) is handled client-side
