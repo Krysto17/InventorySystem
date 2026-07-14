@@ -110,6 +110,21 @@ export async function BatchMaterials({
   // Unsettled lines are excluded from the batch purchase total.
   const totalPurchase = lines.reduce((s, l) => s + (l.settlement_status === "unsettled" ? 0 : l.purchase_amount ?? 0), 0);
 
+  // Net payable at pricing = materials − processing fee − other deductions −
+  // advance deductions. This is what the supplier is actually owed.
+  let netPayable = totalPurchase;
+  let feesAndDeductions = 0;
+  if (canPrice) {
+    const [{ data: charges }, { data: deds }] = await Promise.all([
+      supabase.from("utility_charges").select("amount").eq("visit_id", visitId),
+      supabase.from("advance_deductions").select("amount").eq("ref_visit_id", visitId),
+    ]);
+    const fees = (charges ?? []).reduce((s, c) => s + Number((c as { amount?: unknown }).amount ?? 0), 0);
+    const adv = (deds ?? []).reduce((s, d) => s + Number((d as { amount?: unknown }).amount ?? 0), 0);
+    feesAndDeductions = fees + adv;
+    netPayable = totalPurchase - feesAndDeductions;
+  }
+
   // The receiving stage (add/edit/delete draft lines) is handled client-side
   // with optimistic updates so rapid entry feels instant.
   const rxLines: RxLine[] = lines.map((l) => ({
@@ -385,9 +400,18 @@ export async function BatchMaterials({
         )}
 
         {lines.length > 0 && totalPurchase > 0 && (
-          <div className="text-sm">
-            Batch purchase total: <span className="font-semibold">₦{totalPurchase.toLocaleString()}</span>
-          </div>
+          canPrice ? (
+            <div className="text-sm">
+              Net payable: <span className="font-semibold">₦{netPayable.toLocaleString()}</span>
+              {feesAndDeductions > 0 && (
+                <span className="text-ink-2"> · materials ₦{totalPurchase.toLocaleString()} − fees/deductions ₦{feesAndDeductions.toLocaleString()}</span>
+              )}
+            </div>
+          ) : (
+            <div className="text-sm">
+              Batch purchase total: <span className="font-semibold">₦{totalPurchase.toLocaleString()}</span>
+            </div>
+          )
         )}
 
         {/* Manager: submit the priced batch to the owner (→ awaiting approval,
