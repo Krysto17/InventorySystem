@@ -4,7 +4,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
-import { markAdvancePaid, markConsumablePaid, markSettlementPaid } from "./actions";
+import { markAdvancePaid, markConsumablePaid, markSettlementPaid, markCorrectionPaid } from "./actions";
 import { MarkPaidButton } from "@/components/accounting/MarkPaidButton";
 
 import { one as g1 } from "@/lib/db/relation";
@@ -15,7 +15,7 @@ const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDi
 export default async function AccountingPayoutsPage() {
   const supabase = await createClient();
 
-  const [{ data: supplies }, { data: advances }, { data: expenses }] = await Promise.all([
+  const [{ data: supplies }, { data: advances }, { data: expenses }, { data: corrections }] = await Promise.all([
     supabase.from("batch_settlements")
       .select("id, visit_id, net_balance, created_at, visit:visits(supplier:suppliers(name, account_name, account_number, bank_name))")
       .eq("status", "approved").order("created_at", { ascending: true }),
@@ -25,9 +25,14 @@ export default async function AccountingPayoutsPage() {
     supabase.from("consumables")
       .select("id, name, category, amount_naira, entry_date, comment, created_at, account_name, account_number, bank_name")
       .eq("approval_status", "approved").order("entry_date", { ascending: true }),
+    // Underpaid corrections the owner/GM logged on a paid visit — a compensation
+    // the accountant still owes the supplier.
+    supabase.from("price_corrections")
+      .select("id, visit_id, amount, reason, created_at, supplier:suppliers(name, account_name, account_number, bank_name)")
+      .eq("direction", "underpaid").is("paid_at", null).order("created_at", { ascending: true }),
   ]);
 
-  const count = (supplies?.length ?? 0) + (advances?.length ?? 0) + (expenses?.length ?? 0);
+  const count = (supplies?.length ?? 0) + (advances?.length ?? 0) + (expenses?.length ?? 0) + (corrections?.length ?? 0);
 
   return (
     <main className="p-6 max-w-3xl mx-auto space-y-6">
@@ -61,6 +66,37 @@ export default async function AccountingPayoutsPage() {
                       </span>
                     </span>
                     <MarkPaidButton action={markSettlementPaid} inputName="settlement_id" id={s.id as string} />
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><h2 className="text-sm font-semibold">Supplier compensations (under-priced, after payment)</h2></CardHeader>
+        <CardContent className="p-0">
+          {(corrections?.length ?? 0) === 0 ? (
+            <p className="px-4 py-3 text-sm text-ink-2">Nothing to compensate.</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {(corrections ?? []).map((c) => {
+                const sup = g1<{ name: string; account_name: string | null; account_number: string | null; bank_name: string | null }>((c as { supplier: unknown }).supplier);
+                const hasAcct = sup?.account_name || sup?.account_number || sup?.bank_name;
+                return (
+                  <li key={c.id as string} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                    <span>
+                      <Link href={`/visits/${c.visit_id}`} className="font-medium underline">{sup?.name ?? "—"}</Link>
+                      <span className="text-ink-2"> · {ngn(Number(c.amount))} · {formatTimestamp(c.created_at as string)}</span>
+                      {c.reason ? <span className="block text-xs text-ink-2">{c.reason as string}</span> : null}
+                      <span className="block text-xs text-ink-2">
+                        {hasAcct
+                          ? <>{sup?.account_name ?? "—"} · <span className="mono">{sup?.account_number ?? "—"}</span> · {sup?.bank_name ?? "—"}</>
+                          : "No account details on file"}
+                      </span>
+                    </span>
+                    <MarkPaidButton action={markCorrectionPaid} inputName="correction_id" id={c.id as string} />
                   </li>
                 );
               })}

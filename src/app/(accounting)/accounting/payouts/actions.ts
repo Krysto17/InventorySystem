@@ -43,3 +43,17 @@ export async function markSettlementPaid(_prev: ActionResult, formData: FormData
   if (result.ok) revalidatePath("/accounting/payouts");
   return result;
 }
+
+// An underpaid price correction is a compensation the accountant disburses to
+// the supplier. The RPC enforces accounting-only + site + unpaid-underpaid.
+export async function markCorrectionPaid(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const me = await getProfile();
+  if (!me || me.role !== "accounting") return fail("Only accounting can mark items paid.");
+  const id = String(formData.get("correction_id") ?? "");
+  if (!id) return fail("Missing correction.");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("mark_price_correction_paid", { p_id: id });
+  if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
+  revalidatePath("/accounting/payouts");
+  return { ok: true };
+}

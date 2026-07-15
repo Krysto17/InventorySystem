@@ -8,7 +8,7 @@ import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
 export default async function AccountingHomePage() {
   const supabase = await createClient();
 
-  const [{ data: visits }, { data: supplies }, { data: advances }, { data: expenses }] = await Promise.all([
+  const [{ data: visits }, { data: supplies }, { data: advances }, { data: expenses }, { data: corrections }] = await Promise.all([
     supabase
       .from("visits")
       .select(`
@@ -23,12 +23,13 @@ export default async function AccountingHomePage() {
     supabase.from("batch_settlements").select("net_balance").eq("status", "approved"),
     supabase.from("advances").select("amount_naira").eq("approval_status", "approved"),
     supabase.from("consumables").select("amount_naira").eq("approval_status", "approved"),
+    supabase.from("price_corrections").select("amount").eq("direction", "underpaid").is("paid_at", null),
   ]);
 
-  const sum = (rows: Array<Record<string, unknown>> | null, key: "net_balance" | "amount_naira") =>
+  const sum = (rows: Array<Record<string, unknown>> | null, key: "net_balance" | "amount_naira" | "amount") =>
     (rows ?? []).reduce((s, r) => s + Number(r[key] ?? 0), 0);
-  const payoutCount = (supplies?.length ?? 0) + (advances?.length ?? 0) + (expenses?.length ?? 0);
-  const payoutTotal = sum(supplies, "net_balance") + sum(advances, "amount_naira") + sum(expenses, "amount_naira");
+  const payoutCount = (supplies?.length ?? 0) + (advances?.length ?? 0) + (expenses?.length ?? 0) + (corrections?.length ?? 0);
+  const payoutTotal = sum(supplies, "net_balance") + sum(advances, "amount_naira") + sum(expenses, "amount_naira") + sum(corrections, "amount");
 
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">

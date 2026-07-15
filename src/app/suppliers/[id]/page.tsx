@@ -7,6 +7,7 @@ import { Badge, stateVariant } from "@/components/ui/badge";
 import { SupplierEditForms } from "@/components/suppliers/SupplierEditForms";
 import { DeleteSupplierButton } from "@/components/suppliers/DeleteSupplierButton";
 import { OpeningBalanceForm } from "@/components/suppliers/OpeningBalanceForm";
+import { DebtRepaymentForm } from "@/components/suppliers/DebtRepaymentForm";
 import { formatTimestamp } from "@/lib/visits/format";
 import { STATE_LABELS, type VisitState } from "@/lib/visits/state-machine";
 import { one as g1 } from "@/lib/db/relation";
@@ -138,6 +139,9 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
                 hasOpeningBalance={hasOpeningBalance}
                 canRecord={isOwner}
               />
+              {/* Debt cleared outside the app (bank transfer / cash). Any finance
+                  role who can view the record may log the repayment. */}
+              <DebtRepaymentForm supplierId={s.id as string} outstandingDebt={outstandingDebt} />
             </CardContent>
           </Card>
 

@@ -27,7 +27,7 @@ export async function PriceCorrections({
   const supabase = await createClient();
   const { data: rows } = await supabase
     .from("price_corrections")
-    .select("id, direction, amount, reason, created_at, recorded_by_profile:profiles!price_corrections_recorded_by_fkey(full_name)")
+    .select("id, direction, amount, reason, created_at, paid_at, recorded_by_profile:profiles!price_corrections_recorded_by_fkey(full_name)")
     .eq("visit_id", visitId)
     .order("created_at", { ascending: false });
 
@@ -43,11 +43,14 @@ export async function PriceCorrections({
             {(rows ?? []).map((r) => {
               const by = g1<{ full_name?: string }>((r as { recorded_by_profile: unknown }).recorded_by_profile)?.full_name ?? "—";
               const over = r.direction === "overpaid";
+              const paid = r.paid_at != null;
               return (
                 <li key={r.id as string} className="flex flex-wrap items-center justify-between gap-2 py-2">
                   <span className="flex items-center gap-2">
                     <Badge variant={over ? "red" : "green"}>{over ? "Over-paid" : "Under-paid"}</Badge>
                     <span className="font-medium">{ngn(Number(r.amount))}</span>
+                    {/* Under-paid corrections are a payable — show whether the accountant has compensated it yet. */}
+                    {!over && <Badge variant={paid ? "green" : "yellow"}>{paid ? "Compensation paid" : "Awaiting accountant"}</Badge>}
                     {r.reason && <span className="text-ink-2">· {r.reason as string}</span>}
                   </span>
                   <span className="text-xs text-ink-2">{by} · {formatTimestamp(r.created_at as string)}</span>
@@ -58,7 +61,7 @@ export async function PriceCorrections({
         )}
         {canRecord ? (
           <div className="border-t border-line pt-3">
-            <p className="mb-2 text-xs text-ink-2">The paid settlement stays as-is — this logs the difference for the record. Settle it with the supplier separately.</p>
+            <p className="mb-2 text-xs text-ink-2">The paid settlement stays locked. <strong>Under-paid</strong> goes to the accountant&rsquo;s payout queue to compensate the supplier; <strong>over-paid</strong> is logged for you to recover from a later supply.</p>
             <PriceCorrectionForm visitId={visitId} />
           </div>
         ) : null}

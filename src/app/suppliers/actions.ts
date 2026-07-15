@@ -62,6 +62,31 @@ export async function recordOpeningBalance(_prev: SupplierEditState, formData: F
   return { ok: "Opening balance recorded." };
 }
 
+// Record a debt repayment the supplier made OUTSIDE the app (e.g. bank transfer).
+// It reduces outstanding debt immediately; the DB blocks repaying more than owed.
+// Owner / manager / accounting. (RPC re-checks the role + resolves the site.)
+export async function recordDebtRepayment(_prev: SupplierEditState, formData: FormData): Promise<SupplierEditState> {
+  const me = await getProfile();
+  if (!me || !["owner", "manager", "accounting"].includes(me.role)) {
+    return { error: "Not authorized to record a repayment." };
+  }
+  const id = String(formData.get("supplier_id") ?? "");
+  const amount = Number(formData.get("amount"));
+  const note = String(formData.get("note") ?? "").trim() || null;
+  if (!id) return { error: "Missing supplier" };
+  if (!(amount > 0)) return { error: "Amount must be greater than zero." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("record_debt_repayment", {
+    p_supplier_id: id,
+    p_amount: amount,
+    ...(note ? { p_note: note } : {}),
+  });
+  if (error) return { error: error.message.replace(/^.*?:\s*/, "") };
+  revalidatePath(`/suppliers/${id}`);
+  return { ok: "Repayment recorded — outstanding debt reduced." };
+}
+
 // Manager or owner deletes a supplier that has no records (no visits, advances,
 // stock lots, gate passes, …). The delete_supplier RPC re-checks the role and
 // refuses when anything references the supplier.

@@ -1162,6 +1162,8 @@ export type Database = {
           created_at: string
           direction: string
           id: string
+          paid_at: string | null
+          paid_by: string | null
           reason: string | null
           recorded_by: string | null
           site_id: string
@@ -1173,6 +1175,8 @@ export type Database = {
           created_at?: string
           direction: string
           id?: string
+          paid_at?: string | null
+          paid_by?: string | null
           reason?: string | null
           recorded_by?: string | null
           site_id: string
@@ -1184,6 +1188,8 @@ export type Database = {
           created_at?: string
           direction?: string
           id?: string
+          paid_at?: string | null
+          paid_by?: string | null
           reason?: string | null
           recorded_by?: string | null
           site_id?: string
@@ -2030,6 +2036,8 @@ export type Database = {
       delete_supplier: { Args: { p_supplier_id: string }; Returns: undefined }
       reopen_processing_fee: { Args: { p_visit_id: string }; Returns: undefined }
       record_price_correction: { Args: { p_visit_id: string; p_direction: string; p_amount: number; p_reason?: string }; Returns: string }
+      mark_price_correction_paid: { Args: { p_id: string }; Returns: undefined }
+      record_debt_repayment: { Args: { p_supplier_id: string; p_amount: number; p_note?: string }; Returns: string }
       settlement_totals: { Args: { p_visit_id: string }; Returns: { materials: number; processing_fee: number; other_deductions: number; advances: number; net: number; remaining_debt: number }[] }
       sync_processing_fee: { Args: { p_visit_id: string }; Returns: undefined }
       record_opening_balance: { Args: { p_supplier_id: string; p_amount: number; p_as_of?: string; p_site_id?: string }; Returns: string }

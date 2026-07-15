@@ -83,6 +83,37 @@ describe("supplier debt ledger (advances + deductions)", () => {
     expect(error).not.toBeNull();
   });
 
+  // ─── Repayment made outside the app (bank transfer) via the RPC ────────────
+  it("records an off-app repayment that reduces the debt", async () => {
+    const before = await debt();
+    const { error } = await acctA.client.rpc("record_debt_repayment", {
+      p_supplier_id: supplierId, p_amount: 1000, p_note: "Bank transfer",
+    });
+    expect(error).toBeNull();
+    expect(await debt()).toBe(before - 1000);
+    // It lands in the ledger as a standalone deduction (no visit).
+    const { data } = await adminClient().from("advance_deductions")
+      .select("ref_visit_id, notes").eq("supplier_id", supplierId).eq("amount", 1000).single();
+    expect(data!.ref_visit_id).toBeNull();
+    expect(data!.notes).toBe("Bank transfer");
+  });
+
+  it("a repayment cannot exceed the outstanding debt", async () => {
+    const outstanding = await debt();
+    const { error } = await acctA.client.rpc("record_debt_repayment", {
+      p_supplier_id: supplierId, p_amount: outstanding + 1,
+    });
+    expect(error).not.toBeNull();
+    expect(await debt()).toBe(outstanding);
+  });
+
+  it("inventory cannot record a repayment", async () => {
+    const { error } = await invA.client.rpc("record_debt_repayment", {
+      p_supplier_id: supplierId, p_amount: 1,
+    });
+    expect(error).not.toBeNull();
+  });
+
   it("manager cannot deduct on another site; owner can", async () => {
     const { error } = await mgrA.client.from("advance_deductions").insert({
       supplier_id: supplierId, site_id: siteBId, amount: 1, recorded_by: mgrA.userId,
