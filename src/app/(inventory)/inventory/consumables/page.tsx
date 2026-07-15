@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { getProfile } from "@/lib/auth/get-profile";
-import { createConsumable, reviewExpense } from "./actions";
+import { createConsumable, reviewExpense, deleteConsumable } from "./actions";
 import { CONSUMABLE_CATEGORIES, CATEGORY_LABELS } from "./categories";
 import { formatTimestamp } from "@/lib/visits/format";
 
@@ -14,6 +14,7 @@ const STATUS_BADGE: Record<string, string> = {
 export default async function ConsumablesPage() {
   const me = await getProfile();
   const isOwner = me?.role === "owner";
+  const canDelete = isOwner || me?.role === "manager"; // before payment
   const supabase = await createClient();
 
   const { data: consumables } = await supabase
@@ -179,7 +180,18 @@ export default async function ConsumablesPage() {
                       </td>
                       <td className="px-3 py-2 text-gray-600">{(c.comment as string | null) ?? "—"}</td>
                       <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
-                        {recName} · {formatTimestamp(c.created_at as string)}
+                        <span className="inline-flex items-center gap-2">
+                          <span>{recName} · {formatTimestamp(c.created_at as string)}</span>
+                          {canDelete && status !== "paid" && (
+                            <form action={deleteConsumable} className="inline">
+                              <input type="hidden" name="consumable_id" value={c.id as string} />
+                              <button type="submit" title="Delete this expense (before payment)"
+                                className="rounded border border-red-300 px-1.5 py-0.5 text-[10px] text-red-700 hover:bg-red-50">
+                                Delete
+                              </button>
+                            </form>
+                          )}
+                        </span>
                       </td>
                     </tr>
                   );

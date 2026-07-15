@@ -50,6 +50,18 @@ export async function createConsumable(formData: FormData): Promise<void> {
   revalidatePath("/inventory/consumables");
 }
 
+// Manager (own site) / owner / general manager deletes an expense before it is
+// paid. RLS re-checks the role + site + not-paid; a paid expense can't be removed.
+export async function deleteConsumable(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || !["manager", "owner"].includes(me.role)) return;
+  const id = String(formData.get("consumable_id") ?? "");
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("consumables").delete().eq("id", id);
+  revalidatePath("/inventory/consumables");
+}
+
 // Owner approves / rejects a submitted expense (DB trigger enforces owner-only).
 export async function reviewExpense(formData: FormData): Promise<void> {
   const me = await getProfile();
