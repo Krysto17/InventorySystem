@@ -83,6 +83,7 @@ export async function recordSettlementPayment(_prev: ActionResult, formData: For
   if (visitId) revalidatePath(`/visits/${visitId}`);
   revalidatePath("/accounting/payouts");
   revalidatePath("/owner/payments");
+  revalidatePath("/manager/payments");
   return ok();
 }
 
