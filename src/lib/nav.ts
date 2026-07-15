@@ -78,6 +78,7 @@ const NAV: Record<Role, NavItem[]> = {
   owner: [
     { label: "Dashboard", href: "/owner", icon: "dashboard" },
     { label: "Approvals", href: "/owner/approvals", icon: "pricing" },
+    { label: "Approved payments", href: "/owner/payments", icon: "accounting" },
     { label: "Analyses", href: "/owner/analyses", icon: "qc" },
     { label: "Ledger", href: "/owner/ledger", icon: "accounting" },
     { label: "Finance breakdown", href: "/owner/finance", icon: "reports" },

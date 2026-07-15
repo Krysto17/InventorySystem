@@ -304,6 +304,8 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           created_at: string
+          held_at: string | null
+          held_by: string | null
           id: string
           light_bill_total: number
           materials_total: number
@@ -324,6 +326,8 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           created_at?: string
+          held_at?: string | null
+          held_by?: string | null
           id?: string
           light_bill_total?: number
           materials_total?: number
@@ -344,6 +348,8 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           created_at?: string
+          held_at?: string | null
+          held_by?: string | null
           id?: string
           light_bill_total?: number
           materials_total?: number
