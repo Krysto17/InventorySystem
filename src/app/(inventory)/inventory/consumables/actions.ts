@@ -3,12 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
+import { fail, ok, type ActionResult } from "@/lib/actions/result";
+import { accountTrioFromForm } from "@/lib/validation/account";
 import { CONSUMABLE_CATEGORIES, type ConsumableCategory } from "./categories";
 
-export async function createConsumable(formData: FormData): Promise<void> {
+export async function createConsumable(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me) return;
-  if (!["inventory", "manager", "owner"].includes(me.role)) return;
+  if (!me || !["inventory", "manager", "owner"].includes(me.role)) return fail("Not authorized.");
 
   const name = String(formData.get("name") ?? "").trim();
   const category = String(formData.get("category") ?? "") as ConsumableCategory;
@@ -16,38 +17,50 @@ export async function createConsumable(formData: FormData): Promise<void> {
   const comment = String(formData.get("comment") ?? "").trim() || null;
   const amountRaw = String(formData.get("amount_naira") ?? "").trim();
   const amount = amountRaw === "" ? null : Number(amountRaw);
-  const accountName = String(formData.get("account_name") ?? "").trim() || null;
-  const accountNumber = String(formData.get("account_number") ?? "").trim() || null;
-  const bankName = String(formData.get("bank_name") ?? "").trim() || null;
-  if (!name) return;
-  if (!CONSUMABLE_CATEGORIES.includes(category)) return;
-  // Account number, when given, must be exactly 10 digits (all positive integers).
-  if (accountNumber && !/^\d{10}$/.test(accountNumber)) return;
+  if (!name) return fail("Enter a name.");
+  if (!CONSUMABLE_CATEGORIES.includes(category)) return fail("Pick a category.");
+  const acct = accountTrioFromForm(formData);
+  if (!acct.ok) return fail(acct.error);
 
   const supabase = await createClient();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("site_id")
-    .eq("id", me.id)
-    .single();
-
+  const { data: profile } = await supabase.from("profiles").select("site_id").eq("id", me.id).single();
   const siteId = profile?.site_id as string | null;
-  if (!siteId) return;
+  if (!siteId) return fail("No site on your profile.");
 
-  await supabase.from("consumables").insert({
-    site_id: siteId,
-    name,
-    category,
-    entry_date: entryDate ?? undefined,
-    comment,
-    amount_naira: amount,
-    account_name: accountName,
-    account_number: accountNumber,
-    bank_name: bankName,
-    recorded_by: me.id,
-  });
-
+  const res = await supabase.from("consumables").insert({
+    site_id: siteId, name, category, entry_date: entryDate ?? undefined, comment,
+    amount_naira: amount, ...acct.value, recorded_by: me.id,
+  }).select("id");
+  if (res.error) return fail(res.error.message.replace(/^.*?:\s*/, ""));
   revalidatePath("/inventory/consumables");
+  return ok();
+}
+
+// Manager (own site) / owner edits an expense before it is paid. RLS scopes the
+// site; the DB locks a paid expense and re-checks the account trio.
+export async function editConsumable(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const me = await getProfile();
+  if (!me || !["manager", "owner"].includes(me.role)) return fail("Not authorized.");
+  const id = String(formData.get("consumable_id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const category = String(formData.get("category") ?? "") as ConsumableCategory;
+  const comment = String(formData.get("comment") ?? "").trim() || null;
+  const amountRaw = String(formData.get("amount_naira") ?? "").trim();
+  const amount = amountRaw === "" ? null : Number(amountRaw);
+  if (!id) return fail("Missing expense.");
+  if (!name) return fail("Enter a name.");
+  if (!CONSUMABLE_CATEGORIES.includes(category)) return fail("Pick a category.");
+  const acct = accountTrioFromForm(formData);
+  if (!acct.ok) return fail(acct.error);
+
+  const supabase = await createClient();
+  const res = await supabase.from("consumables")
+    .update({ name, category, comment, amount_naira: amount, ...acct.value })
+    .eq("id", id).neq("approval_status", "paid").select("id");
+  if (res.error) return fail(res.error.message.replace(/^.*?:\s*/, ""));
+  if (!res.data || res.data.length === 0) return fail("Couldn't edit this expense — it may be paid or on another site.");
+  revalidatePath("/inventory/consumables");
+  return ok();
 }
 
 // Manager (own site) / owner / general manager deletes an expense before it is

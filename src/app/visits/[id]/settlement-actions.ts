@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
+import { parseAccountTrio } from "@/lib/validation/account";
 
 // NB: settlement creation now lives in the approve_pricing RPC (migration 0090) —
 // the owner's price approval snapshots the settlement from settlement_totals and
@@ -36,12 +37,16 @@ export async function updateSupplierAccount(formData: FormData): Promise<void> {
   const visitId = String(formData.get("visit_id") ?? "");
   if (!supplierId) return;
 
+  // Account name, number, and bank must be a complete set (or all blank).
+  const acct = parseAccountTrio(
+    String(formData.get("account_name") ?? ""),
+    String(formData.get("account_number") ?? ""),
+    String(formData.get("bank_name") ?? ""),
+  );
+  if (!acct.ok) return; // invalid partial set — the DB enforces this too
+
   const supabase = await createClient();
-  await supabase.from("suppliers").update({
-    account_name: String(formData.get("account_name") ?? "").trim() || null,
-    account_number: String(formData.get("account_number") ?? "").trim() || null,
-    bank_name: String(formData.get("bank_name") ?? "").trim() || null,
-  }).eq("id", supplierId);
+  await supabase.from("suppliers").update(acct.value).eq("id", supplierId);
   if (visitId) revalidatePath(`/visits/${visitId}`);
 }
 

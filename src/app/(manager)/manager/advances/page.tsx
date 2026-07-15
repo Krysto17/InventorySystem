@@ -5,7 +5,9 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
-import { recordAdvance, setAdvanceApproval, deleteAdvance } from "./actions";
+import { setAdvanceApproval, deleteAdvance } from "./actions";
+import { AdvanceForm } from "@/components/advances/AdvanceForm";
+import { AdvanceEditForm } from "@/components/advances/AdvanceEditForm";
 
 import { one as g1 } from "@/lib/db/relation";
 const ngn = (n: number) => `₦${n.toLocaleString()}`;
@@ -22,7 +24,7 @@ export default async function ManagerAdvancesPage() {
   const { data: advances } = await supabase
     .from("advances")
     .select(`
-      id, purpose, amount_naira, approval_status, created_at, account_number, account_name, bank_name,
+      id, purpose, amount_naira, approval_status, created_at, comment, account_number, account_name, bank_name,
       supplier:suppliers(name, supplier_code)
     `)
     .order("created_at", { ascending: false })
@@ -38,47 +40,7 @@ export default async function ManagerAdvancesPage() {
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">Record an advance</h2></CardHeader>
         <CardContent>
-          <form action={recordAdvance} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="text-sm sm:col-span-2">Supplier
-              <select name="supplier_id" required defaultValue="" className="mt-1 block w-full rounded border px-2 py-1 text-sm">
-                <option value="" disabled>Select supplier…</option>
-                {(suppliers ?? []).map((s) => (
-                  <option key={s.id as string} value={s.id as string}>
-                    {s.name as string} ({(s.supplier_code as string | null) ?? "—"})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm">Purpose
-              <input type="text" name="purpose" required className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
-            </label>
-            <label className="text-sm">Amount (₦)
-              <input type="number" name="amount_naira" min="1" step="0.01" required className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
-            </label>
-            <label className="text-sm">Account name <span className="font-normal text-gray-400">(where to pay)</span>
-              <input type="text" name="account_name" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
-            </label>
-            <label className="text-sm">Bank name
-              <input type="text" name="bank_name" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
-            </label>
-            <label className="text-sm sm:col-span-2">Account number <span className="font-normal text-gray-400">(10 digits)</span>
-              <input
-                type="text"
-                name="account_number"
-                inputMode="numeric"
-                pattern="\d{10}"
-                maxLength={10}
-                title="Exactly 10 digits (0-9)"
-                className="mt-1 block w-full rounded border px-2 py-1 text-sm"
-              />
-            </label>
-            <label className="text-sm sm:col-span-2">Comment
-              <input type="text" name="comment" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
-            </label>
-            <button type="submit" className="rounded bg-ore px-4 py-1.5 text-sm font-semibold text-white hover:bg-ore-strong sm:col-span-2">
-              Record advance (pending owner approval)
-            </button>
-          </form>
+          <AdvanceForm suppliers={(suppliers ?? []).map((s) => ({ id: s.id as string, name: s.name as string, code: (s.supplier_code as string | null) ?? null }))} />
         </CardContent>
       </Card>
 
@@ -125,14 +87,28 @@ export default async function ManagerAdvancesPage() {
                           </form>
                         </>
                       )}
-                      {/* Manager/owner may delete a still-pending advance (#4). */}
-                      {canManage && st === "pending" && (
+                      {/* Manager/owner may delete an advance before it is paid. */}
+                      {canManage && st !== "paid" && (
                         <form action={deleteAdvance}>
                           <input type="hidden" name="advance_id" value={a.id as string} />
                           <button type="submit" className="rounded border border-reject px-2.5 py-0.5 text-xs text-reject hover:bg-reject-soft">Delete</button>
                         </form>
                       )}
                     </div>
+                    {/* Manager/owner may edit an advance before it is paid. */}
+                    {canManage && st !== "paid" && (
+                      <div className="w-full">
+                        <AdvanceEditForm
+                          id={a.id as string}
+                          purpose={a.purpose as string}
+                          amount={Number(a.amount_naira)}
+                          comment={(a.comment as string | null) ?? null}
+                          accountName={(a.account_name as string | null) ?? null}
+                          accountNumber={(a.account_number as string | null) ?? null}
+                          bankName={(a.bank_name as string | null) ?? null}
+                        />
+                      </div>
+                    )}
                   </li>
                 );
               })}

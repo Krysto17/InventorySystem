@@ -1,8 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { getProfile } from "@/lib/auth/get-profile";
-import { createConsumable, reviewExpense, deleteConsumable } from "./actions";
-import { CONSUMABLE_CATEGORIES, CATEGORY_LABELS } from "./categories";
+import { reviewExpense, deleteConsumable } from "./actions";
+import { CATEGORY_LABELS } from "./categories";
+import { ConsumableForm } from "@/components/consumables/ConsumableForm";
+import { ConsumableEditForm } from "@/components/consumables/ConsumableEditForm";
 import { formatTimestamp } from "@/lib/visits/format";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -21,6 +23,7 @@ export default async function ConsumablesPage() {
     .from("consumables")
     .select(`
       id, name, category, entry_date, comment, created_at, amount_naira, approval_status,
+      account_name, account_number, bank_name,
       recorded_by_profile:profiles!consumables_recorded_by_fkey(full_name)
     `)
     .order("entry_date", { ascending: false })
@@ -39,87 +42,7 @@ export default async function ConsumablesPage() {
 
       <section className="border rounded p-4">
         <h2 className="font-semibold mb-3">Log a consumable</h2>
-        <form action={createConsumable} className="space-y-3 max-w-md">
-          <label className="block text-sm font-medium">
-            Name *
-            <input
-              type="text"
-              name="name"
-              required
-              placeholder="e.g. Diesel, Generator repair, Office paper"
-              className="mt-1 block w-full border rounded px-2 py-1 text-sm"
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block text-sm font-medium">
-              Category *
-              <select
-                name="category"
-                required
-                defaultValue=""
-                className="mt-1 block w-full border rounded px-2 py-1 text-sm"
-              >
-                <option value="" disabled>Select…</option>
-                {CONSUMABLE_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm font-medium">
-              Date
-              <input
-                type="date"
-                name="entry_date"
-                defaultValue={today}
-                className="mt-1 block w-full border rounded px-2 py-1 text-sm"
-              />
-            </label>
-          </div>
-          <label className="block text-sm font-medium">
-            Amount (₦, optional)
-            <input
-              type="number"
-              name="amount_naira"
-              min="0.01"
-              step="0.01"
-              className="mt-1 block w-full border rounded px-2 py-1 text-sm"
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block text-sm font-medium">
-              Account name <span className="font-normal text-gray-400">(where to pay)</span>
-              <input type="text" name="account_name" className="mt-1 block w-full border rounded px-2 py-1 text-sm" />
-            </label>
-            <label className="block text-sm font-medium">
-              Bank name
-              <input type="text" name="bank_name" className="mt-1 block w-full border rounded px-2 py-1 text-sm" />
-            </label>
-          </div>
-          <label className="block text-sm font-medium">
-            Account number <span className="font-normal text-gray-400">(10 digits)</span>
-            <input
-              type="text"
-              name="account_number"
-              inputMode="numeric"
-              pattern="\d{10}"
-              maxLength={10}
-              title="Exactly 10 digits (0-9)"
-              className="mt-1 block w-full border rounded px-2 py-1 text-sm"
-            />
-          </label>
-          <label className="block text-sm font-medium">
-            Comment
-            <textarea
-              name="comment"
-              rows={2}
-              placeholder="Optional note"
-              className="mt-1 block w-full border rounded px-2 py-1 text-sm"
-            />
-          </label>
-          <button type="submit" className="px-4 py-2 bg-black text-white text-sm rounded">
-            Log
-          </button>
-        </form>
+        <ConsumableForm today={today} />
       </section>
 
       <section>
@@ -183,13 +106,25 @@ export default async function ConsumablesPage() {
                         <span className="inline-flex items-center gap-2">
                           <span>{recName} · {formatTimestamp(c.created_at as string)}</span>
                           {canDelete && status !== "paid" && (
-                            <form action={deleteConsumable} className="inline">
-                              <input type="hidden" name="consumable_id" value={c.id as string} />
-                              <button type="submit" title="Delete this expense (before payment)"
-                                className="rounded border border-red-300 px-1.5 py-0.5 text-[10px] text-red-700 hover:bg-red-50">
-                                Delete
-                              </button>
-                            </form>
+                            <>
+                              <ConsumableEditForm
+                                id={c.id as string}
+                                name={c.name as string}
+                                category={c.category as string}
+                                amount={c.amount_naira != null ? Number(c.amount_naira) : null}
+                                comment={(c.comment as string | null) ?? null}
+                                accountName={(c.account_name as string | null) ?? null}
+                                accountNumber={(c.account_number as string | null) ?? null}
+                                bankName={(c.bank_name as string | null) ?? null}
+                              />
+                              <form action={deleteConsumable} className="inline">
+                                <input type="hidden" name="consumable_id" value={c.id as string} />
+                                <button type="submit" title="Delete this expense (before payment)"
+                                  className="rounded border border-red-300 px-1.5 py-0.5 text-[10px] text-red-700 hover:bg-red-50">
+                                  Delete
+                                </button>
+                              </form>
+                            </>
                           )}
                         </span>
                       </td>

@@ -4,11 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
+import { parseAccountTrio } from "@/lib/validation/account";
 
 export type SupplierEditState = { error?: string; ok?: string };
 
 // A Nigerian bank account number is exactly 10 digits (all positive integers).
-const ACCOUNT_NUMBER_RE = /^\d{10}$/;
 
 // Roles that bring suppliers into the system (intake staff + supplier managers).
 const SUPPLIER_CREATORS = ["owner", "manager", "processing", "receiving"];
@@ -128,21 +128,16 @@ export async function saveSupplierAccount(_prev: SupplierEditState, formData: Fo
   const id = String(formData.get("supplier_id") ?? "");
   if (!id) return { error: "Missing supplier" };
 
-  const accountName = String(formData.get("account_name") ?? "").trim();
-  const accountNumber = String(formData.get("account_number") ?? "").trim();
-  const bankName = String(formData.get("bank_name") ?? "").trim();
-
-  // Account number, when given, must be exactly 10 digits (all positive integers).
-  if (accountNumber && !ACCOUNT_NUMBER_RE.test(accountNumber)) {
-    return { error: "Account number must be exactly 10 digits (0-9)." };
-  }
+  // Account name, number, and bank must be entered together (or all blank).
+  const acct = parseAccountTrio(
+    String(formData.get("account_name") ?? ""),
+    String(formData.get("account_number") ?? ""),
+    String(formData.get("bank_name") ?? ""),
+  );
+  if (!acct.ok) return { error: acct.error };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("suppliers").update({
-    account_name: accountName || null,
-    account_number: accountNumber || null,
-    bank_name: bankName || null,
-  }).eq("id", id);
+  const { error } = await supabase.from("suppliers").update(acct.value).eq("id", id);
   if (error) return { error: error.message };
   revalidatePath(`/suppliers/${id}`);
   return { ok: "Account details saved." };
