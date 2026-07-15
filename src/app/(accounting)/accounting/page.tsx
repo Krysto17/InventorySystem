@@ -20,16 +20,25 @@ export default async function AccountingHomePage() {
       `)
       .eq("state", "in_accounting")
       .order("created_at", { ascending: true }),
-    supabase.from("batch_settlements").select("net_balance").eq("status", "approved"),
+    supabase.from("batch_settlements").select("id, net_balance").in("status", ["approved", "partially_paid"]),
     supabase.from("advances").select("amount_naira").eq("approval_status", "approved"),
     supabase.from("consumables").select("amount_naira").eq("approval_status", "approved"),
     supabase.from("price_corrections").select("amount").eq("direction", "underpaid").is("paid_at", null),
   ]);
 
-  const sum = (rows: Array<Record<string, unknown>> | null, key: "net_balance" | "amount_naira" | "amount") =>
+  // Supplier payouts show what's LEFT to pay (net − payments already recorded).
+  const supIds = (supplies ?? []).map((s) => s.id as string);
+  const { data: paidRows } = supIds.length
+    ? await supabase.from("settlement_payments").select("settlement_id, amount").in("settlement_id", supIds)
+    : { data: [] as { settlement_id: string; amount: number }[] };
+  const paidBy = new Map<string, number>();
+  for (const p of paidRows ?? []) paidBy.set(p.settlement_id as string, (paidBy.get(p.settlement_id as string) ?? 0) + Number(p.amount));
+  const suppliesRemaining = (supplies ?? []).reduce((s, r) => s + Math.max(Number(r.net_balance) - (paidBy.get(r.id as string) ?? 0), 0), 0);
+
+  const sum = (rows: Array<Record<string, unknown>> | null, key: "amount_naira" | "amount") =>
     (rows ?? []).reduce((s, r) => s + Number(r[key] ?? 0), 0);
   const payoutCount = (supplies?.length ?? 0) + (advances?.length ?? 0) + (expenses?.length ?? 0) + (corrections?.length ?? 0);
-  const payoutTotal = sum(supplies, "net_balance") + sum(advances, "amount_naira") + sum(expenses, "amount_naira") + sum(corrections, "amount");
+  const payoutTotal = suppliesRemaining + sum(advances, "amount_naira") + sum(expenses, "amount_naira") + sum(corrections, "amount");
 
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
@@ -52,7 +61,7 @@ export default async function AccountingHomePage() {
               <p className="text-sm text-gray-500">Nothing approved to pay right now.</p>
             ) : (
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-                <div><span className="text-gray-500">Supplier payouts</span> <span className="font-semibold">{supplies?.length ?? 0}</span> · {formatNaira(sum(supplies, "net_balance"))}</div>
+                <div><span className="text-gray-500">Supplier payouts</span> <span className="font-semibold">{supplies?.length ?? 0}</span> · {formatNaira(suppliesRemaining)}</div>
                 <div><span className="text-gray-500">Advances</span> <span className="font-semibold">{advances?.length ?? 0}</span> · {formatNaira(sum(advances, "amount_naira"))}</div>
                 <div><span className="text-gray-500">Expenses</span> <span className="font-semibold">{expenses?.length ?? 0}</span> · {formatNaira(sum(expenses, "amount_naira"))}</div>
                 <div className="ml-auto font-semibold">Total: {formatNaira(payoutTotal)}</div>

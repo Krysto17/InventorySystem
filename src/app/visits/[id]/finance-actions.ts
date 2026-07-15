@@ -57,6 +57,35 @@ export async function sendBackToOwner(_prev: ActionResult, formData: FormData): 
   return ok();
 }
 
+// Record a payment (part or full) against an approved settlement. Cash is
+// typically paid by the manager; the accountant records transfers. The RPC
+// enforces role + site + open status + no over-payment, and derives the
+// settlement status (partially_paid / paid).
+export async function recordSettlementPayment(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const me = await getProfile();
+  if (!me || !["owner", "accounting", "manager"].includes(me.role)) {
+    return fail("Not allowed to record a payment.");
+  }
+  const visitId = String(formData.get("visit_id") ?? "");
+  const settlementId = String(formData.get("settlement_id") ?? "");
+  const amount = Number(formData.get("amount"));
+  const method = String(formData.get("method") ?? "");
+  const note = String(formData.get("note") ?? "").trim() || null;
+  if (!settlementId) return fail("Missing settlement.");
+  if (!["cash", "transfer", "other"].includes(method)) return fail("Pick a payment method.");
+  if (!(amount > 0)) return fail("Amount must be greater than zero.");
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("record_settlement_payment", {
+    p_settlement_id: settlementId, p_amount: amount, p_method: method, p_note: note ?? undefined,
+  });
+  if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
+  if (visitId) revalidatePath(`/visits/${visitId}`);
+  revalidatePath("/accounting/payouts");
+  revalidatePath("/owner/payments");
+  return ok();
+}
+
 // ─── Utility charges (Phase 11 B) ────────────────────────────────────────────
 
 export async function addUtilityCharge(formData: FormData): Promise<void> {

@@ -103,6 +103,9 @@ export type Database = {
           account_name: string | null
           bank_name: string | null
           approval_status: string
+          correction_note: string | null
+          held_at: string | null
+          held_by: string | null
           approved_at: string | null
           approved_by: string | null
           comment: string | null
@@ -123,6 +126,9 @@ export type Database = {
           account_name?: string | null
           bank_name?: string | null
           approval_status?: string
+          correction_note?: string | null
+          held_at?: string | null
+          held_by?: string | null
           approved_at?: string | null
           approved_by?: string | null
           comment?: string | null
@@ -143,6 +149,9 @@ export type Database = {
           account_name?: string | null
           bank_name?: string | null
           approval_status?: string
+          correction_note?: string | null
+          held_at?: string | null
+          held_by?: string | null
           approved_at?: string | null
           approved_by?: string | null
           comment?: string | null
@@ -402,6 +411,39 @@ export type Database = {
           },
         ]
       }
+      settlement_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          method: string
+          note: string | null
+          paid_by: string | null
+          settlement_id: string
+          site_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          method: string
+          note?: string | null
+          paid_by?: string | null
+          settlement_id: string
+          site_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          method?: string
+          note?: string | null
+          paid_by?: string | null
+          settlement_id?: string
+          site_id?: string
+        }
+        Relationships: []
+      }
       bulk_sales: {
         Row: {
           approval_status: string
@@ -498,6 +540,9 @@ export type Database = {
           account_number: string | null
           bank_name: string | null
           approval_status: string
+          correction_note: string | null
+          held_at: string | null
+          held_by: string | null
           approved_at: string | null
           approved_by: string | null
           category: string
@@ -517,6 +562,9 @@ export type Database = {
           account_number?: string | null
           bank_name?: string | null
           approval_status?: string
+          correction_note?: string | null
+          held_at?: string | null
+          held_by?: string | null
           approved_at?: string | null
           approved_by?: string | null
           category: string
@@ -536,6 +584,9 @@ export type Database = {
           account_number?: string | null
           bank_name?: string | null
           approval_status?: string
+          correction_note?: string | null
+          held_at?: string | null
+          held_by?: string | null
           approved_at?: string | null
           approved_by?: string | null
           category?: string
@@ -2046,6 +2097,17 @@ export type Database = {
       accountant_send_back_to_owner: { Args: { p_visit_id: string; p_reason: string }; Returns: undefined }
       record_debt_repayment: { Args: { p_supplier_id: string; p_amount: number; p_note?: string }; Returns: string }
       settlement_totals: { Args: { p_visit_id: string }; Returns: { materials: number; processing_fee: number; other_deductions: number; advances: number; net: number; remaining_debt: number }[] }
+      settlement_paid_total: { Args: { p_settlement_id: string }; Returns: number }
+      record_settlement_payment: { Args: { p_settlement_id: string; p_amount: number; p_method: string; p_note?: string }; Returns: string }
+      hold_settlement: { Args: { p_id: string }; Returns: undefined }
+      release_settlement: { Args: { p_id: string }; Returns: undefined }
+      send_settlement_back: { Args: { p_id: string; p_reason: string }; Returns: undefined }
+      hold_advance: { Args: { p_id: string }; Returns: undefined }
+      release_advance: { Args: { p_id: string }; Returns: undefined }
+      send_advance_back: { Args: { p_id: string; p_reason: string }; Returns: undefined }
+      hold_expense: { Args: { p_id: string }; Returns: undefined }
+      release_expense: { Args: { p_id: string }; Returns: undefined }
+      send_expense_back: { Args: { p_id: string; p_reason: string }; Returns: undefined }
       sync_processing_fee: { Args: { p_visit_id: string }; Returns: undefined }
       record_opening_balance: { Args: { p_supplier_id: string; p_amount: number; p_as_of?: string; p_site_id?: string }; Returns: string }
       current_role: {

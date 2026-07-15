@@ -6,6 +6,8 @@ import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
 import { markAdvancePaid, markConsumablePaid, markSettlementPaid, markCorrectionPaid } from "./actions";
 import { MarkPaidButton } from "@/components/accounting/MarkPaidButton";
+import { HoldButton } from "@/components/payables/HoldButton";
+import { PayablesReview } from "@/components/payables/PayablesReview";
 
 import { one as g1 } from "@/lib/db/relation";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -18,7 +20,7 @@ export default async function AccountingPayoutsPage() {
   const [{ data: supplies }, { data: advances }, { data: expenses }, { data: corrections }] = await Promise.all([
     supabase.from("batch_settlements")
       .select("id, visit_id, net_balance, created_at, visit:visits(supplier:suppliers(name, account_name, account_number, bank_name))")
-      .eq("status", "approved").order("created_at", { ascending: true }),
+      .in("status", ["approved", "partially_paid"]).order("created_at", { ascending: true }),
     supabase.from("advances")
       .select("id, purpose, amount_naira, created_at, comment, account_name, account_number, bank_name, supplier:suppliers(name, supplier_code, account_name, account_number, bank_name)")
       .eq("approval_status", "approved").order("created_at", { ascending: true }),
@@ -32,6 +34,16 @@ export default async function AccountingPayoutsPage() {
       .eq("direction", "underpaid").is("paid_at", null).order("created_at", { ascending: true }),
   ]);
 
+  // Remaining to pay per settlement = net − payments already recorded (a manager
+  // may have paid part in cash). Fetch payments for the listed settlements once.
+  const settlementIds = (supplies ?? []).map((s) => s.id as string);
+  const { data: paidRows } = settlementIds.length
+    ? await supabase.from("settlement_payments").select("settlement_id, amount").in("settlement_id", settlementIds)
+    : { data: [] as { settlement_id: string; amount: number }[] };
+  const paidBy = new Map<string, number>();
+  for (const p of paidRows ?? []) paidBy.set(p.settlement_id as string, (paidBy.get(p.settlement_id as string) ?? 0) + Number(p.amount));
+  const remainingOf = (s: { id: string; net_balance: number }) => Number(s.net_balance) - (paidBy.get(s.id) ?? 0);
+
   const count = (supplies?.length ?? 0) + (advances?.length ?? 0) + (expenses?.length ?? 0) + (corrections?.length ?? 0);
 
   return (
@@ -41,6 +53,10 @@ export default async function AccountingPayoutsPage() {
         <h1 className="text-2xl font-bold">Approved — to pay</h1>
         <Badge variant={count ? "yellow" : "default"}>{count}</Badge>
       </div>
+
+      {/* Payments the owner/manager have paused — shown here so they're not
+          mistaken for missing. Released items return to the lists below. */}
+      <PayablesReview canManage={false} includeApproved={false} includeReturned={false} heldTitle="On hold (paused by owner/manager)" />
 
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">Supplier payouts (batch settlements)</h2></CardHeader>
@@ -54,18 +70,23 @@ export default async function AccountingPayoutsPage() {
                   g1<{ supplier: unknown }>((s as { visit: unknown }).visit)?.supplier,
                 );
                 const hasAcct = sup?.account_name || sup?.account_number || sup?.bank_name;
+                const remaining = remainingOf(s as { id: string; net_balance: number });
+                const partly = remaining < Number(s.net_balance) - 0.005;
                 return (
                   <li key={s.id as string} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
                     <span>
                       <Link href={`/visits/${s.visit_id}`} className="font-medium underline">{sup?.name ?? "—"}</Link>
-                      <span className="text-ink-2"> · {ngn(Number(s.net_balance))} · {formatTimestamp(s.created_at as string)}</span>
+                      <span className="text-ink-2"> · {ngn(remaining)} to pay{partly ? ` (of ${ngn(Number(s.net_balance))})` : ""} · {formatTimestamp(s.created_at as string)}</span>
                       <span className="block text-xs text-ink-2">
                         {hasAcct
                           ? <>{sup?.account_name ?? "—"} · <span className="mono">{sup?.account_number ?? "—"}</span> · {sup?.bank_name ?? "—"}</>
                           : "No account details on file"}
                       </span>
                     </span>
-                    <MarkPaidButton action={markSettlementPaid} inputName="settlement_id" id={s.id as string} />
+                    <span className="flex items-center gap-2">
+                      {!partly && <HoldButton kind="settlement" id={s.id as string} />}
+                      <MarkPaidButton action={markSettlementPaid} inputName="settlement_id" id={s.id as string} label="Pay remaining" />
+                    </span>
                   </li>
                 );
               })}
@@ -136,7 +157,10 @@ export default async function AccountingPayoutsPage() {
                         {a.comment ? <div>Comment: {a.comment as string}</div> : null}
                         <div>Logged: {formatTimestamp(a.created_at as string)}</div>
                       </div>
-                      <MarkPaidButton action={markAdvancePaid} inputName="advance_id" id={a.id as string} />
+                      <div className="mt-2 flex items-center gap-2">
+                        <HoldButton kind="advance" id={a.id as string} />
+                        <MarkPaidButton action={markAdvancePaid} inputName="advance_id" id={a.id as string} />
+                      </div>
                     </details>
                   </li>
                 );
@@ -172,7 +196,10 @@ export default async function AccountingPayoutsPage() {
                       {e.comment ? <div>Comment: {e.comment as string}</div> : null}
                       <div>Logged: {formatTimestamp(e.created_at as string)}</div>
                     </div>
-                    <MarkPaidButton action={markConsumablePaid} inputName="consumable_id" id={e.id as string} />
+                    <div className="mt-2 flex items-center gap-2">
+                      <HoldButton kind="expense" id={e.id as string} />
+                      <MarkPaidButton action={markConsumablePaid} inputName="consumable_id" id={e.id as string} />
+                    </div>
                   </details>
                 </li>
               ))}

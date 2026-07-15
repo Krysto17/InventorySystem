@@ -38,10 +38,20 @@ export async function markSettlementPaid(_prev: ActionResult, formData: FormData
   const id = String(formData.get("settlement_id") ?? "");
   if (!id) return fail("Missing settlement.");
   const supabase = await createClient();
-  const res = await supabase.from("batch_settlements").update({ status: "paid" }).eq("id", id).select("id");
-  const result = fromWrite(res, "Couldn't mark this settlement paid — check you have access to its site.");
-  if (result.ok) revalidatePath("/accounting/payouts");
-  return result;
+  // Pay the full remaining balance in one go (net − already-recorded payments).
+  const [{ data: st }, { data: paidTotal }] = await Promise.all([
+    supabase.from("batch_settlements").select("net_balance").eq("id", id).maybeSingle(),
+    supabase.rpc("settlement_paid_total", { p_settlement_id: id }),
+  ]);
+  if (!st) return fail("Couldn't load this settlement — check you have access to its site.");
+  const remaining = Number(st.net_balance) - Number(paidTotal ?? 0);
+  if (!(remaining > 0.005)) return fail("Nothing left to pay on this settlement.");
+  const { error } = await supabase.rpc("record_settlement_payment", {
+    p_settlement_id: id, p_amount: remaining, p_method: "transfer",
+  });
+  if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
+  revalidatePath("/accounting/payouts");
+  return { ok: true };
 }
 
 // An underpaid price correction is a compensation the accountant disburses to

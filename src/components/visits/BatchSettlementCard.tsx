@@ -3,15 +3,22 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { recordDeduction, removeDeduction, removeUtilityCharge } from "@/app/visits/[id]/finance-actions";
-import { setSettlementStatus, updateSupplierAccount } from "@/app/visits/[id]/settlement-actions";
+import { updateSupplierAccount } from "@/app/visits/[id]/settlement-actions";
+import { RecordPaymentForm } from "@/components/visits/RecordPaymentForm";
+import { formatTimestamp } from "@/lib/visits/format";
 import type { Role } from "@/lib/auth/roles";
 
 import { one as g1 } from "@/lib/db/relation";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 const STATUS_VARIANT: Record<string, "default" | "green" | "yellow" | "red" | "blue" | "paid"> = {
-  pending: "yellow", approved: "blue", paid: "paid", rejected: "red",
+  pending: "yellow", approved: "blue", on_hold: "yellow", partially_paid: "blue", paid: "paid", rejected: "red",
 };
+const STATUS_LABEL: Record<string, string> = {
+  pending: "pending", approved: "approved", on_hold: "on hold",
+  partially_paid: "part-paid", paid: "paid", rejected: "rejected",
+};
+const METHOD_LABEL: Record<string, string> = { cash: "Cash", transfer: "Bank transfer", other: "Other" };
 
 // One consolidated batch-supply settlement: all materials (kg + price),
 // the light bill (processing fee), advance deducted, remaining debt, and the
@@ -44,6 +51,14 @@ export async function BatchSettlementCard({
   const { data: supplier } = await supabase
     .from("suppliers").select("account_name, account_number, bank_name").eq("id", supplierId).maybeSingle();
 
+  // Payment ledger against this settlement (part / full; cash by manager, etc.).
+  const settlementId = (settlement?.id as string | undefined) ?? null;
+  const { data: payments } = settlementId
+    ? await supabase.from("settlement_payments")
+        .select("id, amount, method, note, created_at, payer:profiles!settlement_payments_paid_by_fkey(full_name)")
+        .eq("settlement_id", settlementId).order("created_at", { ascending: true })
+    : { data: null };
+
   // Totals come from a single source: the stored snapshot once a settlement
   // exists (authoritative + reconciles), otherwise the live settlement_totals
   // function. "other" charges stay itemised here for the per-line remove button.
@@ -61,7 +76,16 @@ export async function BatchSettlementCard({
   const isOwner = viewerRole === "owner";
   const isAccounting = viewerRole === "accounting";
   const status = (settlement?.status as string | undefined) ?? null;
-  const locked = status === "approved" || status === "paid";
+  // Deductions/edits lock once the batch is out of the manager's hands.
+  const locked = status != null && status !== "pending" && status !== "rejected";
+  const paidTotal = (payments ?? []).reduce((s, p) => s + Number(p.amount), 0);
+  const remaining = Math.max(net - paidTotal, 0);
+  // A payment can be recorded while the settlement is open (approved or part-paid
+  // and not on hold) — cash usually by the manager, transfers by the accountant.
+  const canRecordPayment =
+    (isManager || isAccounting || isOwner) &&
+    (status === "approved" || status === "partially_paid") &&
+    remaining > 0.005;
   // Manager/owner may remove an applied deduction (mistake) before the batch is
   // approved/paid.
   const canEditDeductions = (isManager || isOwner) && !locked;
@@ -76,7 +100,7 @@ export async function BatchSettlementCard({
       <CardHeader>
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">Batch supply settlement</h2>
-          {status && <Badge variant={STATUS_VARIANT[status] ?? "default"}>{status}</Badge>}
+          {status && <Badge variant={STATUS_VARIANT[status] ?? "default"}>{STATUS_LABEL[status] ?? status}</Badge>}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -218,16 +242,34 @@ export async function BatchSettlementCard({
           </p>
         )}
 
-        {/* Accountant: pay once approved (only the accountant marks paid) */}
-        {isAccounting && status === "approved" && (
-          <form action={setSettlementStatus} className="border-t border-line pt-3">
-            <input type="hidden" name="visit_id" value={visitId} />
-            <input type="hidden" name="settlement_id" value={settlement!.id as string} />
-            <input type="hidden" name="status" value="paid" />
-            <button type="submit" className="w-full rounded bg-ink px-3 py-2 text-sm font-semibold text-white">
-              Mark paid ({ngn(Number(settlement!.net_balance))})
-            </button>
-          </form>
+        {/* Payments ledger — part or full; cash usually by the manager. */}
+        {(isManager || isAccounting || isOwner) && status && ["approved", "on_hold", "partially_paid", "paid"].includes(status) && (
+          <div className="border-t border-line pt-3 text-sm">
+            <div className="mb-1 flex items-center justify-between text-xs font-medium text-ink-2">
+              <span>Payments</span>
+              <span>{ngn(paidTotal)} of {ngn(net)} paid{remaining > 0.005 ? ` · ${ngn(remaining)} left` : ""}</span>
+            </div>
+            {(payments ?? []).length === 0 ? (
+              <p className="text-xs text-ink-2">No payments recorded yet.</p>
+            ) : (
+              <ul className="divide-y divide-line">
+                {(payments ?? []).map((p) => (
+                  <li key={p.id as string} className="flex items-center justify-between py-1 text-xs">
+                    <span className="text-ink-2">
+                      {METHOD_LABEL[p.method as string] ?? p.method as string}
+                      {p.note ? ` · ${p.note as string}` : ""}
+                      {" · "}{g1<{ full_name?: string }>((p as { payer: unknown }).payer)?.full_name ?? "—"}
+                      {" · "}{formatTimestamp(p.created_at as string)}
+                    </span>
+                    <span className="font-medium">{ngn(Number(p.amount))}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        {canRecordPayment && (
+          <RecordPaymentForm visitId={visitId} settlementId={settlementId!} remaining={remaining} />
         )}
 
         {/* Supply invoice — available once the batch has been submitted */}

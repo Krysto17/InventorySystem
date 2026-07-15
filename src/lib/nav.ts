@@ -48,6 +48,7 @@ const NAV: Record<Role, NavItem[]> = {
   ],
   manager: [
     { label: "Pricing queue", href: "/manager", icon: "pricing" },
+    { label: "Payments", href: "/manager/payments", icon: "accounting" },
     { label: "Advances", href: "/manager/advances", icon: "accounting" },
     { label: "Expenses", href: "/inventory/consumables", icon: "consumables" },
     // General (New-Site) manager only — site managers can't see these (#13).
