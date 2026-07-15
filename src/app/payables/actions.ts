@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
-import { fail, ok, type ActionResult } from "@/lib/actions/result";
+import { fail, ok, fromWrite, type ActionResult } from "@/lib/actions/result";
 
 // Hold / release / send-back apply uniformly to the three payables. Each kind
 // maps to its own SECURITY DEFINER RPC (authorization + site enforced in the DB).
@@ -56,6 +56,24 @@ export async function releasePayable(_prev: ActionResult, formData: FormData): P
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidateHubs();
   return ok();
+}
+
+// Mark an advance or expense paid (manager cash, or accountant/owner). The DB
+// guard enforces the role + the approved → paid step; a held item must be
+// released first. Settlements are paid through the payment ledger instead.
+export async function markPayablePaid(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const me = await getProfile();
+  if (!me || !REVIEW_ROLES.includes(me.role)) return fail("Not allowed to mark payments paid.");
+  const kind = kindOf(formData);
+  const id = String(formData.get("id") ?? "");
+  if (!kind || kind === "settlement" || !id) return fail("Use the payment form for supplier settlements.");
+  const table = kind === "advance" ? "advances" : "consumables";
+  const supabase = await createClient();
+  const res = await supabase.from(table).update({ approval_status: "paid" })
+    .eq("id", id).eq("approval_status", "approved").select("id");
+  const result = fromWrite(res, "Couldn't mark this paid — it may be on hold, already paid, or on another site.");
+  if (result.ok) revalidateHubs();
+  return result;
 }
 
 export async function sendPayableBack(_prev: ActionResult, formData: FormData): Promise<ActionResult> {

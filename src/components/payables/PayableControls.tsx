@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { holdPayable, releasePayable, sendPayableBack } from "@/app/payables/actions";
+import { holdPayable, releasePayable, sendPayableBack, markPayablePaid } from "@/app/payables/actions";
 import type { ActionResult } from "@/lib/actions/result";
 
 const init: ActionResult = { ok: false };
@@ -21,11 +21,25 @@ export function PayableControls({
   const [holdState, holdAction, holding] = useActionState(holdPayable, init);
   const [relState, relAction, releasing] = useActionState(releasePayable, init);
   const [sbState, sbAction, sending] = useActionState(sendPayableBack, init);
-  const err = holdState.error || relState.error || sbState.error;
+  const [payState, payAction, paying] = useActionState(markPayablePaid, init);
+  const err = holdState.error || relState.error || sbState.error || payState.error;
+  // Advances/expenses are marked paid directly (cash by the manager, etc.);
+  // supplier settlements are paid through the payment ledger instead.
+  const canMarkPaid = kind !== "settlement" && status === "approved";
 
   return (
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-2">
+        {canMarkPaid && (
+          <form action={payAction}>
+            <input type="hidden" name="kind" value={kind} />
+            <input type="hidden" name="id" value={id} />
+            <button type="submit" disabled={paying}
+              className="rounded bg-ink px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50">
+              {paying ? "Paying…" : "Mark paid"}
+            </button>
+          </form>
+        )}
         {status === "approved" ? (
           <form action={holdAction}>
             <input type="hidden" name="kind" value={kind} />
