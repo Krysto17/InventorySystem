@@ -2037,6 +2037,7 @@ export type Database = {
       reopen_processing_fee: { Args: { p_visit_id: string }; Returns: undefined }
       record_price_correction: { Args: { p_visit_id: string; p_direction: string; p_amount: number; p_reason?: string }; Returns: string }
       mark_price_correction_paid: { Args: { p_id: string }; Returns: undefined }
+      accountant_send_back_to_pricing: { Args: { p_visit_id: string; p_reason: string }; Returns: undefined }
       record_debt_repayment: { Args: { p_supplier_id: string; p_amount: number; p_note?: string }; Returns: string }
       settlement_totals: { Args: { p_visit_id: string }; Returns: { materials: number; processing_fee: number; other_deductions: number; advances: number; net: number; remaining_debt: number }[] }
       sync_processing_fee: { Args: { p_visit_id: string }; Returns: undefined }
