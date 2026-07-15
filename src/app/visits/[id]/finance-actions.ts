@@ -30,28 +30,30 @@ export async function recordPriceCorrection(_prev: ActionResult, formData: FormD
   return ok();
 }
 
-// Accounting bounces an owner-approved (not-yet-paid) batch back to the manager
-// for a price correction. The RPC voids the approved settlement, unlocks the
-// line prices, returns the visit to 'pricing', and posts the reason to the batch
-// thread. Enforces accounting-only + site + not-paid in the DB.
-export async function sendBackToPricing(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+// Accounting returns an owner-approved (not-yet-paid) batch to the OWNER for
+// review (accounting → owner → manager). The RPC voids the approved settlement,
+// unlocks the line prices, returns the visit to 'awaiting_price_approval', and
+// posts the reason to the batch thread. The owner then re-approves or sends it
+// on to the manager. Enforces accounting-only + site + not-paid in the DB.
+export async function sendBackToOwner(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
   if (!me || !(me.role === "accounting" || me.role === "owner")) {
-    return fail("Only accounting can send a batch back for correction.");
+    return fail("Only accounting can send a batch back for review.");
   }
   const visitId = String(formData.get("visit_id") ?? "");
   const reason = String(formData.get("reason") ?? "").trim();
   if (!visitId) return fail("Missing visit.");
-  if (!reason) return fail("Give the manager a reason for the correction.");
+  if (!reason) return fail("Give the owner a reason for the review.");
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("accountant_send_back_to_pricing", {
+  const { error } = await supabase.rpc("accountant_send_back_to_owner", {
     p_visit_id: visitId, p_reason: reason,
   });
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidatePath(`/visits/${visitId}`);
   revalidatePath("/accounting");
-  revalidatePath("/manager");
+  revalidatePath("/owner/approvals");
+  revalidatePath("/owner");
   return ok();
 }
 

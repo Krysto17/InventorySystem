@@ -13,7 +13,7 @@ import { SupplierFinanceCard } from "@/components/visits/SupplierFinanceCard";
 import { BatchSettlementCard } from "@/components/visits/BatchSettlementCard";
 import { ProcessingFeeReopen } from "@/components/visits/ProcessingFeeReopen";
 import { SubmitPricedBatchForm } from "@/components/visits/SubmitPricedBatchForm";
-import { SendBackToPricingForm } from "@/components/visits/SendBackToPricingForm";
+import { SendBackToOwnerForm } from "@/components/visits/SendBackToOwnerForm";
 import { PriceCorrections } from "@/components/visits/PriceCorrections";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { GateExitCard } from "@/components/visits/GateExitCard";
@@ -122,9 +122,9 @@ export default async function VisitDetailPage({
   // Batch delete gate (#4/#5): general manager may delete until owner-approval,
   // owner until paid. Mirrors the delete_batch RPC, which re-checks server-side.
   const settlementStatus = (settlement?.status as string | null) ?? null;
-  // Accounting (or owner) can bounce an in-accounting, not-yet-paid batch back to
-  // the manager to correct the pricing.
-  const canSendBackToPricing =
+  // Accounting (or owner) can return an in-accounting, not-yet-paid batch to the
+  // owner for review (owner then re-approves or sends it to the manager).
+  const canSendBackToOwner =
     (me.role === "accounting" || me.role === "owner") &&
     (visit.state as string) === "in_accounting" &&
     settlementStatus !== "paid";
@@ -322,11 +322,11 @@ export default async function VisitDetailPage({
         </CardContent>
       </Card>
     )}
-    {canSendBackToPricing && (
+    {canSendBackToOwner && (
       <Card>
-        <CardHeader><h2 className="text-sm font-semibold">Send back for correction</h2></CardHeader>
+        <CardHeader><h2 className="text-sm font-semibold">Send back for review</h2></CardHeader>
         <CardContent>
-          <SendBackToPricingForm visitId={visitNorm.id} />
+          <SendBackToOwnerForm visitId={visitNorm.id} />
         </CardContent>
       </Card>
     )}

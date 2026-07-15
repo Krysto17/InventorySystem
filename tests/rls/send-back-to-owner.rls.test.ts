@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
 
-// Accounting bounces an owner-approved (not-yet-paid) batch back to the manager
-// for a price correction: in_accounting → pricing, settlement voided, lines
-// unlocked, reason posted to the batch thread.
-describe("accountant sends a batch back to pricing", () => {
+// Accounting returns an owner-approved (not-yet-paid) batch to the owner for
+// review: in_accounting → awaiting_price_approval, settlement voided, lines
+// unlocked, reason posted. The owner then re-approves or sends it to the manager.
+describe("accountant sends a batch back to the owner", () => {
   let siteId: string, otherSite: string, monazite: string, supplierId: string;
   let owner: TestUser, acct: TestUser, acctOther: TestUser, mgr: TestUser, recv: TestUser;
 
@@ -47,32 +47,39 @@ describe("accountant sends a batch back to pricing", () => {
     return visitId;
   }
 
-  it("same-site accountant sends it back: state → pricing, settlement voided, lines unlocked, reason logged", async () => {
+  it("same-site accountant returns it to the owner: state → awaiting_price_approval, settlement voided, lines unlocked, reason logged", async () => {
     const id = await inAccountingVisit();
-    const { error } = await acct.client.rpc("accountant_send_back_to_pricing", { p_visit_id: id, p_reason: "Monazite underpriced" });
+    const { error } = await acct.client.rpc("accountant_send_back_to_owner", { p_visit_id: id, p_reason: "Monazite underpriced" });
     expect(error).toBeNull();
 
     const { data: v } = await adminClient().from("visits").select("state").eq("id", id).single();
-    expect(v!.state).toBe("pricing");
+    expect(v!.state).toBe("awaiting_price_approval");
     const { data: st } = await adminClient().from("batch_settlements").select("id").eq("visit_id", id);
     expect(st!.length).toBe(0);
     const { data: lines } = await adminClient().from("visit_materials").select("price_finalized").eq("visit_id", id);
     expect(lines!.every((l) => l.price_finalized === false)).toBe(true);
-    const { data: pr } = await adminClient().from("pricing").select("agreement_status").eq("visit_id", id).single();
-    expect(pr!.agreement_status).toBe("pending");
     const { data: c } = await adminClient().from("batch_comments").select("body").eq("visit_id", id).single();
     expect(c!.body).toMatch(/Monazite underpriced/);
   });
 
+  it("the owner then sends it on to the manager (awaiting_price_approval → pricing)", async () => {
+    const id = await inAccountingVisit();
+    await acct.client.rpc("accountant_send_back_to_owner", { p_visit_id: id, p_reason: "please review" });
+    const { error } = await owner.client.rpc("reject_pricing", { p_visit_id: id });
+    expect(error).toBeNull();
+    const { data: v } = await adminClient().from("visits").select("state").eq("id", id).single();
+    expect(v!.state).toBe("pricing");
+  });
+
   it("requires a reason", async () => {
     const id = await inAccountingVisit();
-    const { error } = await acct.client.rpc("accountant_send_back_to_pricing", { p_visit_id: id, p_reason: "  " });
+    const { error } = await acct.client.rpc("accountant_send_back_to_owner", { p_visit_id: id, p_reason: "  " });
     expect(error).not.toBeNull();
   });
 
   it("cannot send back a paid batch", async () => {
     const id = await inAccountingVisit(true);
-    const { error } = await acct.client.rpc("accountant_send_back_to_pricing", { p_visit_id: id, p_reason: "too late" });
+    const { error } = await acct.client.rpc("accountant_send_back_to_owner", { p_visit_id: id, p_reason: "too late" });
     expect(error).not.toBeNull();
     const { data: v } = await adminClient().from("visits").select("state").eq("id", id).single();
     expect(v!.state).toBe("in_accounting");
@@ -80,13 +87,13 @@ describe("accountant sends a batch back to pricing", () => {
 
   it("an accountant on another site cannot send it back", async () => {
     const id = await inAccountingVisit();
-    const { error } = await acctOther.client.rpc("accountant_send_back_to_pricing", { p_visit_id: id, p_reason: "not my site" });
+    const { error } = await acctOther.client.rpc("accountant_send_back_to_owner", { p_visit_id: id, p_reason: "not my site" });
     expect(error).not.toBeNull();
   });
 
   it("a manager cannot send it back (accounting/owner only)", async () => {
     const id = await inAccountingVisit();
-    const { error } = await mgr.client.rpc("accountant_send_back_to_pricing", { p_visit_id: id, p_reason: "nope" });
+    const { error } = await mgr.client.rpc("accountant_send_back_to_owner", { p_visit_id: id, p_reason: "nope" });
     expect(error).not.toBeNull();
   });
 });
