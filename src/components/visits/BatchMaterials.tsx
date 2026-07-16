@@ -290,9 +290,9 @@ export async function BatchMaterials({
                         🔒 finalized by owner
                       </span>
                     )}
-                    {/* Manager / inventory / owner print the price slip (grade + RA
-                        are written by hand after printing). */}
-                    {["manager", "owner", "inventory"].includes(viewerRole) && (
+                    {/* Manager / inventory / receiving / owner print the price slip
+                        (grade + RA are written by hand after printing). */}
+                    {["manager", "owner", "inventory", "receiving"].includes(viewerRole) && (
                       <a
                         href={`/api/pdf/price-slip/${l.id}`}
                         target="_blank"

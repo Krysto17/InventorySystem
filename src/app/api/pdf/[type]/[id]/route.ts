@@ -71,7 +71,7 @@ export async function GET(
 
   // ── Material price slip (printed when a price is set) ─────────────────────
   if (type === "price-slip") {
-    if (!["inventory", "manager", "owner"].includes(me.role)) return forbidden();
+    if (!["inventory", "manager", "owner", "receiving"].includes(me.role)) return forbidden();
     const data = await fetchPriceSlipData(id); // RLS-scoped read; null if not priced/visible
     if (!data) return notFound("Priced line not found");
     const docId = docHash(type, id);
