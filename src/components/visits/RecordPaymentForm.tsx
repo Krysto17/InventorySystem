@@ -22,7 +22,7 @@ export function RecordPaymentForm({
   const [state, action, pending] = useActionState(recordSettlementPayment, init);
 
   return (
-    <form action={action} className="space-y-2 border-t border-line pt-3">
+    <form action={action} className="space-y-2 border-t border-line pt-3" data-confirm="Confirm this payment has actually been made to the supplier.">
       <input type="hidden" name="visit_id" value={visitId} />
       <input type="hidden" name="settlement_id" value={settlementId} />
       <div className="text-xs font-medium text-ink-2">Record a payment · {ngn(remaining)} left to pay</div>
@@ -50,7 +50,6 @@ export function RecordPaymentForm({
       </div>
       <button
         type="submit" disabled={pending}
-        onClick={(e) => { if (!window.confirm("Confirm this payment has actually been made to the supplier.")) e.preventDefault(); }}
         className="rounded bg-ink px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
       >
         {pending ? "Recording…" : "Record payment"}

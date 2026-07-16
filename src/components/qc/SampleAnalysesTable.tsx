@@ -98,6 +98,7 @@ export function SampleAnalysesTable({ rows, canPrice = false, canDelete = false 
                   {r.price == null ? (
                     <form
                       action={deleteSample}
+                      data-confirm="skip"
                       onSubmit={(e) => { if (!confirm("Delete this sample analysis?")) e.preventDefault(); }}
                     >
                       <input type="hidden" name="sample_id" value={r.id} />

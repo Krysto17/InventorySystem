@@ -31,11 +31,10 @@ export function PayableControls({
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-2">
         {canMarkPaid && (
-          <form action={payAction}>
+          <form action={payAction} data-confirm="Confirm you have already paid this. It will be recorded as paid.">
             <input type="hidden" name="kind" value={kind} />
             <input type="hidden" name="id" value={id} />
             <button type="submit" disabled={paying}
-              onClick={(e) => { if (!window.confirm("Confirm you have already paid this. It will be recorded as paid.")) e.preventDefault(); }}
               className="rounded bg-ink px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50">
               {paying ? "Paying…" : "Mark paid"}
             </button>

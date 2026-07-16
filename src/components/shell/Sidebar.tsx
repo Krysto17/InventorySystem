@@ -127,7 +127,7 @@ export function Sidebar({ role, fullName, username, isGeneralManager, open, onCl
               {username} · {ROLE_LABEL[role]}
             </div>
           </div>
-          <form action={logout}>
+          <form action={logout} data-confirm="skip">
             <button
               type="submit"
               className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm font-semibold text-ink-2 hover:bg-panel hover:text-ink"

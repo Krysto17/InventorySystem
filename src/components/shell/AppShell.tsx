@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { InstallButton } from "@/components/pwa/InstallButton";
+import { ConfirmSubmits } from "@/components/ui/ConfirmSubmits";
 import { NotificationButton } from "@/components/pwa/NotificationButton";
 import { createClient } from "@/lib/supabase/client";
 import { fetchMyNotifications } from "@/app/notification-actions";
@@ -99,6 +100,7 @@ export function AppShell({ profile, notificationItems, children }: Props) {
 
   return (
     <div className="flex min-h-screen">
+      <ConfirmSubmits />
       <Sidebar
         role={profile.role}
         fullName={profile.fullName}

@@ -27,6 +27,7 @@ export function DeleteSupplierButton({
   return (
     <form
       action={action}
+      data-confirm="skip"
       onSubmit={(e) => {
         if (!confirm("Delete this supplier? This cannot be undone.")) e.preventDefault();
       }}

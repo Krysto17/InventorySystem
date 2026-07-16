@@ -41,7 +41,7 @@ export async function BatchComments({ visitId, viewerRole }: { visitId: string; 
         )}
 
         {canComment && (
-          <form action={addBatchComment} className="space-y-2 border-t border-line pt-3">
+          <form action={addBatchComment} data-confirm="skip" className="space-y-2 border-t border-line pt-3">
             <input type="hidden" name="visit_id" value={visitId} />
             <label className="block text-xs font-medium">
               Add a comment <span className="font-normal text-ink-2">(visible to owner &amp; accountant)</span>

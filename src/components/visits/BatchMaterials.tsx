@@ -353,13 +353,13 @@ export async function BatchMaterials({
                     ) : (
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[11px] text-ink-2">Fails spec/pricing?</span>
-                        <form action={unsettleLine} className="flex items-center gap-1">
+                        <form action={unsettleLine} className="flex items-center gap-1" data-confirm="Unsettle this line and issue a gate pass? It will be excluded from the batch total.">
                           <input type="hidden" name="visit_id" value={visitId} />
                           <input type="hidden" name="visit_material_id" value={l.id} />
                           <input type="text" name="reason" placeholder="reason (optional)" className="w-36 rounded border px-2 py-1 text-xs" />
                           <SubmitButton pendingText="…" className="rounded border border-reject px-2 py-1 text-xs text-reject hover:bg-reject-soft disabled:opacity-50">Unsettle → gate pass</SubmitButton>
                         </form>
-                        <form action={removeLineAsManager}>
+                        <form action={removeLineAsManager} data-confirm="Remove this material line? This cannot be undone.">
                           <input type="hidden" name="visit_id" value={visitId} />
                           <input type="hidden" name="visit_material_id" value={l.id} />
                           <SubmitButton pendingText="Removing…" className="rounded border border-reject px-2 py-1 text-xs text-reject hover:bg-reject-soft disabled:opacity-50">Remove line</SubmitButton>

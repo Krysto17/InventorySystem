@@ -21,7 +21,7 @@ export function DeleteBatchButton({ visitId }: { visitId: string }) {
   }
 
   return (
-    <form action={deleteBatch} className="flex items-center gap-2">
+    <form action={deleteBatch} data-confirm="skip" className="flex items-center gap-2">
       <input type="hidden" name="visit_id" value={visitId} />
       <span className="text-sm text-red-600">Delete this entire batch supply?</span>
       <button type="submit" className="text-sm px-2 py-1 bg-red-600 text-white rounded">

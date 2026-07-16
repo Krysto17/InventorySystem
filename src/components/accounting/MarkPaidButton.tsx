@@ -20,14 +20,11 @@ export function MarkPaidButton({
 }) {
   const [state, formAction, pending] = useActionState(action, { ok: false });
   return (
-    <form action={formAction} className="mt-2">
+    <form action={formAction} className="mt-2" data-confirm="Confirm you have already paid this. It will be recorded as paid.">
       <input type="hidden" name={inputName} value={id} />
       <button
         type="submit"
         disabled={pending}
-        onClick={(e) => {
-          if (!window.confirm("Confirm you have already paid this. It will be recorded as paid.")) e.preventDefault();
-        }}
         className="rounded bg-ink px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
       >
         {pending ? "Paying…" : label}

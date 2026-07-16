@@ -10,13 +10,23 @@ export function SubmitButton({
   children,
   pendingText,
   className,
+  confirm,
+  onClick,
   ...props
-}: React.ComponentProps<"button"> & { pendingText?: string }) {
+}: React.ComponentProps<"button"> & { pendingText?: string; confirm?: string }) {
   const { pending } = useFormStatus();
   return (
     <button
       type="submit"
       {...props}
+      onClick={(e) => {
+        // Ask for confirmation before the form's action runs.
+        if (confirm && !window.confirm(confirm)) {
+          e.preventDefault();
+          return;
+        }
+        onClick?.(e);
+      }}
       disabled={pending || props.disabled}
       aria-busy={pending}
       className={className}

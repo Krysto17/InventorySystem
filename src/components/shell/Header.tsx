@@ -53,7 +53,7 @@ export function Header({ role, notificationItems, onMenuClick }: Props) {
         Magnetic<span className="text-[#F3C892]">Joezion</span>
       </span>
 
-      <form onSubmit={onSearch} className="relative ml-2 flex-1 max-w-md">
+      <form onSubmit={onSearch} data-confirm="skip" className="relative ml-2 flex-1 max-w-md">
         <Search
           size={15}
           className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"

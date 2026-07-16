@@ -33,6 +33,7 @@ export function FilterBar({
   return (
     <form
       onSubmit={handleSubmit}
+      data-confirm="skip"
       className="flex flex-wrap gap-3 items-end text-sm"
     >
       <label className="flex flex-col gap-1">
