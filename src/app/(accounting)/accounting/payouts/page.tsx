@@ -85,7 +85,8 @@ export default async function AccountingPayoutsPage() {
                     </span>
                     <span className="flex items-center gap-2">
                       {!partly && <HoldButton kind="settlement" id={s.id as string} />}
-                      <MarkPaidButton action={markSettlementPaid} inputName="settlement_id" id={s.id as string} label="Pay remaining" />
+                      <MarkPaidButton action={markSettlementPaid} inputName="settlement_id" id={s.id as string}
+                        label={remaining > 0.005 ? "Pay remaining" : "Mark paid (₦0)"} />
                     </span>
                   </li>
                 );

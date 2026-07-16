@@ -45,10 +45,10 @@ export async function markSettlementPaid(_prev: ActionResult, formData: FormData
   ]);
   if (!st) return fail("Couldn't load this settlement — check you have access to its site.");
   const remaining = Number(st.net_balance) - Number(paidTotal ?? 0);
-  if (!(remaining > 0.005)) return fail("Nothing left to pay on this settlement.");
-  const { error } = await supabase.rpc("record_settlement_payment", {
-    p_settlement_id: id, p_amount: remaining, p_method: "transfer",
-  });
+  // A ₦0 (fully-covered) balance is closed directly; otherwise pay the rest.
+  const { error } = remaining > 0.005
+    ? await supabase.rpc("record_settlement_payment", { p_settlement_id: id, p_amount: remaining, p_method: "transfer" })
+    : await supabase.rpc("close_settlement", { p_id: id });
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidatePath("/accounting/payouts");
   return { ok: true };

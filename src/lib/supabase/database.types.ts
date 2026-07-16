@@ -2099,6 +2099,7 @@ export type Database = {
       settlement_totals: { Args: { p_visit_id: string }; Returns: { materials: number; processing_fee: number; other_deductions: number; advances: number; net: number; remaining_debt: number }[] }
       settlement_paid_total: { Args: { p_settlement_id: string }; Returns: number }
       record_settlement_payment: { Args: { p_settlement_id: string; p_amount: number; p_method: string; p_note?: string }; Returns: string }
+      close_settlement: { Args: { p_id: string }; Returns: undefined }
       hold_settlement: { Args: { p_id: string }; Returns: undefined }
       release_settlement: { Args: { p_id: string }; Returns: undefined }
       send_settlement_back: { Args: { p_id: string; p_reason: string }; Returns: undefined }

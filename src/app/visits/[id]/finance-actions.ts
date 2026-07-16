@@ -87,6 +87,24 @@ export async function recordSettlementPayment(_prev: ActionResult, formData: For
   return ok();
 }
 
+// Close a fully-covered (₦0 remaining) settlement — mark it paid without a
+// ledger entry. The RPC enforces role + site + that nothing is left to pay.
+export async function closeSettlement(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const me = await getProfile();
+  if (!me || !["owner", "accounting", "manager"].includes(me.role)) return fail("Not allowed to close a settlement.");
+  const visitId = String(formData.get("visit_id") ?? "");
+  const settlementId = String(formData.get("settlement_id") ?? "");
+  if (!settlementId) return fail("Missing settlement.");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("close_settlement", { p_id: settlementId });
+  if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
+  if (visitId) revalidatePath(`/visits/${visitId}`);
+  revalidatePath("/accounting/payouts");
+  revalidatePath("/owner/payments");
+  revalidatePath("/manager/payments");
+  return ok();
+}
+
 // ─── Utility charges (Phase 11 B) ────────────────────────────────────────────
 
 export async function addUtilityCharge(formData: FormData): Promise<void> {

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { recordDeduction, removeDeduction, removeUtilityCharge } from "@/app/visits/[id]/finance-actions";
 import { updateSupplierAccount } from "@/app/visits/[id]/settlement-actions";
 import { RecordPaymentForm } from "@/components/visits/RecordPaymentForm";
+import { CloseSettlementButton } from "@/components/visits/CloseSettlementButton";
 import { formatTimestamp } from "@/lib/visits/format";
 import type { Role } from "@/lib/auth/roles";
 
@@ -82,10 +83,10 @@ export async function BatchSettlementCard({
   const remaining = Math.max(net - paidTotal, 0);
   // A payment can be recorded while the settlement is open (approved or part-paid
   // and not on hold) — cash usually by the manager, transfers by the accountant.
-  const canRecordPayment =
-    (isManager || isAccounting || isOwner) &&
-    (status === "approved" || status === "partially_paid") &&
-    remaining > 0.005;
+  const settlementOpen = status === "approved" || status === "partially_paid";
+  const canRecordPayment = (isManager || isAccounting || isOwner) && settlementOpen && remaining > 0.005;
+  // Fully-covered (₦0 left) — close it directly instead of recording a payment.
+  const canCloseZero = (isManager || isAccounting || isOwner) && settlementOpen && remaining <= 0.005;
   // Manager/owner may remove an applied deduction (mistake) before the batch is
   // approved/paid.
   const canEditDeductions = (isManager || isOwner) && !locked;
@@ -270,6 +271,12 @@ export async function BatchSettlementCard({
         )}
         {canRecordPayment && (
           <RecordPaymentForm visitId={visitId} settlementId={settlementId!} remaining={remaining} />
+        )}
+        {canCloseZero && (
+          <div className="border-t border-line pt-3">
+            <p className="mb-2 text-xs text-ink-2">Nothing is owed on this batch (₦0 net) — close it to complete the settlement.</p>
+            <CloseSettlementButton visitId={visitId} settlementId={settlementId!} />
+          </div>
         )}
 
         {/* Supply invoice — available once the batch has been submitted */}

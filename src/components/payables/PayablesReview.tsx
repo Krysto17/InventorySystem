@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatTimestamp } from "@/lib/visits/format";
 import { PayableControls } from "@/components/payables/PayableControls";
 import { RecordPaymentForm } from "@/components/visits/RecordPaymentForm";
+import { CloseSettlementButton } from "@/components/visits/CloseSettlementButton";
 import { one as g1 } from "@/lib/db/relation";
 
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -115,8 +116,10 @@ export async function PayablesReview({
     const partPaid = i.kind === "settlement" && i.status === "partially_paid";
     // Record-payment (manager cash / etc.) on a settlement that's still owed;
     // hold/send-back only while it's fully approved (a part-paid one can't).
-    const canPay = showControls && i.kind === "settlement" && i.visitId != null && (i.remaining ?? 0) > 0.005
-      && (i.status === "approved" || i.status === "partially_paid");
+    const payable = i.kind === "settlement" && i.visitId != null && (i.status === "approved" || i.status === "partially_paid");
+    const canPay = showControls && payable && (i.remaining ?? 0) > 0.005;
+    // A fully-covered settlement (₦0 left) is closed directly.
+    const canClose = showControls && payable && (i.remaining ?? 0) <= 0.005;
     const canHold = showControls && (i.status === "approved" || i.status === "on_hold");
     return (
       <li className="px-4 py-3 text-sm">
@@ -133,7 +136,10 @@ export async function PayablesReview({
               {i.note ? ` · “${i.note}”` : ""}
             </span>
           </span>
-          {canHold && <PayableControls kind={i.kind} id={i.id} status={i.status as "approved" | "on_hold"} />}
+          <span className="flex items-center gap-2">
+            {canClose && <CloseSettlementButton visitId={i.visitId!} settlementId={i.id} />}
+            {canHold && <PayableControls kind={i.kind} id={i.id} status={i.status as "approved" | "on_hold"} />}
+          </span>
         </div>
         {canPay && (
           <div className="mt-1">
