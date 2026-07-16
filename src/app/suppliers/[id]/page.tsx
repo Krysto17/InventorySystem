@@ -8,6 +8,8 @@ import { SupplierEditForms } from "@/components/suppliers/SupplierEditForms";
 import { DeleteSupplierButton } from "@/components/suppliers/DeleteSupplierButton";
 import { OpeningBalanceForm } from "@/components/suppliers/OpeningBalanceForm";
 import { DebtRepaymentForm } from "@/components/suppliers/DebtRepaymentForm";
+import { switchSupplierAccount } from "@/app/suppliers/actions";
+import { SupplierStatement } from "@/components/suppliers/SupplierStatement";
 import { formatTimestamp } from "@/lib/visits/format";
 import { STATE_LABELS, type VisitState } from "@/lib/visits/state-machine";
 import { one as g1 } from "@/lib/db/relation";
@@ -42,7 +44,7 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
           .eq("supplier_id", id).order("created_at", { ascending: false }).limit(50),
         supabase.from("advances").select("id, purpose, amount_naira, approval_status, created_at")
           .eq("supplier_id", id).order("created_at", { ascending: false }),
-        supabase.from("stock_lots").select("id, weight_kg, cost_price_per_kg, status, material:material_types(name)")
+        supabase.from("stock_lots").select("id, weight_kg, cost_price_per_kg, status, created_at, material:material_types(name), ref:visit_materials(visit_id)")
           .eq("supplier_id", id).order("created_at", { ascending: false }).limit(50),
       ])
     : [{ data: null }, { data: null }, { data: null }];
@@ -116,12 +118,24 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
             <div>
               <div className="text-[11px] font-medium text-ink-2">Previous accounts ({formerAccounts.length})</div>
               <ul className="mt-1 space-y-1">
-                {formerAccounts.slice().reverse().map((a, i) => (
-                  <li key={i} className="rounded bg-zinc-50 px-2 py-1 text-xs text-gray-600 dark:bg-zinc-800/50">
-                    {a.account_name ?? "—"} · <span className="mono">{a.account_number ?? "—"}</span> · {a.bank_name ?? "—"}
-                    {a.replaced_at && <span className="text-gray-400"> · until {new Date(a.replaced_at).toLocaleDateString()}</span>}
-                  </li>
-                ))}
+                {formerAccounts.slice().reverse().map((a, i) => {
+                  const complete = !!(a.account_name && a.account_number && a.bank_name);
+                  return (
+                    <li key={i} className="flex flex-wrap items-center justify-between gap-2 rounded bg-zinc-50 px-2 py-1 text-xs text-gray-600 dark:bg-zinc-800/50">
+                      <span>
+                        {a.account_name ?? "—"} · <span className="mono">{a.account_number ?? "—"}</span> · {a.bank_name ?? "—"}
+                        {a.replaced_at && <span className="text-gray-400"> · until {new Date(a.replaced_at).toLocaleDateString()}</span>}
+                      </span>
+                      {canEdit && complete && (
+                        <form action={switchSupplierAccount} data-confirm="Make this the supplier's active account for payouts?">
+                          <input type="hidden" name="supplier_id" value={s.id as string} />
+                          <input type="hidden" name="account_number" value={a.account_number as string} />
+                          <button type="submit" className="rounded border border-line px-2 py-0.5 text-[11px] font-semibold hover:bg-white dark:hover:bg-zinc-800">Use this account</button>
+                        </form>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
@@ -130,6 +144,8 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
 
       {canViewRecords && (
         <>
+          <SupplierStatement supplierId={s.id as string} />
+
           <Card>
             <CardHeader><h2 className="text-sm font-semibold">Supplier debt &amp; opening balance</h2></CardHeader>
             <CardContent>
@@ -199,13 +215,25 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
                 <ul className="divide-y">
                   {(lots ?? []).map((l) => {
                     const mat = g1<{ name: string }>((l as { material: unknown }).material);
-                    return (
-                      <li key={l.id as string} className="flex items-center justify-between px-4 py-2 text-sm">
-                        <span>{mat?.name ?? "—"} · {Number(l.weight_kg).toFixed(3)} kg</span>
+                    const visitId = g1<{ visit_id: string }>((l as { ref: unknown }).ref)?.visit_id;
+                    const inner = (
+                      <>
+                        <span>{mat?.name ?? "—"} · {Number(l.weight_kg).toFixed(3)} kg
+                          <span className="text-gray-400"> · {formatTimestamp(l.created_at as string)}</span>
+                        </span>
                         <span className="flex items-center gap-2">
                           {l.cost_price_per_kg != null ? `${ngn(Number(l.cost_price_per_kg))}/kg` : "—"}
                           <Badge variant={l.status === "available" ? "green" : "default"}>{l.status as string}</Badge>
                         </span>
+                      </>
+                    );
+                    return (
+                      <li key={l.id as string}>
+                        {visitId ? (
+                          <Link href={`/visits/${visitId}`} className="flex items-center justify-between px-4 py-2 text-sm hover:bg-gray-50">{inner}</Link>
+                        ) : (
+                          <div className="flex items-center justify-between px-4 py-2 text-sm">{inner}</div>
+                        )}
                       </li>
                     );
                   })}

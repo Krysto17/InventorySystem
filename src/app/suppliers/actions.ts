@@ -142,3 +142,27 @@ export async function saveSupplierAccount(_prev: SupplierEditState, formData: Fo
   revalidatePath(`/suppliers/${id}`);
   return { ok: "Account details saved." };
 }
+
+// Switch the supplier's active account to one from its history. The current
+// account is archived; the chosen one becomes current (and leaves history).
+export async function switchSupplierAccount(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || (me.role !== "manager" && me.role !== "owner")) return;
+  const id = String(formData.get("supplier_id") ?? "");
+  const number = String(formData.get("account_number") ?? "").trim();
+  if (!id || !number) return;
+
+  const supabase = await createClient();
+  const { data: s } = await supabase.from("suppliers").select("former_accounts, account_number").eq("id", id).maybeSingle();
+  if (!s || s.account_number === number) return; // already current
+  const formers = (s.former_accounts as { account_name?: string | null; account_number?: string | null; bank_name?: string | null }[] | null) ?? [];
+  const target = formers.find((a) => a.account_number === number);
+  if (!target?.account_number) return;
+
+  await supabase.from("suppliers").update({
+    account_name: target.account_name ?? null,
+    account_number: target.account_number,
+    bank_name: target.bank_name ?? null,
+  }).eq("id", id);
+  revalidatePath(`/suppliers/${id}`);
+}
