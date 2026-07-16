@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { setLinePrice } from "@/app/visits/[id]/batch-actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { dayLabel, groupByDay } from "@/lib/analyses/group-by-day";
 
 export type AnalysisRow = {
   lineId: string;
@@ -55,8 +56,12 @@ function useSorter(rows: AnalysisRow[], sort: SortKey, asc: boolean) {
 function Table({ rows, mode }: { rows: AnalysisRow[]; mode: "pricing" | "closed" }) {
   const [sort, setSort] = useState<SortKey>("date");
   const [asc, setAsc] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const sorted = useSorter(rows, sort, asc);
   const toggle = (k: SortKey) => (k === sort ? setAsc((v) => !v) : (setSort(k), setAsc(false)));
+  const toggleDay = (k: string) => setCollapsed((p) => { const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const groups = groupByDay(sorted);
+  const totalCols = COLS.length + 2;
 
   if (rows.length === 0) {
     return <p className="text-sm text-gray-500">{mode === "pricing" ? "Nothing awaiting pricing." : "No settled analyses."}</p>;
@@ -78,7 +83,19 @@ function Table({ rows, mode }: { rows: AnalysisRow[]; mode: "pricing" | "closed"
           </tr>
         </thead>
         <tbody>
-          {sorted.map((r) => (
+          {groups.map((g) => {
+            const isCollapsed = collapsed.has(g.key);
+            return (
+            <Fragment key={g.key}>
+            <tr className="bg-zinc-50 dark:bg-zinc-800/50">
+              <td colSpan={totalCols} className="px-3 py-1.5">
+                <button type="button" onClick={() => toggleDay(g.key)} className="flex w-full items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                  <span>{isCollapsed ? "▸" : "▾"} {dayLabel(g.rows[0].date)}</span>
+                  <span>{g.rows.length}</span>
+                </button>
+              </td>
+            </tr>
+            {!isCollapsed && g.rows.map((r) => (
             <tr key={r.lineId} className="border-b hover:bg-gray-50 dark:hover:bg-zinc-900/40">
               <td className="whitespace-nowrap px-3 py-2 text-gray-500">{new Date(r.date).toLocaleDateString()}</td>
               <td className="px-3 py-2">
@@ -106,7 +123,10 @@ function Table({ rows, mode }: { rows: AnalysisRow[]; mode: "pricing" | "closed"
                 )}
               </td>
             </tr>
-          ))}
+            ))}
+            </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
