@@ -50,6 +50,7 @@ export function RecordPaymentForm({
       </div>
       <button
         type="submit" disabled={pending}
+        onClick={(e) => { if (!window.confirm("Confirm this payment has actually been made to the supplier.")) e.preventDefault(); }}
         className="rounded bg-ink px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
       >
         {pending ? "Recording…" : "Record payment"}

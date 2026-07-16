@@ -22,7 +22,14 @@ export function MarkPaidButton({
   return (
     <form action={formAction} className="mt-2">
       <input type="hidden" name={inputName} value={id} />
-      <button type="submit" disabled={pending} className="rounded bg-ink px-3 py-1 text-xs font-semibold text-white disabled:opacity-50">
+      <button
+        type="submit"
+        disabled={pending}
+        onClick={(e) => {
+          if (!window.confirm("Confirm you have already paid this. It will be recorded as paid.")) e.preventDefault();
+        }}
+        className="rounded bg-ink px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
+      >
         {pending ? "Paying…" : label}
       </button>
       {state.error && <p className="mt-1 text-xs text-red-600">{state.error}</p>}
