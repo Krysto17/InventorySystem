@@ -9,6 +9,7 @@ import { STATE_LABELS } from "@/lib/visits/state-machine";
 import { BatchMaterials } from "@/components/visits/BatchMaterials";
 import { DeleteBatchButton } from "@/components/visits/DeleteBatchButton";
 import { UtilityChargesCard } from "@/components/visits/UtilityChargesCard";
+import { DressingOnlyClose } from "@/components/visits/DressingOnlyClose";
 import { SupplierFinanceCard } from "@/components/visits/SupplierFinanceCard";
 import { BatchSettlementCard } from "@/components/visits/BatchSettlementCard";
 import { ProcessingFeeReopen } from "@/components/visits/ProcessingFeeReopen";
@@ -301,6 +302,11 @@ export default async function VisitDetailPage({
       visitState={visitNorm.state}
       viewerRole={me.role as Role}
     />
+    {["processing", "manager", "owner"].includes(me.role) &&
+      ["in_receiving", "pricing"].includes(visitNorm.state) &&
+      (visit.entry_path as string) === "unprocessed" && (
+        <DressingOnlyClose visitId={visitNorm.id} />
+      )}
     <ProcessingFeeReopen
       visitId={visitNorm.id}
       visitState={visitNorm.state}

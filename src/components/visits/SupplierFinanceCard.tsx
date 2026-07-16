@@ -22,8 +22,9 @@ export async function SupplierFinanceCard({
   if (!supplierId) return null;
 
   const supabase = await createClient();
-  const [{ data: debtRaw }, { data: deductions }] = await Promise.all([
+  const [{ data: debtRaw }, { data: lightBillRaw }, { data: deductions }] = await Promise.all([
     supabase.rpc("supplier_outstanding_debt", { _supplier_id: supplierId }),
+    supabase.rpc("supplier_carried_light_bills", { _supplier_id: supplierId }),
     supabase
       .from("advance_deductions")
       .select("id, amount, notes, created_at")
@@ -32,6 +33,7 @@ export async function SupplierFinanceCard({
   ]);
 
   const debt = Number(debtRaw ?? 0);
+  const carriedLightBills = Number(lightBillRaw ?? 0);
   const canDeduct = ["manager", "accounting", "owner"].includes(viewerRole);
 
   return (
@@ -45,6 +47,11 @@ export async function SupplierFinanceCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {carriedLightBills > 0 && (
+          <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+            Includes {ngn(carriedLightBills)} carried light bill(s) from processing elsewhere — deduct it from this payout below.
+          </p>
+        )}
         {(deductions?.length ?? 0) > 0 && (
           <div>
             <h3 className="mb-1 text-xs font-medium text-zinc-500">Deductions on this visit</h3>

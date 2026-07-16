@@ -1814,6 +1814,7 @@ export type Database = {
       utility_charges: {
         Row: {
           amount: number
+          carried: boolean
           created_at: string
           description: string | null
           id: string
@@ -1832,6 +1833,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          carried?: boolean
           created_at?: string
           description?: string | null
           id?: string
@@ -1959,6 +1961,7 @@ export type Database = {
         Row: {
           closed_at: string | null
           created_at: string
+          dressing_only: boolean
           created_by: string
           declared_material_type_id: string
           entry_path: string
@@ -1972,6 +1975,7 @@ export type Database = {
         Insert: {
           closed_at?: string | null
           created_at?: string
+          dressing_only?: boolean
           created_by: string
           declared_material_type_id: string
           entry_path: string
@@ -1985,6 +1989,7 @@ export type Database = {
         Update: {
           closed_at?: string | null
           created_at?: string
+          dressing_only?: boolean
           created_by?: string
           declared_material_type_id?: string
           entry_path?: string
@@ -2122,6 +2127,8 @@ export type Database = {
       pricing_has_acted: { Args: { _visit_id: string }; Returns: boolean }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      close_dressing_only: { Args: { p_visit_id: string }; Returns: undefined }
+      supplier_carried_light_bills: { Args: { _supplier_id: string }; Returns: number }
       supplier_outstanding_debt: {
         Args: { _supplier_id: string }
         Returns: number

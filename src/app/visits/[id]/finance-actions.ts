@@ -105,6 +105,24 @@ export async function closeSettlement(_prev: ActionResult, formData: FormData): 
   return ok();
 }
 
+// Close a processing visit as "dressing only" — the customer dressed material
+// for the light bill but isn't supplying here. Carries the light bill to their
+// account (recoverable from a later supply or payable in cash) and exits.
+export async function closeDressingOnly(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const me = await getProfile();
+  if (!me || !["processing", "manager", "owner"].includes(me.role)) return fail("Not allowed to close this visit.");
+  const visitId = String(formData.get("visit_id") ?? "");
+  if (!visitId) return fail("Missing visit.");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("close_dressing_only", { p_visit_id: visitId });
+  if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
+  revalidatePath(`/visits/${visitId}`);
+  revalidatePath("/processing");
+  revalidatePath("/receiving");
+  revalidatePath("/manager");
+  return ok();
+}
+
 // ─── Utility charges (Phase 11 B) ────────────────────────────────────────────
 
 export async function addUtilityCharge(formData: FormData): Promise<void> {

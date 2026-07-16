@@ -8,14 +8,15 @@ import { one as g1 } from "@/lib/db/relation";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 type Entry = {
-  key: string; at: string; label: string; kind: "advance" | "deduction" | "payout" | "correction";
+  key: string; at: string; label: string; kind: "advance" | "deduction" | "payout" | "correction" | "lightbill";
   amount: number; dir: string; href?: string; note?: string | null;
 };
 const KIND_LABEL: Record<Entry["kind"], string> = {
   advance: "Advance", deduction: "Advance recovered", payout: "Supply payout", correction: "Price correction",
+  lightbill: "Light bill (carried)",
 };
-const KIND_VARIANT: Record<Entry["kind"], "yellow" | "blue" | "green" | "red"> = {
-  advance: "yellow", deduction: "blue", payout: "green", correction: "red",
+const KIND_VARIANT: Record<Entry["kind"], "yellow" | "blue" | "green" | "red" | "default"> = {
+  advance: "yellow", deduction: "blue", payout: "green", correction: "red", lightbill: "default",
 };
 
 // A supplier's statement of account: every money transaction (advances,
@@ -23,12 +24,14 @@ const KIND_VARIANT: Record<Entry["kind"], "yellow" | "blue" | "green" | "red"> =
 // links back to the visit it came from where there is one. Finance roles only.
 export async function SupplierStatement({ supplierId }: { supplierId: string }) {
   const supabase = await createClient();
-  const [{ data: advances }, { data: deductions }, { data: settlements }, { data: corrections }] = await Promise.all([
+  const [{ data: advances }, { data: deductions }, { data: settlements }, { data: corrections }, { data: lightBills }] = await Promise.all([
     supabase.from("advances").select("id, purpose, amount_naira, approval_status, created_at").eq("supplier_id", supplierId),
     supabase.from("advance_deductions").select("id, amount, notes, created_at, ref_visit_id").eq("supplier_id", supplierId),
     supabase.from("batch_settlements").select("id, net_balance, paid_at, visit:visits!inner(id, supplier_id)")
       .eq("status", "paid").eq("visits.supplier_id", supplierId),
     supabase.from("price_corrections").select("id, direction, amount, reason, created_at, visit_id").eq("supplier_id", supplierId),
+    supabase.from("utility_charges").select("id, amount, created_at, visit_id, visit:visits!inner(supplier_id)")
+      .eq("kind", "light_bill").eq("carried", true).eq("visits.supplier_id", supplierId),
   ]);
 
   const entries: Entry[] = [
@@ -55,6 +58,11 @@ export async function SupplierStatement({ supplierId }: { supplierId: string }) 
       label: c.direction === "underpaid" ? "Under-paid — topped up" : "Over-paid — recoverable",
       amount: Number(c.amount), dir: c.direction === "underpaid" ? "to supplier" : "supplier owes",
       href: c.visit_id ? `/visits/${c.visit_id}` : undefined, note: c.reason as string | null,
+    })),
+    ...(lightBills ?? []).map((l): Entry => ({
+      key: `l-${l.id}`, at: l.created_at as string, kind: "lightbill",
+      label: "Dressing / light bill", amount: Number(l.amount), dir: "supplier owes",
+      href: l.visit_id ? `/visits/${l.visit_id}` : undefined,
     })),
   ]
     .filter((e) => e.at)
