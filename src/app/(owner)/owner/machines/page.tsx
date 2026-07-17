@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
+import { requireConfigManager } from "@/lib/auth/require-config-manager";
 import { createMachine, updateMachine } from "./actions";
 
 export default async function MachinesPage() {
+  await requireConfigManager();
   const supabase = await createClient();
   const { data: sites } = await supabase.from("sites").select("id, name").order("name");
   const { data: machines } = await supabase

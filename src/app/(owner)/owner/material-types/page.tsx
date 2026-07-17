@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
+import { requireConfigManager } from "@/lib/auth/require-config-manager";
 import { createMaterialType, toggleMaterialType } from "./actions";
 
 export default async function MaterialTypesPage() {
+  await requireConfigManager();
   const supabase = await createClient();
   const { data: rows } = await supabase
     .from("material_types")

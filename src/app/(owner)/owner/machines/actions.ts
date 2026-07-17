@@ -8,7 +8,7 @@ const BASES = ["weight", "bag", "hour"] as const;
 
 export async function createMachine(formData: FormData): Promise<void> {
   const me = await getProfile();
-  if (!me || me.role !== "owner") return;
+  if (!me || !(me.role === "owner" || me.is_general_manager)) return;
   const site_id = String(formData.get("site_id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const charge_basis = String(formData.get("charge_basis") ?? "");
@@ -23,7 +23,7 @@ export async function createMachine(formData: FormData): Promise<void> {
 
 export async function updateMachine(formData: FormData): Promise<void> {
   const me = await getProfile();
-  if (!me || me.role !== "owner") return;
+  if (!me || !(me.role === "owner" || me.is_general_manager)) return;
   const id = String(formData.get("id") ?? "");
   const patch: Record<string, unknown> = {};
   const rate = formData.get("rate");

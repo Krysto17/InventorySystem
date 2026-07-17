@@ -27,8 +27,13 @@ const SHARED_AUTHENTICATED_PREFIXES = ["/visits/", "/suppliers", "/stocked-mater
 // inventory (blueprint: no standalone inventory role), so it reaches /inventory.
 const EXTRA_ROLE_PREFIXES: Record<string, string[]> = {
   // The manager owns inventory; the general (New-Site) manager also runs the
-  // receiving module. Nav + action guards restrict receiving use to the GM.
-  manager: ["/inventory", "/receiving"],
+  // receiving module + the technical config (material types, machines,
+  // employees). Those config pages gate themselves to the GM (requireConfigManager)
+  // and RLS restricts the writes, so exposing the path to all managers is safe.
+  manager: [
+    "/inventory", "/receiving",
+    "/owner/material-types", "/owner/machines", "/owner/employees",
+  ],
 };
 
 function isSharedAuthenticatedPath(path: string): boolean {

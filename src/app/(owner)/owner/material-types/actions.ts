@@ -6,7 +6,7 @@ import { getProfile } from "@/lib/auth/get-profile";
 
 export async function createMaterialType(formData: FormData): Promise<void> {
   const me = await getProfile();
-  if (!me || me.role !== "owner") return;
+  if (!me || !(me.role === "owner" || me.is_general_manager)) return;
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
   const supabase = await createClient();
@@ -16,7 +16,7 @@ export async function createMaterialType(formData: FormData): Promise<void> {
 
 export async function toggleMaterialType(formData: FormData): Promise<void> {
   const me = await getProfile();
-  if (!me || me.role !== "owner") return;
+  if (!me || !(me.role === "owner" || me.is_general_manager)) return;
   const id = String(formData.get("id") ?? "");
   const active = formData.get("active") === "true";
   const supabase = await createClient();

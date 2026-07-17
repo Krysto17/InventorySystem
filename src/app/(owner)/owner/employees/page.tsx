@@ -1,14 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { ROLES } from "@/lib/auth/roles";
-import { getProfile } from "@/lib/auth/get-profile";
+import { requireConfigManager } from "@/lib/auth/require-config-manager";
 import { AddEmployeeForm } from "./form";
 import { EmployeeRow, type EmployeeRowData } from "./EmployeeRow";
 
 import { one as g1 } from "@/lib/db/relation";
 
 export default async function EmployeesPage() {
+  const me = await requireConfigManager();
   const supabase = await createClient();
-  const me = await getProfile();
   const [{ data: sites }, { data: people }] = await Promise.all([
     supabase.from("sites").select("id, name").order("name"),
     supabase
@@ -30,7 +30,7 @@ export default async function EmployeesPage() {
     <main className="mx-auto max-w-2xl space-y-8 p-6">
       <section>
         <h1 className="mb-4 text-xl font-semibold">Add employee</h1>
-        <AddEmployeeForm sites={sites ?? []} roles={[...ROLES]} />
+        <AddEmployeeForm sites={sites ?? []} roles={me?.role === "owner" ? [...ROLES] : ROLES.filter((r) => r !== "owner")} />
       </section>
 
       <section>

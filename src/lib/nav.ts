@@ -56,6 +56,10 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Reports", href: "/manager/reports", icon: "reports", generalOnly: true },
     { label: "Cost price", href: "/manager/cost-price", icon: "pricing", generalOnly: true },
     { label: "Analyses", href: "/manager/analyses", icon: "qc", generalOnly: true },
+    // Technical config — general manager (the technical lead) only.
+    { label: "Material types", href: "/owner/material-types", icon: "materials", generalOnly: true },
+    { label: "Machines", href: "/owner/machines", icon: "machines", generalOnly: true },
+    { label: "Employees", href: "/owner/employees", icon: "employees", generalOnly: true },
     // General (New-Site) manager also runs the receiving module (queue + intake).
     { label: "Receiving", href: "/receiving", icon: "receiving", generalOnly: true },
     { label: "New processed", href: "/receiving/intake", icon: "intake", generalOnly: true },
