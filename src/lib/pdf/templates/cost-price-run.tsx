@@ -1,5 +1,5 @@
 import React from "react";
-import { Document, Page, View, Text } from "@react-pdf/renderer";
+import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
 import { BrandHeader, PageFooter } from "../brand";
 import { shared } from "../styles";
 import type { PdfCostPriceData } from "../fetch-data";
@@ -8,48 +8,64 @@ import { formatTs, formatNgn, formatKg } from "../format";
 const statusLabel = (s: string | null) =>
   s === "approved" ? "Sold" : s === "pending" ? "Awaiting owner approval" : s === "rejected" ? "Rejected" : "Computation";
 
+// Local, roomier styling on A4 so the breakdown reads clearly.
+const s = StyleSheet.create({
+  body: { paddingHorizontal: 28, paddingTop: 4 },
+  headRow: { flexDirection: "row", borderBottomWidth: 1.2, borderBottomColor: "#333", paddingBottom: 5 },
+  headCell: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#444", textTransform: "uppercase" },
+  row: { flexDirection: "row", borderBottomWidth: 0.6, borderBottomColor: "#e2e2e2", paddingVertical: 7 },
+  cell: { fontSize: 11 },
+  totalRow: { flexDirection: "row", borderTopWidth: 1.4, borderTopColor: "#333", paddingVertical: 7, marginTop: 1 },
+  totalCell: { fontSize: 11, fontFamily: "Helvetica-Bold" },
+  material: { flex: 2 },
+  supplier: { flex: 2.4 },
+  num: { flex: 1.4, textAlign: "right" },
+  numWide: { flex: 1.7, textAlign: "right" },
+  highlight: { marginTop: 20, backgroundColor: "#f4efe6", borderRadius: 3, padding: 14 },
+  hLabel: { fontSize: 10, color: "#7a6a48", textTransform: "uppercase", fontFamily: "Helvetica-Bold" },
+  hValue: { fontSize: 20, fontFamily: "Helvetica-Bold", marginTop: 4, color: "#5b4a22" },
+  hSub: { fontSize: 10, color: "#666", marginTop: 3 },
+});
+
 export function CostPriceRunPdf({ data, docId }: { data: PdfCostPriceData; docId: string }) {
   const generatedAt = new Date().toISOString();
   return (
     <Document title={`Cost Price — ${data.label}`}>
-      <Page size="A5" style={shared.page}>
+      <Page size="A4" style={shared.page}>
         <BrandHeader siteName={data.site_name} docType="Cost Price Computation" />
         <Text style={shared.docTitle}>{data.label}</Text>
         <Text style={shared.docSubtitle}>
           {data.batch_code ? `${data.batch_code} · ` : ""}{data.material_type_name ?? "—"} · {statusLabel(data.approval_status)} · {formatTs(data.created_at)}
         </Text>
 
-        <View style={shared.body}>
-          <View style={shared.table}>
-            <View style={shared.tableHeader}>
-              <Text style={[shared.tableHeaderCell, { flex: 1.4 }]}>Material</Text>
-              <Text style={[shared.tableHeaderCell, { flex: 1.6 }]}>Supplier</Text>
-              <Text style={[shared.tableHeaderCell, { flex: 1, textAlign: "right" }]}>Weight (kg)</Text>
-              <Text style={[shared.tableHeaderCell, { flex: 1, textAlign: "right" }]}>₦/kg</Text>
-              <Text style={[shared.tableHeaderCell, { flex: 1.3, textAlign: "right" }]}>Line cost (₦)</Text>
+        <View style={s.body}>
+          <View style={s.headRow}>
+            <Text style={[s.headCell, s.material]}>Material</Text>
+            <Text style={[s.headCell, s.supplier]}>Supplier</Text>
+            <Text style={[s.headCell, s.num]}>Weight (kg)</Text>
+            <Text style={[s.headCell, s.num]}>Cost ₦/kg</Text>
+            <Text style={[s.headCell, s.numWide]}>Line cost ₦</Text>
+          </View>
+          {data.items.map((it, i) => (
+            <View style={s.row} key={i}>
+              <Text style={[s.cell, s.material]}>{it.material_name ?? "—"}</Text>
+              <Text style={[s.cell, s.supplier]}>{it.supplier_name ?? "—"}</Text>
+              <Text style={[s.cell, s.num]}>{formatKg(it.weight_kg)}</Text>
+              <Text style={[s.cell, s.num]}>{formatNgn(it.cost_price_per_kg)}</Text>
+              <Text style={[s.cell, s.numWide]}>{formatNgn(it.total)}</Text>
             </View>
-            {data.items.map((it, i) => (
-              <View style={shared.tableRow} key={i}>
-                <Text style={{ flex: 1.4 }}>{it.material_name ?? "—"}</Text>
-                <Text style={{ flex: 1.6 }}>{it.supplier_name ?? "—"}</Text>
-                <Text style={{ flex: 1, textAlign: "right" }}>{formatKg(it.weight_kg)}</Text>
-                <Text style={{ flex: 1, textAlign: "right" }}>{formatNgn(it.cost_price_per_kg)}</Text>
-                <Text style={{ flex: 1.3, textAlign: "right" }}>{formatNgn(it.total)}</Text>
-              </View>
-            ))}
-            <View style={[shared.tableRow, shared.bold]}>
-              <Text style={{ flex: 3 }}>TOTAL</Text>
-              <Text style={{ flex: 1, textAlign: "right" }}>{formatKg(data.total_weight_kg)}</Text>
-              <Text style={{ flex: 1, textAlign: "right" }}>—</Text>
-              <Text style={{ flex: 1.3, textAlign: "right" }}>{formatNgn(data.total_cost_price)}</Text>
-            </View>
+          ))}
+          <View style={s.totalRow}>
+            <Text style={[s.totalCell, { flex: 4.4 }]}>TOTAL</Text>
+            <Text style={[s.totalCell, s.num]}>{formatKg(data.total_weight_kg)}</Text>
+            <Text style={[s.totalCell, s.num]}>—</Text>
+            <Text style={[s.totalCell, s.numWide]}>{formatNgn(data.total_cost_price)}</Text>
           </View>
 
-          <View style={[shared.highlight, { marginTop: 14 }]}>
-            <Text style={shared.label}>Weighted cost price</Text>
-            <Text style={[shared.bold, { fontSize: 16, marginTop: 2 }]}>
-              {formatNgn(data.total_cost_price)} ÷ {formatKg(data.total_weight_kg)} = {formatNgn(data.avg_cost_price_per_kg)}/kg
-            </Text>
+          <View style={s.highlight}>
+            <Text style={s.hLabel}>Weighted cost price</Text>
+            <Text style={s.hValue}>{formatNgn(data.avg_cost_price_per_kg)} / kg</Text>
+            <Text style={s.hSub}>{formatNgn(data.total_cost_price)} ÷ {formatKg(data.total_weight_kg)} kg</Text>
           </View>
         </View>
 

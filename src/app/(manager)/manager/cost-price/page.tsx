@@ -6,6 +6,7 @@ import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
 import { MixingBatchTool, type Lot } from "@/components/reports/MixingBatchTool";
 import { deleteCostPriceRun } from "./actions";
+import { SubmitButton } from "@/components/ui/SubmitButton";
 import { requireGeneralManager } from "@/lib/auth/require-general-manager";
 
 import { one as g1 } from "@/lib/db/relation";
@@ -130,7 +131,7 @@ export default async function ManagerCostPricePage() {
                             {st !== "approved" && (
                               <form action={deleteCostPriceRun} data-confirm="Delete this cost-price computation?">
                                 <input type="hidden" name="run_id" value={r.id as string} />
-                                <button type="submit" className="rounded border border-red-300 px-2 py-0.5 text-[11px] text-red-700 hover:bg-red-50">Delete</button>
+                                <SubmitButton pendingText="Deleting…" className="rounded border border-red-300 px-2 py-0.5 text-[11px] text-red-700 hover:bg-red-50 disabled:opacity-50">Delete</SubmitButton>
                               </form>
                             )}
                           </div>
