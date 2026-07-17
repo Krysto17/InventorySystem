@@ -15,13 +15,23 @@ export async function createCostPriceRun(_prev: ActionResult, formData: FormData
   const label = String(formData.get("label") ?? "").trim();
   const sell = String(formData.get("sell") ?? "") === "1";
   const lotIds = [...new Set(formData.getAll("lot_ids").map(String).filter(Boolean))];
+  // External (non-stock) materials mixed in — parallel arrays from the form.
+  const exNames = formData.getAll("extra_name").map(String);
+  const exWeights = formData.getAll("extra_weight").map(String);
+  const exCosts = formData.getAll("extra_cost").map(String);
+  const extras = exNames
+    .map((name, i) => ({ material_name: name.trim(), weight_kg: Number(exWeights[i]), cost_price_per_kg: Number(exCosts[i] || 0) }))
+    .filter((e) => e.material_name && e.weight_kg > 0);
   if (!label) return fail("Give the batch a label.");
-  if (lotIds.length === 0) return fail("Select at least one stock lot.");
+  if (lotIds.length === 0 && extras.length === 0) return fail("Add at least one stock lot or external material.");
+  // A sale must move real stock — external-only batches can only be saved.
+  if (sell && lotIds.length === 0) return fail("A sale needs at least one stocked lot to remove; save it as a computation instead.");
 
   const supabase = await createClient();
   const { data: profile } = await supabase.from("profiles").select("site_id").eq("id", me.id).single();
-  const { data: firstLot } = await supabase
-    .from("stock_lots").select("site_id, material_type_id").eq("id", lotIds[0]).maybeSingle();
+  const { data: firstLot } = lotIds.length
+    ? await supabase.from("stock_lots").select("site_id, material_type_id").eq("id", lotIds[0]).maybeSingle()
+    : { data: null };
 
   const siteId = (profile?.site_id as string | null) ?? (firstLot?.site_id as string | null) ?? null;
   if (!siteId) return fail("No site to anchor this batch to.");
@@ -39,14 +49,25 @@ export async function createCostPriceRun(_prev: ActionResult, formData: FormData
     .single();
   if (error || !run) return fail(error?.message?.replace(/^.*?:\s*/, "") ?? "Couldn't create the batch.");
 
-  // Attach all lots in one insert; roll back the run if it fails so no empty
+  // Attach lots + extras; roll back the run if either fails so no empty/partial
   // batch is left behind.
-  const { error: linkErr } = await supabase
-    .from("cost_price_run_lots")
-    .insert(lotIds.map((id) => ({ run_id: run.id as string, stock_lot_id: id })));
-  if (linkErr) {
-    await supabase.from("cost_price_runs").delete().eq("id", run.id);
-    return fail(`Couldn't attach the lots — nothing was saved. ${linkErr.message.replace(/^.*?:\s*/, "")}`);
+  if (lotIds.length) {
+    const { error: linkErr } = await supabase
+      .from("cost_price_run_lots")
+      .insert(lotIds.map((id) => ({ run_id: run.id as string, stock_lot_id: id })));
+    if (linkErr) {
+      await supabase.from("cost_price_runs").delete().eq("id", run.id);
+      return fail(`Couldn't attach the lots — nothing was saved. ${linkErr.message.replace(/^.*?:\s*/, "")}`);
+    }
+  }
+  if (extras.length) {
+    const { error: exErr } = await supabase
+      .from("cost_price_run_extras")
+      .insert(extras.map((e) => ({ run_id: run.id as string, ...e })));
+    if (exErr) {
+      await supabase.from("cost_price_runs").delete().eq("id", run.id);
+      return fail(`Couldn't add the external materials — nothing was saved. ${exErr.message.replace(/^.*?:\s*/, "")}`);
+    }
   }
 
   revalidatePath("/manager/cost-price");

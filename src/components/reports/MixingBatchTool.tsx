@@ -39,6 +39,20 @@ export function MixingBatchTool({ lots }: { lots: Lot[] }) {
   const [sort, setSort] = useState<SortKey>("cost_asc");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [sell, setSell] = useState(true);
+  // External (non-stock) materials mixed in — counted in the cost, never removed
+  // from stock.
+  type Extra = { name: string; weight: string; cost: string };
+  const [extras, setExtras] = useState<Extra[]>([]);
+  const [draft, setDraft] = useState<Extra>({ name: "", weight: "", cost: "" });
+  const addExtra = () => {
+    if (!draft.name.trim() || !(Number(draft.weight) > 0)) return;
+    setExtras((xs) => [...xs, draft]);
+    setDraft({ name: "", weight: "", cost: "" });
+  };
+  const removeExtra = (i: number) => setExtras((xs) => xs.filter((_, idx) => idx !== i));
+  const extraRows = extras.map((e) => ({ name: e.name, weight: Number(e.weight), cost: Number(e.cost || 0) }));
+  const extraWeight = extraRows.reduce((s, e) => s + e.weight, 0);
+  const extraCost = extraRows.reduce((s, e) => s + e.weight * e.cost, 0);
 
   const visible = useMemo(() => {
     let rows = lots.slice();
@@ -69,10 +83,11 @@ export function MixingBatchTool({ lots }: { lots: Lot[] }) {
   }, [lots, material, magQuery, text, sort]);
 
   const selected = lots.filter((l) => picked.has(l.id));
-  const totalWeight = selected.reduce((s, l) => s + l.weight, 0);
-  const totalCost = selected.reduce((s, l) => s + l.weight * (l.cost ?? 0), 0);
+  const totalWeight = selected.reduce((s, l) => s + l.weight, 0) + extraWeight;
+  const totalCost = selected.reduce((s, l) => s + l.weight * (l.cost ?? 0), 0) + extraCost;
   const avgCost = totalWeight > 0 ? totalCost / totalWeight : 0;
-  const missingCost = selected.some((l) => l.cost == null);
+  const itemCount = selected.length + extraRows.length;
+  const missingCost = selected.some((l) => l.cost == null) || extraRows.some((e) => !(e.cost > 0));
   const materialsInBatch = new Set(selected.map((l) => l.material_name));
   const mixedMaterials = materialsInBatch.size > 1;
 
@@ -134,33 +149,72 @@ export function MixingBatchTool({ lots }: { lots: Lot[] }) {
         </div>
       </div>
 
-      {/* Computed cost — selected lots in a table */}
+      {/* Add an external (non-stock) material to the mix */}
+      <div className="rounded border border-line p-3">
+        <div className="mb-2 text-xs font-medium text-ink-2">Add an external material (not in stock — counted in the cost, never removed from inventory)</div>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-xs font-medium">Material
+            <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="e.g. Tin ore (bought)" className="mt-1 block rounded border px-2 py-1 text-sm" />
+          </label>
+          <label className="text-xs font-medium">Weight (kg)
+            <input type="number" min="0.001" step="0.001" value={draft.weight} onChange={(e) => setDraft({ ...draft, weight: e.target.value })} className="mt-1 block w-28 rounded border px-2 py-1 text-sm" />
+          </label>
+          <label className="text-xs font-medium">Cost ₦/kg
+            <input type="number" min="0" step="0.01" value={draft.cost} onChange={(e) => setDraft({ ...draft, cost: e.target.value })} className="mt-1 block w-28 rounded border px-2 py-1 text-sm" />
+          </label>
+          <button type="button" onClick={addExtra} disabled={!draft.name.trim() || !(Number(draft.weight) > 0)}
+            className="rounded border border-line px-3 py-1.5 text-sm font-semibold hover:bg-paper disabled:opacity-40">Add</button>
+        </div>
+      </div>
+
+      {/* Hidden inputs so the extras submit with the form */}
+      {extras.map((e, i) => (
+        <div key={`ex-${i}`} className="hidden">
+          <input type="hidden" name="extra_name" value={e.name} readOnly />
+          <input type="hidden" name="extra_weight" value={e.weight} readOnly />
+          <input type="hidden" name="extra_cost" value={e.cost} readOnly />
+        </div>
+      ))}
+
+      {/* Computed cost — the mixed materials in a table */}
       <div className="rounded border border-line">
         <div className="border-b border-line bg-zinc-50 px-3 py-2 text-xs font-semibold text-ink-2 dark:bg-zinc-800/50">
-          Computed cost ({selected.length} lot{selected.length === 1 ? "" : "s"})
+          Mixed materials — computed cost ({itemCount} item{itemCount === 1 ? "" : "s"})
         </div>
-        {selected.length === 0 ? (
-          <p className="px-3 py-3 text-sm text-ink-2">Select lots above to build the batch and compute its weighted cost price.</p>
+        {itemCount === 0 ? (
+          <p className="px-3 py-3 text-sm text-ink-2">Pick stock lots above and/or add external materials to build the batch and compute its weighted cost price.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-[11px] uppercase text-ink-2">
-                  <th className="px-3 py-2">Material</th>
-                  <th className="px-3 py-2">Supplier · Site</th>
+                  <th className="px-3 py-2">Type</th>
+                  <th className="px-3 py-2">Material · Supplier</th>
                   <th className="px-3 py-2 text-right">Weight</th>
                   <th className="px-3 py-2 text-right">Cost ₦/kg</th>
                   <th className="px-3 py-2 text-right">Line cost</th>
+                  <th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {selected.map((l) => (
                   <tr key={l.id} className="border-b border-line/60">
-                    <td className="px-3 py-2 font-medium">{l.material_name}{l.magnetic ? <span className="ml-1 text-[10px] text-ore">mag {l.magnetic}</span> : null}</td>
-                    <td className="px-3 py-2 text-ink-2">{l.supplier ?? "—"} · {l.site ?? "—"}</td>
+                    <td className="px-3 py-2"><span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300">Stocked</span></td>
+                    <td className="px-3 py-2"><span className="font-medium">{l.material_name}</span>{l.magnetic ? <span className="ml-1 text-[10px] text-ore">mag {l.magnetic}</span> : null} <span className="text-ink-2">· {l.supplier ?? "—"}</span></td>
                     <td className="px-3 py-2 text-right tabular-nums">{kg(l.weight)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{l.cost != null ? ngn(l.cost) : <span className="text-reject">—</span>}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{ngn(l.weight * (l.cost ?? 0))}</td>
+                    <td className="px-3 py-2"></td>
+                  </tr>
+                ))}
+                {extraRows.map((e, i) => (
+                  <tr key={`er-${i}`} className="border-b border-line/60">
+                    <td className="px-3 py-2"><span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">Added</span></td>
+                    <td className="px-3 py-2"><span className="font-medium">{e.name}</span> <span className="text-ink-2">· external</span></td>
+                    <td className="px-3 py-2 text-right tabular-nums">{kg(e.weight)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{e.cost > 0 ? ngn(e.cost) : <span className="text-reject">—</span>}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{ngn(e.weight * e.cost)}</td>
+                    <td className="px-3 py-2 text-right"><button type="button" onClick={() => removeExtra(i)} className="text-reject hover:underline" title="Remove">✕</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -170,10 +224,11 @@ export function MixingBatchTool({ lots }: { lots: Lot[] }) {
                   <td className="px-3 py-2 text-right tabular-nums">{kg(totalWeight)}</td>
                   <td className="px-3 py-2 text-right text-ink-2">→</td>
                   <td className="px-3 py-2 text-right tabular-nums">{ngn(totalCost)}</td>
+                  <td className="px-3 py-2"></td>
                 </tr>
                 <tr className="bg-ore/5">
                   <td className="px-3 py-2 font-semibold text-ore" colSpan={4}>Weighted cost price</td>
-                  <td className="px-3 py-2 text-right text-base font-bold tabular-nums text-ore">{avgCost > 0 ? `${ngn(avgCost)}/kg` : "—"}</td>
+                  <td className="px-3 py-2 text-right text-base font-bold tabular-nums text-ore" colSpan={2}>{avgCost > 0 ? `${ngn(avgCost)}/kg` : "—"}</td>
                 </tr>
               </tfoot>
             </table>
@@ -204,7 +259,7 @@ export function MixingBatchTool({ lots }: { lots: Lot[] }) {
             Sell (remove lots from stock, owner approves)
           </label>
           <input type="hidden" name="sell" value={sell ? "1" : "0"} />
-          <button type="submit" disabled={selected.length === 0 || pending}
+          <button type="submit" disabled={itemCount === 0 || (sell && selected.length === 0) || pending}
             className="rounded bg-ink px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-40">
             {pending ? "Saving…" : sell ? "Form batch & sell" : "Save computation"}
           </button>

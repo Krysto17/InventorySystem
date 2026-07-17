@@ -631,6 +631,33 @@ export type Database = {
           },
         ]
       }
+      cost_price_run_extras: {
+        Row: {
+          id: string
+          run_id: string
+          material_name: string
+          weight_kg: number
+          cost_price_per_kg: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          run_id: string
+          material_name: string
+          weight_kg: number
+          cost_price_per_kg?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          run_id?: string
+          material_name?: string
+          weight_kg?: number
+          cost_price_per_kg?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
       cost_price_run_lots: {
         Row: {
           run_id: string
