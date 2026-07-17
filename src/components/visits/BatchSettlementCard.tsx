@@ -283,8 +283,11 @@ export async function BatchSettlementCard({
         {/* Supply invoice — available once the batch has been submitted */}
         {status && (
           <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
-            <a href={invoiceUrl} target="_blank" rel="noreferrer"
-              className="rounded border px-3 py-1 text-xs hover:bg-paper">Download supply invoice</a>
+            <span className="text-xs text-ink-2">Supply invoice:</span>
+            <a href={`${invoiceUrl}?format=a4`} target="_blank" rel="noreferrer"
+              className="rounded border px-3 py-1 text-xs hover:bg-paper">A4 (download)</a>
+            <a href={`${invoiceUrl}?format=thermal`} target="_blank" rel="noreferrer"
+              className="rounded border px-3 py-1 text-xs hover:bg-paper">🖨 80mm receipt</a>
           </div>
         )}
 

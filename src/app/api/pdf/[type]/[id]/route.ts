@@ -97,9 +97,10 @@ export async function GET(
     const data = await fetchSupplyInvoiceData(id);
     if (!data) return notFound("Visit not found");
 
+    const format = _req.nextUrl.searchParams.get("format") === "thermal" ? "thermal" : "a4";
     const docId = docHash(type, id);
-    const buffer = await renderToBuffer(pdf(SupplyInvoicePdf, { data, docId }));
-    return pdfResponse(buffer, `supply-invoice-${id.slice(0, 8)}.pdf`);
+    const buffer = await renderToBuffer(pdf(SupplyInvoicePdf, { data, docId, format }));
+    return pdfResponse(buffer, `supply-invoice-${format}-${id.slice(0, 8)}.pdf`);
   }
 
   // ── Processing invoice (processing + manager only) ────────────────────────
