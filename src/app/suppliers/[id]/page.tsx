@@ -8,6 +8,7 @@ import { SupplierEditForms } from "@/components/suppliers/SupplierEditForms";
 import { DeleteSupplierButton } from "@/components/suppliers/DeleteSupplierButton";
 import { OpeningBalanceForm } from "@/components/suppliers/OpeningBalanceForm";
 import { DebtRepaymentForm } from "@/components/suppliers/DebtRepaymentForm";
+import { OverpaymentForm } from "@/components/suppliers/OverpaymentForm";
 import { switchSupplierAccount } from "@/app/suppliers/actions";
 import { SupplierStatement } from "@/components/suppliers/SupplierStatement";
 import { formatTimestamp } from "@/lib/visits/format";
@@ -158,6 +159,8 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
               {/* Debt cleared outside the app (bank transfer / cash). Any finance
                   role who can view the record may log the repayment. */}
               <DebtRepaymentForm supplierId={s.id as string} outstandingDebt={outstandingDebt} />
+              {/* Overpaid supply/expense/advance → becomes a debt tagged Overpayment. */}
+              <OverpaymentForm supplierId={s.id as string} />
             </CardContent>
           </Card>
 

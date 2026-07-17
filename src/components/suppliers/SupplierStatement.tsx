@@ -8,15 +8,15 @@ import { one as g1 } from "@/lib/db/relation";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 type Entry = {
-  key: string; at: string; label: string; kind: "advance" | "deduction" | "payout" | "correction" | "lightbill";
+  key: string; at: string; label: string; kind: "advance" | "deduction" | "payout" | "correction" | "lightbill" | "overpayment";
   amount: number; dir: string; href?: string; note?: string | null;
 };
 const KIND_LABEL: Record<Entry["kind"], string> = {
   advance: "Advance", deduction: "Advance recovered", payout: "Supply payout", correction: "Price correction",
-  lightbill: "Light bill (carried)",
+  lightbill: "Light bill (carried)", overpayment: "Overpayment",
 };
 const KIND_VARIANT: Record<Entry["kind"], "yellow" | "blue" | "green" | "red" | "default"> = {
-  advance: "yellow", deduction: "blue", payout: "green", correction: "red", lightbill: "default",
+  advance: "yellow", deduction: "blue", payout: "green", correction: "red", lightbill: "default", overpayment: "red",
 };
 
 // A supplier's statement of account: every money transaction (advances,
@@ -35,11 +35,15 @@ export async function SupplierStatement({ supplierId }: { supplierId: string }) 
   ]);
 
   const entries: Entry[] = [
-    ...(advances ?? []).map((a): Entry => ({
-      key: `a-${a.id}`, at: a.created_at as string, kind: "advance",
-      label: a.purpose as string, amount: Number(a.amount_naira), dir: "to supplier",
-      note: `${a.approval_status}`,
-    })),
+    ...(advances ?? []).map((a): Entry => {
+      const overpay = (a.purpose as string)?.startsWith("Overpayment");
+      return {
+        key: `a-${a.id}`, at: a.created_at as string, kind: overpay ? "overpayment" : "advance",
+        label: overpay ? (a.purpose as string) : (a.purpose as string),
+        amount: Number(a.amount_naira), dir: overpay ? "supplier owes" : "to supplier",
+        note: `${a.approval_status}`,
+      };
+    }),
     ...(deductions ?? []).map((d): Entry => ({
       key: `d-${d.id}`, at: d.created_at as string, kind: "deduction",
       label: (d.notes as string | null) ?? "Advance recovered", amount: Number(d.amount), dir: "recovered",

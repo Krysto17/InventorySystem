@@ -87,6 +87,45 @@ export async function recordDebtRepayment(_prev: SupplierEditState, formData: Fo
   return { ok: "Repayment recorded — outstanding debt reduced." };
 }
 
+// Record an overpayment (supply / expense / advance overpaid to the supplier) as
+// a supplier debt tagged "Overpayment" — the supplier owes it back. Recorded as
+// an already-paid advance so it joins supplier_outstanding_debt and is recovered
+// from a later supply or repaid in cash, exactly like an advance.
+const OVERPAY_SOURCES = ["supply", "expense", "advance"];
+export async function recordOverpayment(_prev: SupplierEditState, formData: FormData): Promise<SupplierEditState> {
+  const me = await getProfile();
+  if (!me || !["owner", "manager", "accounting"].includes(me.role)) return { error: "Not authorized" };
+  const id = String(formData.get("supplier_id") ?? "");
+  const amount = Number(formData.get("amount"));
+  const source = String(formData.get("source") ?? "");
+  const note = String(formData.get("note") ?? "").trim() || null;
+  if (!id) return { error: "Missing supplier" };
+  if (!(amount > 0)) return { error: "Amount must be greater than zero." };
+  if (!OVERPAY_SOURCES.includes(source)) return { error: "Pick what was overpaid." };
+
+  const supabase = await createClient();
+  const { data: profile } = await supabase.from("profiles").select("site_id").eq("id", me.id).single();
+  let siteId = (profile?.site_id as string | null) ?? null;
+  if (!siteId) {
+    // Owner has no site — attach to the supplier's most recent visit site, else any site.
+    const { data: v } = await supabase.from("visits").select("site_id").eq("supplier_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    siteId = (v?.site_id as string | null) ?? null;
+    if (!siteId) { const { data: s } = await supabase.from("sites").select("id").order("created_at").limit(1).maybeSingle(); siteId = (s?.id as string | null) ?? null; }
+  }
+  if (!siteId) return { error: "No site to attach the overpayment to." };
+
+  const { error } = await supabase.from("advances").insert({
+    supplier_id: id, site_id: siteId,
+    purpose: `Overpayment — ${source}`,
+    amount_naira: amount, comment: note,
+    approval_status: "paid", approved_by: me.id, approved_at: new Date().toISOString(),
+    paid_by: me.id, paid_at: new Date().toISOString(), recorded_by: me.id,
+  });
+  if (error) return { error: error.message.replace(/^.*?:\s*/, "") };
+  revalidatePath(`/suppliers/${id}`);
+  return { ok: "Overpayment recorded as supplier debt." };
+}
+
 // Manager or owner deletes a supplier that has no records (no visits, advances,
 // stock lots, gate passes, …). The delete_supplier RPC re-checks the role and
 // refuses when anything references the supplier.
