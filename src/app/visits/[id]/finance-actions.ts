@@ -113,8 +113,9 @@ export async function closeDressingOnly(_prev: ActionResult, formData: FormData)
   if (!me || !["processing", "manager", "owner"].includes(me.role)) return fail("Not allowed to close this visit.");
   const visitId = String(formData.get("visit_id") ?? "");
   if (!visitId) return fail("Missing visit.");
+  const carry = String(formData.get("carry") ?? "") === "1"; // "1" = carry to account, else paid cash
   const supabase = await createClient();
-  const { error } = await supabase.rpc("close_dressing_only", { p_visit_id: visitId });
+  const { error } = await supabase.rpc("close_dressing_only", { p_visit_id: visitId, p_carry: carry });
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidatePath(`/visits/${visitId}`);
   revalidatePath("/processing");

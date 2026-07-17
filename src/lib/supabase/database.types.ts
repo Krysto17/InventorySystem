@@ -2128,7 +2128,7 @@ export type Database = {
       pricing_has_acted: { Args: { _visit_id: string }; Returns: boolean }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
-      close_dressing_only: { Args: { p_visit_id: string }; Returns: undefined }
+      close_dressing_only: { Args: { p_visit_id: string; p_carry?: boolean }; Returns: undefined }
       supplier_carried_light_bills: { Args: { _supplier_id: string }; Returns: number }
       supplier_outstanding_debt: {
         Args: { _supplier_id: string }
