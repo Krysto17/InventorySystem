@@ -75,53 +75,67 @@ export default async function ManagerCostPricePage() {
 
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">Recent batches ({runs?.length ?? 0})</h2></CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="p-0">
           {(runs?.length ?? 0) === 0 ? (
-            <p className="text-sm text-zinc-500">No batches yet.</p>
+            <p className="px-4 py-3 text-sm text-zinc-500">No batches yet.</p>
           ) : (
-            (runs ?? []).map((r) => {
-              const items = (r as { items: unknown[] }).items ?? [];
-              const runMat = g1<{ name: string }>((r as { material: unknown }).material);
-              return (
-                <div key={r.id as string} className="rounded border border-zinc-200 p-3 dark:border-zinc-800">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {r.batch_code != null && <Stamp>{r.batch_code as string}</Stamp>}
-                      <span className="text-sm font-medium">{r.label as string}</span>
-                      {runMat?.name && <span className="mono text-[11px] uppercase tracking-[0.05em] text-ore">{runMat.name}</span>}
-                      {(() => {
-                        const st = r.approval_status as string | null;
-                        if (st === "approved") return <Badge variant="paid">Sold</Badge>;
-                        if (st === "pending") return <Badge variant="yellow">Awaiting owner approval</Badge>;
-                        if (st === "rejected") return <Badge variant="red">Rejected</Badge>;
-                        return <Badge variant="default">Computation</Badge>;
-                      })()}
-                    </div>
-                    <Badge variant="purple">
-                      {r.avg_cost_price_per_kg != null ? `${ngn(Number(r.avg_cost_price_per_kg))}/kg` : "—"}
-                    </Badge>
-                  </div>
-                  <div className="mt-1 text-xs text-zinc-500">
-                    {Number(r.total_weight_kg).toFixed(3)} kg · {ngn(Number(r.total_cost_price))} · {formatTimestamp(r.created_at as string)}
-                  </div>
-                  <ul className="mt-2 space-y-0.5 text-xs text-zinc-600 dark:text-zinc-300">
-                    {items.map((it, i) => {
-                      const lot = g1<{ weight_kg: number; cost_price_per_kg: number | null; material: unknown; supplier: unknown }>(
-                        (it as { stock_lot: unknown }).stock_lot,
-                      );
-                      const mat = g1<{ name: string }>(lot?.material ?? null);
-                      const sup = g1<{ name: string }>(lot?.supplier ?? null);
-                      return (
-                        <li key={i}>
-                          {mat?.name ?? "—"} · {sup?.name ?? "—"} · {Number(lot?.weight_kg ?? 0).toFixed(3)} kg @{" "}
-                          {lot?.cost_price_per_kg != null ? `${ngn(Number(lot.cost_price_per_kg))}/kg` : "—"}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              );
-            })
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-line text-left text-[11px] uppercase text-ink-2">
+                    <th className="px-3 py-2">Batch</th>
+                    <th className="px-3 py-2">Material</th>
+                    <th className="px-3 py-2 text-right">Weight</th>
+                    <th className="px-3 py-2 text-right">Total cost</th>
+                    <th className="px-3 py-2 text-right">Avg ₦/kg</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(runs ?? []).map((r) => {
+                    const items = (r as { items: unknown[] }).items ?? [];
+                    const runMat = g1<{ name: string }>((r as { material: unknown }).material);
+                    const st = r.approval_status as string | null;
+                    const badge = st === "approved" ? <Badge variant="paid">Sold</Badge>
+                      : st === "pending" ? <Badge variant="yellow">Awaiting owner</Badge>
+                      : st === "rejected" ? <Badge variant="red">Rejected</Badge>
+                      : <Badge variant="default">Computation</Badge>;
+                    return (
+                      <tr key={r.id as string} className="border-b border-line/60 align-top">
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            {r.batch_code != null && <Stamp>{r.batch_code as string}</Stamp>}
+                            <span className="font-medium">{r.label as string}</span>
+                          </div>
+                          {items.length > 0 && (
+                            <details className="mt-1">
+                              <summary className="cursor-pointer text-[11px] text-ink-2 hover:underline">{items.length} lot{items.length === 1 ? "" : "s"}</summary>
+                              <ul className="mt-1 space-y-0.5 text-[11px] text-zinc-600 dark:text-zinc-300">
+                                {items.map((it, i) => {
+                                  const lot = g1<{ weight_kg: number; cost_price_per_kg: number | null; material: unknown; supplier: unknown }>((it as { stock_lot: unknown }).stock_lot);
+                                  const mat = g1<{ name: string }>(lot?.material ?? null);
+                                  const sup = g1<{ name: string }>(lot?.supplier ?? null);
+                                  return (
+                                    <li key={i}>{mat?.name ?? "—"} · {sup?.name ?? "—"} · {Number(lot?.weight_kg ?? 0).toFixed(3)} kg @ {lot?.cost_price_per_kg != null ? `${ngn(Number(lot.cost_price_per_kg))}/kg` : "—"}</li>
+                                  );
+                                })}
+                              </ul>
+                            </details>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-ore">{runMat?.name ?? "—"}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{Number(r.total_weight_kg).toFixed(3)} kg</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{ngn(Number(r.total_cost_price))}</td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums">{r.avg_cost_price_per_kg != null ? ngn(Number(r.avg_cost_price_per_kg)) : "—"}</td>
+                        <td className="px-3 py-2">{badge}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-xs text-ink-2">{formatTimestamp(r.created_at as string)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>

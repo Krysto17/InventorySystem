@@ -1,8 +1,8 @@
 // A typed result for write actions so failures surface in the UI instead of
 // silently no-op'ing (an RLS-filtered update returns no error but 0 rows).
-export type ActionResult = { ok: boolean; error?: string };
+export type ActionResult = { ok: boolean; error?: string; message?: string };
 
-export const ok = (): ActionResult => ({ ok: true });
+export const ok = (message?: string): ActionResult => ({ ok: true, message });
 export const fail = (error: string): ActionResult => ({ ok: false, error });
 
 // Interpret a Supabase write that used `.select()` to report affected rows:
