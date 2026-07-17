@@ -656,7 +656,15 @@ export type Database = {
           cost_price_per_kg?: number
           created_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "cost_price_run_extras_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "cost_price_runs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       cost_price_run_lots: {
         Row: {
