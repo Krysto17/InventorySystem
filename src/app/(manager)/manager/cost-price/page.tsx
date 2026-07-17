@@ -91,7 +91,6 @@ export default async function ManagerCostPricePage() {
                     <th className="px-3 py-2 text-right">Avg ₦/kg</th>
                     <th className="px-3 py-2">Status</th>
                     <th className="px-3 py-2">Date</th>
-                    <th className="px-3 py-2 text-right"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -125,15 +124,7 @@ export default async function ManagerCostPricePage() {
                               </ul>
                             </details>
                           )}
-                        </td>
-                        <td className="px-3 py-2 text-ore">{runMat?.name ?? "—"}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{Number(r.total_weight_kg).toFixed(3)} kg</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{ngn(Number(r.total_cost_price))}</td>
-                        <td className="px-3 py-2 text-right font-semibold tabular-nums">{r.avg_cost_price_per_kg != null ? ngn(Number(r.avg_cost_price_per_kg)) : "—"}</td>
-                        <td className="px-3 py-2">{badge}</td>
-                        <td className="whitespace-nowrap px-3 py-2 text-xs text-ink-2">{formatTimestamp(r.created_at as string)}</td>
-                        <td className="whitespace-nowrap px-3 py-2 text-right">
-                          <span className="inline-flex items-center gap-2">
+                          <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             <a href={`/api/pdf/cost-price/${r.id}`} target="_blank" rel="noreferrer"
                               className="rounded border border-line px-2 py-0.5 text-[11px] hover:bg-paper">🖨 Print</a>
                             {st !== "approved" && (
@@ -142,8 +133,14 @@ export default async function ManagerCostPricePage() {
                                 <button type="submit" className="rounded border border-red-300 px-2 py-0.5 text-[11px] text-red-700 hover:bg-red-50">Delete</button>
                               </form>
                             )}
-                          </span>
+                          </div>
                         </td>
+                        <td className="px-3 py-2 text-ore">{runMat?.name ?? "—"}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{Number(r.total_weight_kg).toFixed(3)} kg</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{ngn(Number(r.total_cost_price))}</td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums">{r.avg_cost_price_per_kg != null ? ngn(Number(r.avg_cost_price_per_kg)) : "—"}</td>
+                        <td className="px-3 py-2">{badge}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-xs text-ink-2">{formatTimestamp(r.created_at as string)}</td>
                       </tr>
                     );
                   })}
