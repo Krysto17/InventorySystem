@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
 import { MixingBatchTool, type Lot } from "@/components/reports/MixingBatchTool";
+import { deleteCostPriceRun } from "./actions";
 import { requireGeneralManager } from "@/lib/auth/require-general-manager";
 
 import { one as g1 } from "@/lib/db/relation";
@@ -90,6 +91,7 @@ export default async function ManagerCostPricePage() {
                     <th className="px-3 py-2 text-right">Avg ₦/kg</th>
                     <th className="px-3 py-2">Status</th>
                     <th className="px-3 py-2">Date</th>
+                    <th className="px-3 py-2 text-right"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -130,6 +132,18 @@ export default async function ManagerCostPricePage() {
                         <td className="px-3 py-2 text-right font-semibold tabular-nums">{r.avg_cost_price_per_kg != null ? ngn(Number(r.avg_cost_price_per_kg)) : "—"}</td>
                         <td className="px-3 py-2">{badge}</td>
                         <td className="whitespace-nowrap px-3 py-2 text-xs text-ink-2">{formatTimestamp(r.created_at as string)}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right">
+                          <span className="inline-flex items-center gap-2">
+                            <a href={`/api/pdf/cost-price/${r.id}`} target="_blank" rel="noreferrer"
+                              className="rounded border border-line px-2 py-0.5 text-[11px] hover:bg-paper">🖨 Print</a>
+                            {st !== "approved" && (
+                              <form action={deleteCostPriceRun} data-confirm="Delete this cost-price computation?">
+                                <input type="hidden" name="run_id" value={r.id as string} />
+                                <button type="submit" className="rounded border border-red-300 px-2 py-0.5 text-[11px] text-red-700 hover:bg-red-50">Delete</button>
+                              </form>
+                            )}
+                          </span>
+                        </td>
                       </tr>
                     );
                   })}

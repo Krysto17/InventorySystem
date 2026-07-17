@@ -339,6 +339,78 @@ export async function fetchLotSalePdfData(saleId: string): Promise<PdfLotSaleDat
   };
 }
 
+// ─── Cost-price computation / mixing batch ──────────────────────────────────
+export type PdfCostPriceItem = {
+  material_name: string | null;
+  supplier_name: string | null;
+  weight_kg: number;
+  cost_price_per_kg: number;
+  total: number;
+};
+export type PdfCostPriceData = {
+  id: string;
+  site_name: string | null;
+  label: string;
+  batch_code: string | null;
+  material_type_name: string | null;
+  approval_status: string | null;
+  created_at: string;
+  total_weight_kg: number;
+  total_cost_price: number;
+  avg_cost_price_per_kg: number;
+  items: PdfCostPriceItem[];
+};
+
+export async function fetchCostPriceRunData(runId: string): Promise<PdfCostPriceData | null> {
+  const supabase = await createClient();
+  const { data: r } = await supabase
+    .from("cost_price_runs")
+    .select(`
+      id, label, batch_code, approval_status, created_at,
+      total_weight_kg, total_cost_price, avg_cost_price_per_kg,
+      site:sites(name), material_type:material_types(name),
+      items:cost_price_run_lots(
+        stock_lot:stock_lots(weight_kg, cost_price_per_kg, material:material_types(name), supplier:suppliers(name))
+      )
+    `)
+    .eq("id", runId)
+    .single();
+  if (!r) return null;
+
+  const items: PdfCostPriceItem[] = ((r.items as unknown[]) ?? []).map((it) => {
+    const lot = g1<{ weight_kg: unknown; cost_price_per_kg: unknown; material: unknown; supplier: unknown }>(
+      (it as { stock_lot: unknown }).stock_lot,
+    );
+    const w = num(lot?.weight_kg);
+    const c = num(lot?.cost_price_per_kg);
+    return {
+      material_name: g1<{ name: string }>(lot?.material)?.name ?? null,
+      supplier_name: g1<{ name: string }>(lot?.supplier)?.name ?? null,
+      weight_kg: w,
+      cost_price_per_kg: c,
+      total: w * c,
+    };
+  });
+
+  const totW = num(r.total_weight_kg) || items.reduce((a, i) => a + i.weight_kg, 0);
+  const totC = num(r.total_cost_price) || items.reduce((a, i) => a + i.total, 0);
+  const avg = num(r.avg_cost_price_per_kg) || (totW > 0 ? totC / totW : 0);
+
+  return {
+    id: r.id as string,
+    site_name: g1<{ name: string }>(r.site)?.name ?? null,
+    label: r.label as string,
+    batch_code: str(r.batch_code),
+    material_type_name: g1<{ name: string }>(r.material_type)?.name ?? null,
+    approval_status: (r.approval_status as string | null) ?? null,
+    created_at: r.created_at as string,
+    total_weight_kg: totW,
+    total_cost_price: totC,
+    avg_cost_price_per_kg: avg,
+    items,
+  };
+}
+
 // ─── Utility invoice (Phase 11) ─────────────────────────────────────────────
 
 export type PdfUtilityData = {

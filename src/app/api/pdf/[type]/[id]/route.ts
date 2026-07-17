@@ -3,8 +3,9 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import React from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
-import { fetchVisitPdfData, fetchBulkSalePdfData, fetchLotSalePdfData, fetchUtilityInvoiceData, fetchSupplyInvoiceData, fetchPriceSlipData } from "@/lib/pdf/fetch-data";
+import { fetchVisitPdfData, fetchBulkSalePdfData, fetchLotSalePdfData, fetchUtilityInvoiceData, fetchSupplyInvoiceData, fetchPriceSlipData, fetchCostPriceRunData } from "@/lib/pdf/fetch-data";
 import { PriceSlipPdf } from "@/lib/pdf/templates/price-slip";
+import { CostPriceRunPdf } from "@/lib/pdf/templates/cost-price-run";
 import { LotSaleBreakdownPdf } from "@/lib/pdf/templates/lot-sale-breakdown";
 import { UtilityInvoicePdf } from "@/lib/pdf/templates/utility-invoice";
 import { SupplyInvoicePdf } from "@/lib/pdf/templates/supply-invoice";
@@ -77,6 +78,16 @@ export async function GET(
     const docId = docHash(type, id);
     const buffer = await renderToBuffer(pdf(PriceSlipPdf, { data, docId }));
     return pdfResponse(buffer, `price-slip-${data.receipt_no}.pdf`);
+  }
+
+  // ── Cost-price computation / mixing batch ─────────────────────────────────
+  if (type === "cost-price") {
+    if (!["manager", "owner"].includes(me.role)) return forbidden();
+    const data = await fetchCostPriceRunData(id); // RLS-scoped; null if not visible
+    if (!data) return notFound("Cost-price run not found");
+    const docId = docHash(type, id);
+    const buffer = await renderToBuffer(pdf(CostPriceRunPdf, { data, docId }));
+    return pdfResponse(buffer, `cost-price-${id.slice(0, 8)}.pdf`);
   }
 
   // ── Supply invoice (batch settlement) ─────────────────────────────────────

@@ -53,3 +53,16 @@ export async function createCostPriceRun(_prev: ActionResult, formData: FormData
   revalidatePath("/owner/cost-batches");
   return ok(sell ? "Batch formed — sent for owner approval." : "Computation saved.");
 }
+
+// Delete a cost-price computation (or a pending/rejected batch). RLS blocks
+// deleting an APPROVED (sold) batch. Owner / general manager only.
+export async function deleteCostPriceRun(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || !(me.role === "owner" || me.is_general_manager)) return;
+  const id = String(formData.get("run_id") ?? "");
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("cost_price_runs").delete().eq("id", id);
+  revalidatePath("/manager/cost-price");
+  revalidatePath("/owner/cost-batches");
+}
