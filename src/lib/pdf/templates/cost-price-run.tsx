@@ -38,14 +38,16 @@ export function CostPriceRunPdf({ data, docId }: { data: PdfCostPriceData; docId
 
         <View style={s.body}>
           <View style={s.headRow}>
-            <Text style={[s.headCell, s.supplier]}>Supplier</Text>
+            <Text style={[s.headCell, s.supplier]}>Supplier / material</Text>
             <Text style={[s.headCell, s.num]}>Weight (kg)</Text>
             <Text style={[s.headCell, s.num]}>Cost ₦/kg</Text>
             <Text style={[s.headCell, s.numWide]}>Line cost ₦</Text>
           </View>
           {data.items.map((it, i) => (
             <View style={s.row} key={i}>
-              <Text style={[s.cell, s.supplier]}>{it.supplier_name ?? "—"}</Text>
+              <Text style={[s.cell, s.supplier]}>
+                {it.external ? `${it.material_name ?? "—"} (external)` : (it.supplier_name ?? "—")}
+              </Text>
               <Text style={[s.cell, s.num]}>{formatKg(it.weight_kg)}</Text>
               <Text style={[s.cell, s.num]}>{formatNgn(it.cost_price_per_kg)}</Text>
               <Text style={[s.cell, s.numWide]}>{formatNgn(it.total)}</Text>

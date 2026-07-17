@@ -346,6 +346,7 @@ export type PdfCostPriceItem = {
   weight_kg: number;
   cost_price_per_kg: number;
   total: number;
+  external?: boolean;
 };
 export type PdfCostPriceData = {
   id: string;
@@ -371,13 +372,14 @@ export async function fetchCostPriceRunData(runId: string): Promise<PdfCostPrice
       site:sites(name), material_type:material_types(name),
       items:cost_price_run_lots(
         stock_lot:stock_lots(weight_kg, cost_price_per_kg, material:material_types(name), supplier:suppliers(name))
-      )
+      ),
+      extras:cost_price_run_extras(material_name, weight_kg, cost_price_per_kg)
     `)
     .eq("id", runId)
     .single();
   if (!r) return null;
 
-  const items: PdfCostPriceItem[] = ((r.items as unknown[]) ?? []).map((it) => {
+  const stockedItems: PdfCostPriceItem[] = ((r.items as unknown[]) ?? []).map((it) => {
     const lot = g1<{ weight_kg: unknown; cost_price_per_kg: unknown; material: unknown; supplier: unknown }>(
       (it as { stock_lot: unknown }).stock_lot,
     );
@@ -386,11 +388,16 @@ export async function fetchCostPriceRunData(runId: string): Promise<PdfCostPrice
     return {
       material_name: g1<{ name: string }>(lot?.material)?.name ?? null,
       supplier_name: g1<{ name: string }>(lot?.supplier)?.name ?? null,
-      weight_kg: w,
-      cost_price_per_kg: c,
-      total: w * c,
+      weight_kg: w, cost_price_per_kg: c, total: w * c,
     };
   });
+  const extraItems: PdfCostPriceItem[] = ((r.extras as unknown[]) ?? []).map((e) => {
+    const x = e as { material_name?: string; weight_kg?: unknown; cost_price_per_kg?: unknown };
+    const w = num(x.weight_kg);
+    const c = num(x.cost_price_per_kg);
+    return { material_name: x.material_name ?? null, supplier_name: null, weight_kg: w, cost_price_per_kg: c, total: w * c, external: true };
+  });
+  const items = [...stockedItems, ...extraItems];
 
   const totW = num(r.total_weight_kg) || items.reduce((a, i) => a + i.weight_kg, 0);
   const totC = num(r.total_cost_price) || items.reduce((a, i) => a + i.total, 0);
