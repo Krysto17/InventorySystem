@@ -17,14 +17,12 @@ const s = StyleSheet.create({
   cell: { fontSize: 11 },
   totalRow: { flexDirection: "row", borderTopWidth: 1.4, borderTopColor: "#333", paddingVertical: 7, marginTop: 1 },
   totalCell: { fontSize: 11, fontFamily: "Helvetica-Bold" },
-  material: { flex: 2 },
-  supplier: { flex: 2.4 },
+  supplier: { flex: 3 },
   num: { flex: 1.4, textAlign: "right" },
   numWide: { flex: 1.7, textAlign: "right" },
   highlight: { marginTop: 20, backgroundColor: "#f4efe6", borderRadius: 3, padding: 14 },
   hLabel: { fontSize: 10, color: "#7a6a48", textTransform: "uppercase", fontFamily: "Helvetica-Bold" },
   hValue: { fontSize: 20, fontFamily: "Helvetica-Bold", marginTop: 4, color: "#5b4a22" },
-  hSub: { fontSize: 10, color: "#666", marginTop: 3 },
 });
 
 export function CostPriceRunPdf({ data, docId }: { data: PdfCostPriceData; docId: string }) {
@@ -40,7 +38,6 @@ export function CostPriceRunPdf({ data, docId }: { data: PdfCostPriceData; docId
 
         <View style={s.body}>
           <View style={s.headRow}>
-            <Text style={[s.headCell, s.material]}>Material</Text>
             <Text style={[s.headCell, s.supplier]}>Supplier</Text>
             <Text style={[s.headCell, s.num]}>Weight (kg)</Text>
             <Text style={[s.headCell, s.num]}>Cost ₦/kg</Text>
@@ -48,7 +45,6 @@ export function CostPriceRunPdf({ data, docId }: { data: PdfCostPriceData; docId
           </View>
           {data.items.map((it, i) => (
             <View style={s.row} key={i}>
-              <Text style={[s.cell, s.material]}>{it.material_name ?? "—"}</Text>
               <Text style={[s.cell, s.supplier]}>{it.supplier_name ?? "—"}</Text>
               <Text style={[s.cell, s.num]}>{formatKg(it.weight_kg)}</Text>
               <Text style={[s.cell, s.num]}>{formatNgn(it.cost_price_per_kg)}</Text>
@@ -56,16 +52,15 @@ export function CostPriceRunPdf({ data, docId }: { data: PdfCostPriceData; docId
             </View>
           ))}
           <View style={s.totalRow}>
-            <Text style={[s.totalCell, { flex: 4.4 }]}>TOTAL</Text>
+            <Text style={[s.totalCell, s.supplier]}>TOTAL</Text>
             <Text style={[s.totalCell, s.num]}>{formatKg(data.total_weight_kg)}</Text>
             <Text style={[s.totalCell, s.num]}>—</Text>
             <Text style={[s.totalCell, s.numWide]}>{formatNgn(data.total_cost_price)}</Text>
           </View>
 
           <View style={s.highlight}>
-            <Text style={s.hLabel}>Weighted cost price</Text>
+            <Text style={s.hLabel}>Cost price</Text>
             <Text style={s.hValue}>{formatNgn(data.avg_cost_price_per_kg)} / kg</Text>
-            <Text style={s.hSub}>{formatNgn(data.total_cost_price)} ÷ {formatKg(data.total_weight_kg)} kg</Text>
           </View>
         </View>
 
