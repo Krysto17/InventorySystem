@@ -4,6 +4,8 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { recordDeduction, removeDeduction, removeUtilityCharge } from "@/app/visits/[id]/finance-actions";
 import { updateSupplierAccount } from "@/app/visits/[id]/settlement-actions";
+import { AccountFields } from "@/components/accounts/AccountFields";
+import { fetchKnownAccounts } from "@/lib/accounts/known-accounts";
 import { RecordPaymentForm } from "@/components/visits/RecordPaymentForm";
 import { CloseSettlementButton } from "@/components/visits/CloseSettlementButton";
 import { formatTimestamp } from "@/lib/visits/format";
@@ -51,6 +53,7 @@ export async function BatchSettlementCard({
 
   const { data: supplier } = await supabase
     .from("suppliers").select("account_name, account_number, bank_name").eq("id", supplierId).maybeSingle();
+  const knownAccounts = await fetchKnownAccounts();
 
   // Payment ledger against this settlement (part / full; cash by manager, etc.).
   const settlementId = (settlement?.id as string | undefined) ?? null;
@@ -203,15 +206,13 @@ export async function BatchSettlementCard({
           <form action={updateSupplierAccount} className="space-y-2 border-t border-line pt-3">
             <input type="hidden" name="visit_id" value={visitId} />
             <input type="hidden" name="supplier_id" value={supplierId} />
-            <div className="text-xs font-medium text-ink-2">Supplier account details</div>
-            <div className="grid grid-cols-3 gap-2">
-              <input name="account_name" placeholder="Account name" defaultValue={(supplier?.account_name as string | null) ?? ""}
-                className="rounded border px-2 py-1 text-sm" />
-              <input name="account_number" placeholder="Account number" defaultValue={(supplier?.account_number as string | null) ?? ""}
-                className="rounded border px-2 py-1 text-sm" />
-              <input name="bank_name" placeholder="Bank" defaultValue={(supplier?.bank_name as string | null) ?? ""}
-                className="rounded border px-2 py-1 text-sm" />
-            </div>
+            <AccountFields
+              accounts={knownAccounts}
+              defaultName={(supplier?.account_name as string | null) ?? null}
+              defaultNumber={(supplier?.account_number as string | null) ?? null}
+              defaultBank={(supplier?.bank_name as string | null) ?? null}
+              label="Supplier account details"
+            />
             <button type="submit" className="rounded border px-3 py-1 text-xs hover:bg-paper">Save account details</button>
           </form>
         )}

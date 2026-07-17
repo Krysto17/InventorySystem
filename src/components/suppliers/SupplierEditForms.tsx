@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 import { renameSupplier, saveSupplierAccount, type SupplierEditState } from "@/app/suppliers/actions";
+import { AccountFields } from "@/components/accounts/AccountFields";
+import type { KnownAccount } from "@/lib/accounts/known-accounts";
 
 const init: SupplierEditState = {};
 
@@ -15,7 +17,7 @@ type Supplier = {
 
 // Manager/owner edit forms: rename the supplier and update their (editable)
 // bank-account details. Previous names/accounts are kept as history server-side.
-export function SupplierEditForms({ supplier }: { supplier: Supplier }) {
+export function SupplierEditForms({ supplier, accounts }: { supplier: Supplier; accounts: KnownAccount[] }) {
   const [nameState, renameAction, renaming] = useActionState(renameSupplier, init);
   const [acctState, acctAction, savingAcct] = useActionState(saveSupplierAccount, init);
 
@@ -36,21 +38,13 @@ export function SupplierEditForms({ supplier }: { supplier: Supplier }) {
 
       <form action={acctAction} className="space-y-2 border-t border-line pt-3">
         <input type="hidden" name="supplier_id" value={supplier.id} />
-        <div className="text-xs font-medium text-ink-2">Bank account details (editable — changes are kept in history)</div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <input name="account_name" placeholder="Account name" defaultValue={supplier.account_name ?? ""} className="rounded border px-2 py-1 text-sm" />
-          <input
-            name="account_number"
-            placeholder="Account number (10 digits)"
-            defaultValue={supplier.account_number ?? ""}
-            inputMode="numeric"
-            pattern="\d{10}"
-            maxLength={10}
-            title="Exactly 10 digits (0-9)"
-            className="rounded border px-2 py-1 text-sm"
-          />
-          <input name="bank_name" placeholder="Bank" defaultValue={supplier.bank_name ?? ""} className="rounded border px-2 py-1 text-sm" />
-        </div>
+        <AccountFields
+          accounts={accounts}
+          defaultName={supplier.account_name}
+          defaultNumber={supplier.account_number}
+          defaultBank={supplier.bank_name}
+          label="Bank account details (editable — changes are kept in history)"
+        />
         <button type="submit" disabled={savingAcct} className="rounded border px-3 py-1 text-sm hover:bg-zinc-50 disabled:opacity-50">
           {savingAcct ? "Saving…" : "Save account details"}
         </button>

@@ -5,6 +5,7 @@ import { getProfile } from "@/lib/auth/get-profile";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge, stateVariant } from "@/components/ui/badge";
 import { SupplierEditForms } from "@/components/suppliers/SupplierEditForms";
+import { fetchKnownAccounts } from "@/lib/accounts/known-accounts";
 import { DeleteSupplierButton } from "@/components/suppliers/DeleteSupplierButton";
 import { OpeningBalanceForm } from "@/components/suppliers/OpeningBalanceForm";
 import { DebtRepaymentForm } from "@/components/suppliers/DebtRepaymentForm";
@@ -35,6 +36,7 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
   const formerAccounts = (s.former_accounts as FormerAccount[] | null) ?? [];
   const isOwner = me.role === "owner";
   const canEdit = me.role === "manager" || isOwner; // rename + account edits
+  const knownAccounts = canEdit ? await fetchKnownAccounts() : [];
   // Manager, owner AND accounting see the full record (visits / advances / lots /
   // debt) — RLS-scoped to what they may read. Accounting has cross-site read.
   const canViewRecords = canEdit || me.role === "accounting";
@@ -92,6 +94,7 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
           <CardHeader><h2 className="text-sm font-semibold">Edit supplier</h2></CardHeader>
           <CardContent>
             <SupplierEditForms
+              accounts={knownAccounts}
               supplier={{
                 id: s.id as string,
                 name: s.name as string,

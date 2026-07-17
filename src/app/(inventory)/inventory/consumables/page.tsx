@@ -5,6 +5,7 @@ import { reviewExpense, deleteConsumable } from "./actions";
 import { CATEGORY_LABELS } from "./categories";
 import { ConsumableForm } from "@/components/consumables/ConsumableForm";
 import { ConsumableEditForm } from "@/components/consumables/ConsumableEditForm";
+import { fetchKnownAccounts } from "@/lib/accounts/known-accounts";
 import { formatTimestamp } from "@/lib/visits/format";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -18,6 +19,7 @@ export default async function ConsumablesPage() {
   const isOwner = me?.role === "owner";
   const canDelete = isOwner || me?.role === "manager"; // before payment
   const supabase = await createClient();
+  const accounts = await fetchKnownAccounts();
 
   const { data: consumables } = await supabase
     .from("consumables")
@@ -42,7 +44,7 @@ export default async function ConsumablesPage() {
 
       <section className="border rounded p-4">
         <h2 className="font-semibold mb-3">Log a consumable</h2>
-        <ConsumableForm today={today} />
+        <ConsumableForm today={today} accounts={accounts} />
       </section>
 
       <section>
@@ -108,6 +110,7 @@ export default async function ConsumablesPage() {
                           {canDelete && status !== "paid" && (
                             <>
                               <ConsumableEditForm
+                                accounts={accounts}
                                 id={c.id as string}
                                 name={c.name as string}
                                 category={c.category as string}

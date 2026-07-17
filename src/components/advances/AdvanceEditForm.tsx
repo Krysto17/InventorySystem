@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 import { editAdvance } from "@/app/(manager)/manager/advances/actions";
+import { AccountFields } from "@/components/accounts/AccountFields";
+import type { KnownAccount } from "@/lib/accounts/known-accounts";
 import type { ActionResult } from "@/lib/actions/result";
 
 const init: ActionResult = { ok: false };
@@ -9,10 +11,10 @@ const init: ActionResult = { ok: false };
 // Inline edit for an unpaid advance (manager/owner). Account details stay a
 // complete set. Rendered inside a disclosure so the row stays compact.
 export function AdvanceEditForm({
-  id, purpose, amount, comment, accountName, accountNumber, bankName,
+  id, purpose, amount, comment, accountName, accountNumber, bankName, accounts,
 }: {
   id: string; purpose: string; amount: number; comment: string | null;
-  accountName: string | null; accountNumber: string | null; bankName: string | null;
+  accountName: string | null; accountNumber: string | null; bankName: string | null; accounts: KnownAccount[];
 }) {
   const [state, action, pending] = useActionState(editAdvance, init);
   return (
@@ -26,16 +28,9 @@ export function AdvanceEditForm({
         <label className="text-xs">Amount (₦)
           <input type="number" name="amount_naira" min="1" step="0.01" required defaultValue={amount} className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
         </label>
-        <label className="text-xs">Account name
-          <input type="text" name="account_name" defaultValue={accountName ?? ""} className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
-        </label>
-        <label className="text-xs">Bank name
-          <input type="text" name="bank_name" defaultValue={bankName ?? ""} className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
-        </label>
-        <label className="text-xs">Account number <span className="font-normal text-gray-400">(10 digits)</span>
-          <input type="text" name="account_number" inputMode="numeric" pattern="\d{10}" maxLength={10}
-            defaultValue={accountNumber ?? ""} className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
-        </label>
+        <div className="sm:col-span-2">
+          <AccountFields accounts={accounts} defaultName={accountName} defaultNumber={accountNumber} defaultBank={bankName} />
+        </div>
         <label className="text-xs">Comment
           <input type="text" name="comment" defaultValue={comment ?? ""} className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
         </label>

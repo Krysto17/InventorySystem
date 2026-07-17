@@ -8,6 +8,7 @@ import { formatTimestamp } from "@/lib/visits/format";
 import { setAdvanceApproval, deleteAdvance } from "./actions";
 import { AdvanceForm } from "@/components/advances/AdvanceForm";
 import { AdvanceEditForm } from "@/components/advances/AdvanceEditForm";
+import { fetchKnownAccounts } from "@/lib/accounts/known-accounts";
 
 import { one as g1 } from "@/lib/db/relation";
 const ngn = (n: number) => `₦${n.toLocaleString()}`;
@@ -20,6 +21,7 @@ export default async function ManagerAdvancesPage() {
 
   const { data: suppliers } = await supabase
     .from("suppliers").select("id, name, supplier_code").order("name").limit(300);
+  const accounts = await fetchKnownAccounts();
 
   const { data: advances } = await supabase
     .from("advances")
@@ -40,7 +42,7 @@ export default async function ManagerAdvancesPage() {
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">Record an advance</h2></CardHeader>
         <CardContent>
-          <AdvanceForm suppliers={(suppliers ?? []).map((s) => ({ id: s.id as string, name: s.name as string, code: (s.supplier_code as string | null) ?? null }))} />
+          <AdvanceForm accounts={accounts} suppliers={(suppliers ?? []).map((s) => ({ id: s.id as string, name: s.name as string, code: (s.supplier_code as string | null) ?? null }))} />
         </CardContent>
       </Card>
 
@@ -99,6 +101,7 @@ export default async function ManagerAdvancesPage() {
                     {canManage && st !== "paid" && (
                       <div className="w-full">
                         <AdvanceEditForm
+                          accounts={accounts}
                           id={a.id as string}
                           purpose={a.purpose as string}
                           amount={Number(a.amount_naira)}

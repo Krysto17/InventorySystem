@@ -3,6 +3,8 @@
 import { useActionState, useEffect, useRef } from "react";
 import { editConsumable } from "@/app/(inventory)/inventory/consumables/actions";
 import { CONSUMABLE_CATEGORIES, CATEGORY_LABELS } from "@/app/(inventory)/inventory/consumables/categories";
+import { AccountFields } from "@/components/accounts/AccountFields";
+import type { KnownAccount } from "@/lib/accounts/known-accounts";
 import type { ActionResult } from "@/lib/actions/result";
 
 const init: ActionResult = { ok: false };
@@ -10,10 +12,10 @@ const init: ActionResult = { ok: false };
 // Edit an unpaid expense (manager/owner) in a roomy modal — the inline grid was
 // unreadable crammed inside the table cell.
 export function ConsumableEditForm({
-  id, name, category, amount, comment, accountName, accountNumber, bankName,
+  id, name, category, amount, comment, accountName, accountNumber, bankName, accounts,
 }: {
   id: string; name: string; category: string; amount: number | null; comment: string | null;
-  accountName: string | null; accountNumber: string | null; bankName: string | null;
+  accountName: string | null; accountNumber: string | null; bankName: string | null; accounts: KnownAccount[];
 }) {
   const [state, action, pending] = useActionState(editConsumable, init);
   const ref = useRef<HTMLDialogElement>(null);
@@ -50,17 +52,8 @@ export function ConsumableEditForm({
             </label>
           </div>
 
-          <div className="border-t border-line pt-3 text-xs font-medium text-ink-2">Account details (pay to)</div>
-          <label className="block text-xs font-medium">Account name
-            <input type="text" name="account_name" defaultValue={accountName ?? ""} className={field} />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block text-xs font-medium">Bank name
-              <input type="text" name="bank_name" defaultValue={bankName ?? ""} className={field} />
-            </label>
-            <label className="block text-xs font-medium">Account number <span className="font-normal text-gray-400">(10 digits)</span>
-              <input type="text" name="account_number" inputMode="numeric" pattern="\d{10}" maxLength={10} defaultValue={accountNumber ?? ""} className={field} />
-            </label>
+          <div className="border-t border-line pt-3">
+            <AccountFields accounts={accounts} defaultName={accountName} defaultNumber={accountNumber} defaultBank={bankName} label="Account details (pay to)" />
           </div>
 
           <label className="block text-xs font-medium">Comment
