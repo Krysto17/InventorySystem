@@ -123,6 +123,25 @@ export async function closeDressingOnly(_prev: ActionResult, formData: FormData)
   return ok();
 }
 
+// Accountant reverses a paid supply after confirming a supplier refund: rolls
+// the intake out of stock, voids the settlement, and returns the visit to
+// pricing. The RPC blocks it if any material has already left stock.
+export async function reversePaidSupply(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const me = await getProfile();
+  if (!me || !(me.role === "accounting" || me.role === "owner")) return fail("Only accounting can reverse a paid supply.");
+  const visitId = String(formData.get("visit_id") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!visitId) return fail("Missing visit.");
+  if (!reason) return fail("Confirm the refund with a reason.");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("reverse_paid_supply", { p_visit_id: visitId, p_reason: reason });
+  if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
+  revalidatePath(`/visits/${visitId}`);
+  revalidatePath("/accounting");
+  revalidatePath("/manager");
+  return ok();
+}
+
 // ─── Utility charges (Phase 11 B) ────────────────────────────────────────────
 
 export async function addUtilityCharge(formData: FormData): Promise<void> {

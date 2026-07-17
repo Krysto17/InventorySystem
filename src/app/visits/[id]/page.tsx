@@ -10,6 +10,7 @@ import { BatchMaterials } from "@/components/visits/BatchMaterials";
 import { DeleteBatchButton } from "@/components/visits/DeleteBatchButton";
 import { UtilityChargesCard } from "@/components/visits/UtilityChargesCard";
 import { DressingOnlyClose } from "@/components/visits/DressingOnlyClose";
+import { ReversePaidSupplyForm } from "@/components/visits/ReversePaidSupplyForm";
 import { SupplierFinanceCard } from "@/components/visits/SupplierFinanceCard";
 import { BatchSettlementCard } from "@/components/visits/BatchSettlementCard";
 import { ProcessingFeeReopen } from "@/components/visits/ProcessingFeeReopen";
@@ -307,6 +308,9 @@ export default async function VisitDetailPage({
       (visit.entry_path as string) === "unprocessed" && (
         <DressingOnlyClose visitId={visitNorm.id} />
       )}
+    {["accounting", "owner"].includes(me.role) && visitNorm.state === "stocked" && (
+      <ReversePaidSupplyForm visitId={visitNorm.id} />
+    )}
     <ProcessingFeeReopen
       visitId={visitNorm.id}
       visitState={visitNorm.state}
