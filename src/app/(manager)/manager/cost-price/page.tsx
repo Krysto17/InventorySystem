@@ -62,16 +62,16 @@ export default async function ManagerCostPricePage() {
         <CardHeader>
           <h2 className="text-sm font-semibold">Form a mixing batch</h2>
           <p className="text-xs text-zinc-500">
-            Search/sort available stock, hand-pick lots, then form a batch. Selling a batch removes
-            each lot from stock and records the weighted cost price.
+            Pick available stock lots and/or add external (bought-outside) materials, then form a
+            batch. Selling removes the stocked lots and records the weighted cost price; external
+            materials only count toward the cost.
           </p>
         </CardHeader>
         <CardContent>
-          {lots.length === 0 ? (
-            <p className="text-sm text-zinc-500">No available stock lots to combine.</p>
-          ) : (
-            <MixingBatchTool lots={lots} />
+          {lots.length === 0 && (
+            <p className="mb-3 text-sm text-zinc-500">No stock lots available — you can still add external materials below.</p>
           )}
+          <MixingBatchTool lots={lots} />
         </CardContent>
       </Card>
 
