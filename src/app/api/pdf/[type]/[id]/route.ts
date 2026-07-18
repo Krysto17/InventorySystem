@@ -75,9 +75,10 @@ export async function GET(
     if (!["inventory", "manager", "owner", "receiving"].includes(me.role)) return forbidden();
     const data = await fetchPriceSlipData(id); // RLS-scoped read; null if not priced/visible
     if (!data) return notFound("Priced line not found");
+    const slipFormat = _req.nextUrl.searchParams.get("format") === "thermal" ? "thermal" : "a5";
     const docId = docHash(type, id);
-    const buffer = await renderToBuffer(pdf(PriceSlipPdf, { data, docId }));
-    return pdfResponse(buffer, `price-slip-${data.receipt_no}.pdf`);
+    const buffer = await renderToBuffer(pdf(PriceSlipPdf, { data, docId, format: slipFormat }));
+    return pdfResponse(buffer, `price-slip-${slipFormat}-${data.receipt_no}.pdf`);
   }
 
   // ── Cost-price computation / mixing batch ─────────────────────────────────

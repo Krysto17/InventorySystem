@@ -119,15 +119,12 @@ export default async function InventoryPage() {
                         {pricedLines.map((m) => {
                           const name = (Array.isArray(m.material) ? m.material[0]?.name : m.material?.name) ?? "material";
                           return (
-                            <a
-                              key={m.id}
-                              href={`/api/pdf/price-slip/${m.id}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="rounded border px-2 py-0.5 text-[11px] hover:bg-gray-100"
-                            >
-                              🖨 {name} slip
-                            </a>
+                            <span key={m.id} className="inline-flex items-center gap-1">
+                              <a href={`/api/pdf/price-slip/${m.id}?format=a5`} target="_blank" rel="noreferrer"
+                                className="rounded border px-2 py-0.5 text-[11px] hover:bg-gray-100">🖨 {name} A5</a>
+                              <a href={`/api/pdf/price-slip/${m.id}?format=thermal`} target="_blank" rel="noreferrer"
+                                className="rounded border px-2 py-0.5 text-[11px] hover:bg-gray-100">80mm</a>
+                            </span>
                           );
                         })}
                       </div>

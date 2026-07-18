@@ -101,7 +101,7 @@ function ThermalInvoice({ data, docId }: { data: PdfSupplyInvoiceData; docId: st
             <Text style={t.itemName}>{it.material_name ?? "—"}</Text>
             <Text style={t.val}>{formatNgn(it.amount)}</Text>
           </View>
-          <Text style={t.itemSub}>{formatKg(it.weight_kg)} kg{it.unit_price != null ? ` @ ${formatNgn(it.unit_price)}/kg` : ""}</Text>
+          <Text style={t.itemSub}>{formatKg(it.weight_kg)}{it.unit_price != null ? ` @ ${formatNgn(it.unit_price)}/kg` : ""}</Text>
         </View>
       ))}
 

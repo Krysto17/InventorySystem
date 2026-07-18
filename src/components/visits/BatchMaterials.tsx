@@ -293,14 +293,16 @@ export async function BatchMaterials({
                     {/* Manager / inventory / receiving / owner print the price slip
                         (grade + RA are written by hand after printing). */}
                     {["manager", "owner", "inventory", "receiving"].includes(viewerRole) && (
-                      <a
-                        href={`/api/pdf/price-slip/${l.id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="ml-2 rounded border px-1.5 py-0.5 text-[10px] font-medium hover:bg-zinc-50"
-                      >
-                        🖨 Print price slip
-                      </a>
+                      <>
+                        <a href={`/api/pdf/price-slip/${l.id}?format=a5`} target="_blank" rel="noreferrer"
+                          className="ml-2 rounded border px-1.5 py-0.5 text-[10px] font-medium hover:bg-zinc-50">
+                          🖨 Slip A5
+                        </a>
+                        <a href={`/api/pdf/price-slip/${l.id}?format=thermal`} target="_blank" rel="noreferrer"
+                          className="ml-1 rounded border px-1.5 py-0.5 text-[10px] font-medium hover:bg-zinc-50">
+                          🖨 80mm
+                        </a>
+                      </>
                     )}
                   </div>
                 )}
