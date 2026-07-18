@@ -104,6 +104,8 @@ export default async function ManagerGatePassesPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant={STATUS_VARIANT[st] ?? "default"}>{st}</Badge>
+                      <a href={`/api/pdf/gate-pass/${p.id}`} target="_blank" rel="noreferrer"
+                        className="rounded border border-line px-2.5 py-0.5 text-xs hover:bg-paper">🖨 80mm</a>
                       {st === "issued" && (
                         <form action={cancelGatePass}>
                           <input type="hidden" name="pass_id" value={p.id as string} />

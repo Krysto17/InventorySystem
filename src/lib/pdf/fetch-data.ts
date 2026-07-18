@@ -418,6 +418,49 @@ export async function fetchCostPriceRunData(runId: string): Promise<PdfCostPrice
   };
 }
 
+// ─── Gate pass (materials leaving the yard) ─────────────────────────────────
+export type PdfGatePassData = {
+  id: string;
+  pass_code: string | null;
+  site_name: string | null;
+  owner: string | null;
+  material_name: string | null;
+  bags: number | null;
+  weight_kg: number | null;
+  reason: string;
+  status: string;
+  issued_by_name: string | null;
+  issued_at: string;
+};
+
+export async function fetchGatePassData(passId: string): Promise<PdfGatePassData | null> {
+  const supabase = await createClient();
+  const { data: g } = await supabase
+    .from("gate_passes")
+    .select(`
+      id, pass_code, material_owner, bags, weight_kg, reason, status, issued_at,
+      site:sites(name), material:material_types(name), supplier:suppliers(name),
+      issued_by_p:profiles!gate_passes_issued_by_fkey(full_name)
+    `)
+    .eq("id", passId)
+    .maybeSingle();
+  if (!g) return null;
+
+  return {
+    id: g.id as string,
+    pass_code: str(g.pass_code),
+    site_name: g1<{ name: string }>(g.site)?.name ?? null,
+    owner: (str(g.material_owner)) ?? g1<{ name: string }>(g.supplier)?.name ?? null,
+    material_name: g1<{ name: string }>(g.material)?.name ?? null,
+    bags: g.bags != null ? Number(g.bags) : null,
+    weight_kg: g.weight_kg != null ? Number(g.weight_kg) : null,
+    reason: (g.reason as string) ?? "",
+    status: (g.status as string) ?? "issued",
+    issued_by_name: g1<{ full_name: string }>((g as { issued_by_p: unknown }).issued_by_p)?.full_name ?? null,
+    issued_at: g.issued_at as string,
+  };
+}
+
 // ─── Utility invoice (Phase 11) ─────────────────────────────────────────────
 
 export type PdfUtilityData = {

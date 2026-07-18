@@ -3,9 +3,10 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import React from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
-import { fetchVisitPdfData, fetchBulkSalePdfData, fetchLotSalePdfData, fetchUtilityInvoiceData, fetchSupplyInvoiceData, fetchPriceSlipData, fetchCostPriceRunData } from "@/lib/pdf/fetch-data";
+import { fetchVisitPdfData, fetchBulkSalePdfData, fetchLotSalePdfData, fetchUtilityInvoiceData, fetchSupplyInvoiceData, fetchPriceSlipData, fetchCostPriceRunData, fetchGatePassData } from "@/lib/pdf/fetch-data";
 import { PriceSlipPdf } from "@/lib/pdf/templates/price-slip";
 import { CostPriceRunPdf } from "@/lib/pdf/templates/cost-price-run";
+import { GatePassPdf } from "@/lib/pdf/templates/gate-pass";
 import { LotSaleBreakdownPdf } from "@/lib/pdf/templates/lot-sale-breakdown";
 import { UtilityInvoicePdf } from "@/lib/pdf/templates/utility-invoice";
 import { SupplyInvoicePdf } from "@/lib/pdf/templates/supply-invoice";
@@ -79,6 +80,16 @@ export async function GET(
     const docId = docHash(type, id);
     const buffer = await renderToBuffer(pdf(PriceSlipPdf, { data, docId, format: slipFormat }));
     return pdfResponse(buffer, `price-slip-${slipFormat}-${data.receipt_no}.pdf`);
+  }
+
+  // ── Gate pass (materials leaving the yard) ────────────────────────────────
+  if (type === "gate-pass") {
+    if (!["manager", "owner", "gate", "receiving", "inventory"].includes(me.role)) return forbidden();
+    const data = await fetchGatePassData(id); // RLS-scoped; null if not visible
+    if (!data) return notFound("Gate pass not found");
+    const docId = docHash(type, id);
+    const buffer = await renderToBuffer(pdf(GatePassPdf, { data, docId }));
+    return pdfResponse(buffer, `gate-pass-${id.slice(0, 8)}.pdf`);
   }
 
   // ── Cost-price computation / mixing batch ─────────────────────────────────
