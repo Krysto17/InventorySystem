@@ -90,6 +90,11 @@ export function LiveWorkflowList({ rows }: { rows: WorkflowRow[] }) {
   const gatePass = useMemo(() => rows.filter((r) => r.state === "awaiting_gate_exit"), [rows]);
   const stocked = useMemo(() => rows.filter((r) => r.state === "stocked"), [rows]);
   const exited = useMemo(() => rows.filter((r) => r.state === "exited"), [rows]);
+  // The search box also filters the Stocked / gate / exited sections below.
+  const matchQ = (r: WorkflowRow) => {
+    const t = q.trim().toLowerCase();
+    return !t || r.supplier.toLowerCase().includes(t) || r.material.toLowerCase().includes(t);
+  };
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -180,9 +185,9 @@ export function LiveWorkflowList({ rows }: { rows: WorkflowRow[] }) {
         </CardContent>
       </Card>
 
-      <CollapsibleSection title="Awaiting gate pass" rows={gatePass} tone="yellow" />
-      <CollapsibleSection title="Stocked" rows={stocked} tone="green" />
-      <CollapsibleSection title="Exited (no agreement)" rows={exited} tone="default" />
+      <CollapsibleSection title="Awaiting gate pass" rows={gatePass.filter(matchQ)} tone="yellow" />
+      <CollapsibleSection title="Stocked" rows={stocked.filter(matchQ)} tone="green" />
+      <CollapsibleSection title="Exited (no agreement)" rows={exited.filter(matchQ)} tone="default" />
     </div>
   );
 }
