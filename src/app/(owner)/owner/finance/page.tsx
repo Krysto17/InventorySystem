@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { SortableFinanceTable, type FinanceItem } from "@/components/finance/SortableFinanceTable";
 
+import { ADVANCE_PAID_STATUS } from "@/lib/finance/figures";
 import { one as g1 } from "@/lib/db/relation";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
@@ -44,17 +45,18 @@ export default async function OwnerFinancePage({
       supabase.from("consumables")
         .select("amount_naira, entry_date, created_at, site_id, category, site:sites(name)")
         .eq("approval_status", "paid"),
+      // Only advances actually PAID OUT count as money spent (canonical rule).
       supabase.from("advances")
         .select("amount_naira, paid_at, created_at, site_id, approval_status, site:sites(name), supplier:suppliers(name)")
-        .eq("approval_status", "paid"),
+        .eq("approval_status", ADVANCE_PAID_STATUS),
       supabase.from("processing_machine_usage")
         .select("line_cost, machine:machines(name, site_id, site:sites(name)), record:processing_records!inner(completed_at, discount_percent)")
         .limit(2000),
       // The processing fee actually deducted from a supplier's batch is the
       // light-bill utility charge (net of discount / any adjustment).
       supabase.from("utility_charges")
-        .select("amount, created_at, kind, visit:visits(site_id, site:sites(name), supplier:suppliers(name))")
-        .eq("kind", "light_bill"),
+        .select("amount, created_at, kind, carried, visit:visits(site_id, site:sites(name), supplier:suppliers(name))")
+        .eq("kind", "light_bill").eq("carried", false),
     ]);
 
   const inRange = (iso: string | null) => !!iso && iso.slice(0, 10) >= from && iso <= toEnd;

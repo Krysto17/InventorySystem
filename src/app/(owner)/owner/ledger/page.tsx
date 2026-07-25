@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Stamp } from "@/components/ui/stamp";
 
+import { ADVANCE_RECOVERY_KIND } from "@/lib/finance/figures";
 import { one as g1 } from "@/lib/db/relation";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
@@ -19,8 +20,8 @@ export default async function OwnerLedgerPage({
     await Promise.all([
       supabase.from("suppliers").select("id, name, supplier_code"),
       supabase.from("advances").select("supplier_id, amount_naira, approval_status"),
-      supabase.from("advance_deductions").select("supplier_id, amount"),
-      supabase.from("utility_charges").select("amount, kind, visit:visits!inner(site:sites(name))").eq("kind", "light_bill"),
+      supabase.from("advance_deductions").select("supplier_id, amount").eq("kind", ADVANCE_RECOVERY_KIND),
+      supabase.from("utility_charges").select("amount, kind, carried, visit:visits!inner(site:sites(name))").eq("kind", "light_bill").eq("carried", false),
       supabase.from("consumables").select("amount_naira, site:sites(name)").eq("approval_status", "paid"),
     ]);
 
@@ -45,7 +46,7 @@ export default async function OwnerLedgerPage({
     .filter((r) => !query || r.name.toLowerCase().includes(query) || (r.code ?? "").toLowerCase().includes(query))
     .sort((a, b) => b.outstanding - a.outstanding);
 
-  // ── Light bills per site ─────────────────────────────────────────────────
+  // ── Light bills per site (collected only — carried bills are still owed) ──
   const lightBySite = new Map<string, number>();
   for (const lb of lightBills ?? []) {
     const site = g1<{ name: string }>(g1<{ site: unknown }>((lb as { visit: unknown }).visit)?.site)?.name ?? "—";
