@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, ok, type ActionResult } from "@/lib/actions/result";
+import { accountTrioFromForm } from "@/lib/validation/account";
 
 // Owner / general manager records a price correction on a paid visit (the
 // supplier's material turned out over- or under-priced). The RPC enforces the
@@ -74,10 +75,17 @@ export async function recordSettlementPayment(_prev: ActionResult, formData: For
   if (!settlementId) return fail("Missing settlement.");
   if (!["cash", "transfer", "other"].includes(method)) return fail("Pick a payment method.");
   if (!(amount > 0)) return fail("Amount must be greater than zero.");
+  // Which account this portion was paid into (a payout may be split across
+  // several accounts — one payment row each). Optional, but complete if given.
+  const acct = accountTrioFromForm(formData);
+  if (!acct.ok) return fail(acct.error);
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("record_settlement_payment", {
     p_settlement_id: settlementId, p_amount: amount, p_method: method, p_note: note ?? undefined,
+    p_account_name: acct.value.account_name ?? undefined,
+    p_account_number: acct.value.account_number ?? undefined,
+    p_bank_name: acct.value.bank_name ?? undefined,
   });
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   if (visitId) revalidatePath(`/visits/${visitId}`);

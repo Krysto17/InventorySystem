@@ -59,7 +59,7 @@ export async function BatchSettlementCard({
   const settlementId = (settlement?.id as string | undefined) ?? null;
   const { data: payments } = settlementId
     ? await supabase.from("settlement_payments")
-        .select("id, amount, method, note, created_at, payer:profiles!settlement_payments_paid_by_fkey(full_name)")
+        .select("id, amount, method, note, created_at, account_name, account_number, bank_name, payer:profiles!settlement_payments_paid_by_fkey(full_name)")
         .eq("settlement_id", settlementId).order("created_at", { ascending: true })
     : { data: null };
 
@@ -260,6 +260,7 @@ export async function BatchSettlementCard({
                     <span className="text-ink-2">
                       {METHOD_LABEL[p.method as string] ?? p.method as string}
                       {p.note ? ` · ${p.note as string}` : ""}
+                      {p.account_name ? ` · → ${p.account_name as string}${p.bank_name ? ` (${p.bank_name as string})` : ""}` : ""}
                       {" · "}{g1<{ full_name?: string }>((p as { payer: unknown }).payer)?.full_name ?? "—"}
                       {" · "}{formatTimestamp(p.created_at as string)}
                     </span>
@@ -271,7 +272,15 @@ export async function BatchSettlementCard({
           </div>
         )}
         {canRecordPayment && (
-          <RecordPaymentForm visitId={visitId} settlementId={settlementId!} remaining={remaining} />
+          <RecordPaymentForm
+            visitId={visitId} settlementId={settlementId!} remaining={remaining}
+            accounts={knownAccounts}
+            supplierAccount={{
+              name: (supplier?.account_name as string | null) ?? null,
+              number: (supplier?.account_number as string | null) ?? null,
+              bank: (supplier?.bank_name as string | null) ?? null,
+            }}
+          />
         )}
         {canCloseZero && (
           <div className="border-t border-line pt-3">

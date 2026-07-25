@@ -418,6 +418,9 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
+          account_name: string | null
+          account_number: string | null
+          bank_name: string | null
           id: string
           method: string
           note: string | null
@@ -428,6 +431,9 @@ export type Database = {
         Insert: {
           amount: number
           created_at?: string
+          account_name?: string | null
+          account_number?: string | null
+          bank_name?: string | null
           id?: string
           method: string
           note?: string | null
@@ -438,6 +444,9 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string
+          account_name?: string | null
+          account_number?: string | null
+          bank_name?: string | null
           id?: string
           method?: string
           note?: string | null
@@ -2142,7 +2151,7 @@ export type Database = {
       record_debt_repayment: { Args: { p_supplier_id: string; p_amount: number; p_note?: string; p_kind?: string }; Returns: string }
       settlement_totals: { Args: { p_visit_id: string }; Returns: { materials: number; processing_fee: number; other_deductions: number; advances: number; net: number; remaining_debt: number }[] }
       settlement_paid_total: { Args: { p_settlement_id: string }; Returns: number }
-      record_settlement_payment: { Args: { p_settlement_id: string; p_amount: number; p_method: string; p_note?: string }; Returns: string }
+      record_settlement_payment: { Args: { p_settlement_id: string; p_amount: number; p_method: string; p_note?: string; p_account_name?: string; p_account_number?: string; p_bank_name?: string }; Returns: string }
       close_settlement: { Args: { p_id: string }; Returns: undefined }
       hold_settlement: { Args: { p_id: string }; Returns: undefined }
       release_settlement: { Args: { p_id: string }; Returns: undefined }

@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 import { recordSettlementPayment } from "@/app/visits/[id]/finance-actions";
+import { AccountFields } from "@/components/accounts/AccountFields";
+import type { KnownAccount } from "@/lib/accounts/known-accounts";
 import type { ActionResult } from "@/lib/actions/result";
 
 const init: ActionResult = { ok: false };
@@ -10,14 +12,21 @@ const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDi
 // Record a part or full payment against an approved settlement. Cash is usually
 // paid by the manager; transfers by the accountant. Amount defaults to the full
 // remaining balance and is capped there.
+//
+// A payout can be SPLIT across several accounts: record one payment per account
+// (each with its own amount + account details) until the balance is cleared.
 export function RecordPaymentForm({
   visitId,
   settlementId,
   remaining,
+  accounts = [],
+  supplierAccount,
 }: {
   visitId: string;
   settlementId: string;
   remaining: number;
+  accounts?: KnownAccount[];
+  supplierAccount?: { name: string | null; number: string | null; bank: string | null };
 }) {
   const [state, action, pending] = useActionState(recordSettlementPayment, init);
 
@@ -48,6 +57,19 @@ export function RecordPaymentForm({
           <input type="text" name="note" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
         </label>
       </div>
+
+      {/* Which account this portion goes to — leave blank for the supplier's
+          default, or fill it to split the payout across accounts. */}
+      <div className="rounded border border-line p-2">
+        <AccountFields
+          accounts={accounts}
+          defaultName={supplierAccount?.name ?? null}
+          defaultNumber={supplierAccount?.number ?? null}
+          defaultBank={supplierAccount?.bank ?? null}
+          label="Pay into (split a payout by recording one payment per account)"
+        />
+      </div>
+
       <button
         type="submit" disabled={pending}
         className="rounded bg-ink px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
