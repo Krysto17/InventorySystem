@@ -14,11 +14,14 @@ const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDi
 export default async function OwnerApprovalsPage() {
   const supabase = await createClient();
 
-  const [{ data: movements }, { data: settledLightBills }, { data: advances }, { data: pendingAdvances }] =
+  const [{ data: movements }, { data: settledLightBills }, { data: advances }, { data: advanceRecoveries }, { data: pendingAdvances }] =
     await Promise.all([
       supabase.from("stock_movements").select("weight, direction, material:material_types(name)"),
       supabase.from("batch_settlements").select("light_bill_total"),
       supabase.from("advances").select("amount_naira, approval_status, supplier_id"),
+      // Advance-kind recoveries (processing/light-bill recoveries are a separate
+      // balance and must not reduce the advances figure).
+      supabase.from("advance_deductions").select("amount").eq("kind", "advance"),
       supabase.from("advances")
         .select("id, purpose, amount_naira, created_at, supplier:suppliers(name, supplier_code)")
         .eq("approval_status", "pending").order("created_at", { ascending: true }),
@@ -45,7 +48,11 @@ export default async function OwnerApprovalsPage() {
   }
   const onHandRows = [...onHand.entries()].filter(([, kg]) => kg > 0.0005).sort((a, b) => a[0].localeCompare(b[0]));
   const lightBillsDeducted = (settledLightBills ?? []).reduce((s, r) => s + Number(r.light_bill_total), 0);
-  const advancesOut = (advances ?? []).filter((a) => a.approval_status === "paid").reduce((s, a) => s + Number(a.amount_naira), 0);
+  // Advances still OUT there: what's been paid out minus what's been recovered
+  // (deducted from payouts or repaid) — i.e. the balance suppliers still owe.
+  const advancesPaid = (advances ?? []).filter((a) => a.approval_status === "paid").reduce((s, a) => s + Number(a.amount_naira), 0);
+  const advancesRecovered = (advanceRecoveries ?? []).reduce((s, d) => s + Number(d.amount), 0);
+  const advancesOut = Math.max(advancesPaid - advancesRecovered, 0);
 
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
@@ -61,8 +68,11 @@ export default async function OwnerApprovalsPage() {
           <CardContent><div className="mono text-2xl font-bold text-ink">{ngn(lightBillsDeducted)}</div></CardContent>
         </Card>
         <Card>
-          <CardHeader><h2 className="text-sm font-semibold">Advances given out</h2></CardHeader>
-          <CardContent><div className="mono text-2xl font-bold text-ink">{ngn(advancesOut)}</div></CardContent>
+          <CardHeader><h2 className="text-sm font-semibold">Advances outstanding</h2></CardHeader>
+          <CardContent>
+            <div className="mono text-2xl font-bold text-ink">{ngn(advancesOut)}</div>
+            <p className="text-xs text-ink-2">{ngn(advancesPaid)} paid out · {ngn(advancesRecovered)} recovered</p>
+          </CardContent>
         </Card>
         <Card>
           <CardHeader><h2 className="text-sm font-semibold">Pending approvals</h2></CardHeader>
