@@ -14,14 +14,23 @@ const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDi
 export default async function OwnerApprovalsPage() {
   const supabase = await createClient();
 
-  const [{ data: movements }, { data: settledLightBills }, { data: advances }, { data: advanceRecoveries }, { data: pendingAdvances }] =
+  const [{ data: movements }, { data: paidLightBills }, { data: advances }, { data: advanceRecoveries }, { data: cashLightBills }, { data: processingRecovered }, { data: pendingAdvances }] =
     await Promise.all([
       supabase.from("stock_movements").select("weight, direction, material:material_types(name)"),
-      supabase.from("batch_settlements").select("light_bill_total"),
+      // Processing fees actually COLLECTED, three ways:
+      //  (a) netted off a settlement the supplier was actually paid,
+      //  (b) paid in cash at a dressing-only close (bill not carried),
+      //  (c) a carried bill later recovered from a payout / cash repayment.
+      supabase.from("batch_settlements").select("light_bill_total").eq("status", "paid"),
       supabase.from("advances").select("amount_naira, approval_status, supplier_id"),
       // Advance-kind recoveries (processing/light-bill recoveries are a separate
       // balance and must not reduce the advances figure).
       supabase.from("advance_deductions").select("amount").eq("kind", "advance"),
+      // (b) dressing-only bills the customer paid in cash at close.
+      supabase.from("utility_charges").select("amount, visit:visits!inner(dressing_only)")
+        .eq("kind", "light_bill").eq("carried", false).eq("visits.dressing_only", true),
+      // (c) carried processing debt actually recovered.
+      supabase.from("advance_deductions").select("amount").eq("kind", "processing"),
       supabase.from("advances")
         .select("id, purpose, amount_naira, created_at, supplier:suppliers(name, supplier_code)")
         .eq("approval_status", "pending").order("created_at", { ascending: true }),
@@ -47,7 +56,13 @@ export default async function OwnerApprovalsPage() {
     onHand.set(name, (onHand.get(name) ?? 0) + (m.direction === "in" ? 1 : -1) * Number(m.weight));
   }
   const onHandRows = [...onHand.entries()].filter(([, kg]) => kg > 0.0005).sort((a, b) => a[0].localeCompare(b[0]));
-  const lightBillsDeducted = (settledLightBills ?? []).reduce((s, r) => s + Number(r.light_bill_total), 0);
+  // Collected = netted off paid settlements + cash at dressing-only close +
+  // carried bills later recovered. Fees merely logged on an unsettled visit are
+  // NOT collected and are excluded.
+  const feesNetted = (paidLightBills ?? []).reduce((s, r) => s + Number(r.light_bill_total), 0);
+  const feesCash = (cashLightBills ?? []).reduce((s, r) => s + Number(r.amount), 0);
+  const feesRecovered = (processingRecovered ?? []).reduce((s, r) => s + Number(r.amount), 0);
+  const lightBillsDeducted = feesNetted + feesCash + feesRecovered;
   // Advances still OUT there: what's been paid out minus what's been recovered
   // (deducted from payouts or repaid) — i.e. the balance suppliers still owe.
   const advancesPaid = (advances ?? []).filter((a) => a.approval_status === "paid").reduce((s, a) => s + Number(a.amount_naira), 0);
@@ -64,8 +79,13 @@ export default async function OwnerApprovalsPage() {
       {/* Overview */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
-          <CardHeader><h2 className="text-sm font-semibold">Processing fees deducted</h2></CardHeader>
-          <CardContent><div className="mono text-2xl font-bold text-ink">{ngn(lightBillsDeducted)}</div></CardContent>
+          <CardHeader><h2 className="text-sm font-semibold">Processing fees collected</h2></CardHeader>
+          <CardContent>
+            <div className="mono text-2xl font-bold text-ink">{ngn(lightBillsDeducted)}</div>
+            <p className="text-xs text-ink-2">
+              {ngn(feesNetted)} deducted{feesCash > 0 ? ` · ${ngn(feesCash)} cash` : ""}{feesRecovered > 0 ? ` · ${ngn(feesRecovered)} recovered` : ""}
+            </p>
+          </CardContent>
         </Card>
         <Card>
           <CardHeader><h2 className="text-sm font-semibold">Advances outstanding</h2></CardHeader>
