@@ -7,6 +7,7 @@ import { formatTimestamp } from "@/lib/visits/format";
 import { MixingBatchTool, type Lot } from "@/components/reports/MixingBatchTool";
 import { deleteCostPriceRun } from "./actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { CostRunEditor, type RunLot, type RunExtra } from "@/components/reports/CostRunEditor";
 import { requireGeneralManager } from "@/lib/auth/require-general-manager";
 
 import { one as g1 } from "@/lib/db/relation";
@@ -33,8 +34,10 @@ export default async function ManagerCostPricePage() {
         id, label, batch_code, sold, approval_status, total_weight_kg, total_cost_price, avg_cost_price_per_kg, created_at,
         material:material_types(name),
         items:cost_price_run_lots(
+          stock_lot_id,
           stock_lot:stock_lots(weight_kg, cost_price_per_kg, material:material_types(name), supplier:suppliers(name))
-        )
+        ),
+        extras:cost_price_run_extras(id, material_name, weight_kg, cost_price_per_kg)
       `)
       .order("created_at", { ascending: false })
       .limit(20),
@@ -135,6 +138,28 @@ export default async function ManagerCostPricePage() {
                               </form>
                             )}
                           </div>
+                          {st !== "approved" && (
+                            <CostRunEditor
+                              runId={r.id as string}
+                              label={r.label as string}
+                              lots={items.map((it) => {
+                                const lot = g1<{ weight_kg: number; cost_price_per_kg: number | null; material: unknown; supplier: unknown }>((it as { stock_lot: unknown }).stock_lot);
+                                return {
+                                  stockLotId: (it as { stock_lot_id: string }).stock_lot_id,
+                                  material: g1<{ name: string }>(lot?.material ?? null)?.name ?? "—",
+                                  supplier: g1<{ name: string }>(lot?.supplier ?? null)?.name ?? null,
+                                  weight: Number(lot?.weight_kg ?? 0),
+                                  cost: lot?.cost_price_per_kg != null ? Number(lot.cost_price_per_kg) : null,
+                                } satisfies RunLot;
+                              })}
+                              extras={(((r as { extras: unknown }).extras ?? []) as Record<string, unknown>[]).map((e) => ({
+                                id: e.id as string,
+                                name: e.material_name as string,
+                                weight: Number(e.weight_kg),
+                                cost: Number(e.cost_price_per_kg),
+                              } satisfies RunExtra))}
+                            />
+                          )}
                         </td>
                         <td className="px-3 py-2 text-ore">{runMat?.name ?? "—"}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{Number(r.total_weight_kg).toFixed(3)} kg</td>
