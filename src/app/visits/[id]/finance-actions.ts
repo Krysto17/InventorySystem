@@ -151,6 +151,67 @@ export async function reversePaidSupply(_prev: ActionResult, formData: FormData)
   return ok();
 }
 
+// ─── Payout split plan (manager declares, accountant pays against it) ────────
+
+// Manager/owner plans an exact figure to send to a given account. Several splits
+// make up the payout; the DB blocks a plan that exceeds it.
+export async function addPayoutSplit(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const me = await getProfile();
+  if (!me || !["manager", "owner"].includes(me.role)) return fail("Only the manager or owner can plan the split.");
+  const visitId = String(formData.get("visit_id") ?? "");
+  const settlementId = String(formData.get("settlement_id") ?? "");
+  const amount = Number(formData.get("amount"));
+  const note = String(formData.get("note") ?? "").trim() || null;
+  if (!settlementId) return fail("Missing settlement.");
+  if (!(amount > 0)) return fail("Amount must be greater than zero.");
+  const acct = accountTrioFromForm(formData);
+  if (!acct.ok) return fail(acct.error);
+  if (!acct.value.account_name) return fail("Enter the account to pay this portion into.");
+
+  const supabase = await createClient();
+  const { data: st } = await supabase.from("batch_settlements").select("site_id").eq("id", settlementId).maybeSingle();
+  if (!st) return fail("Couldn't load this settlement.");
+
+  const { error } = await supabase.from("settlement_payout_splits").insert({
+    settlement_id: settlementId, site_id: st.site_id as string, amount, note,
+    account_name: acct.value.account_name,
+    account_number: acct.value.account_number!,
+    bank_name: acct.value.bank_name!,
+    created_by: me.id,
+  });
+  if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
+  if (visitId) revalidatePath(`/visits/${visitId}`);
+  revalidatePath("/accounting/payouts");
+  return ok("Split added.");
+}
+
+export async function removePayoutSplit(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || !["manager", "owner"].includes(me.role)) return;
+  const visitId = String(formData.get("visit_id") ?? "");
+  const id = String(formData.get("split_id") ?? "");
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("settlement_payout_splits").delete().eq("id", id);
+  if (visitId) revalidatePath(`/visits/${visitId}`);
+  revalidatePath("/accounting/payouts");
+}
+
+// ─── Receiving reopens a submitted batch to add / correct a line ─────────────
+export async function reopenReceiving(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const me = await getProfile();
+  if (!me || !["receiving", "manager", "owner"].includes(me.role)) return fail("Not allowed to reopen receiving.");
+  const visitId = String(formData.get("visit_id") ?? "");
+  if (!visitId) return fail("Missing visit.");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("reopen_receiving", { p_visit_id: visitId });
+  if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
+  revalidatePath(`/visits/${visitId}`);
+  revalidatePath("/receiving");
+  revalidatePath("/qc");
+  return ok("Reopened — add or correct lines, then submit to QC again.");
+}
+
 // ─── Utility charges (Phase 11 B) ────────────────────────────────────────────
 
 export async function addUtilityCharge(formData: FormData): Promise<void> {

@@ -414,6 +414,45 @@ export type Database = {
           },
         ]
       }
+      settlement_payout_splits: {
+        Row: {
+          id: string
+          settlement_id: string
+          site_id: string
+          account_name: string
+          account_number: string
+          bank_name: string
+          amount: number
+          note: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          settlement_id: string
+          site_id: string
+          account_name: string
+          account_number: string
+          bank_name: string
+          amount: number
+          note?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          settlement_id?: string
+          site_id?: string
+          account_name?: string
+          account_number?: string
+          bank_name?: string
+          amount?: number
+          note?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       settlement_payments: {
         Row: {
           amount: number
@@ -2144,6 +2183,7 @@ export type Database = {
       delete_batch: { Args: { p_visit_id: string }; Returns: undefined }
       delete_supplier: { Args: { p_supplier_id: string }; Returns: undefined }
       reopen_processing_fee: { Args: { p_visit_id: string }; Returns: undefined }
+      reopen_receiving: { Args: { p_visit_id: string }; Returns: undefined }
       record_price_correction: { Args: { p_visit_id: string; p_direction: string; p_amount: number; p_reason?: string }; Returns: string }
       mark_price_correction_paid: { Args: { p_id: string }; Returns: undefined }
       accountant_send_back_to_owner: { Args: { p_visit_id: string; p_reason: string }; Returns: undefined }

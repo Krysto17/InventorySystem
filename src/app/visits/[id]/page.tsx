@@ -11,6 +11,7 @@ import { DeleteBatchButton } from "@/components/visits/DeleteBatchButton";
 import { UtilityChargesCard } from "@/components/visits/UtilityChargesCard";
 import { DressingOnlyClose } from "@/components/visits/DressingOnlyClose";
 import { ReversePaidSupplyForm } from "@/components/visits/ReversePaidSupplyForm";
+import { ReopenReceivingCard } from "@/components/visits/ReopenReceivingCard";
 import { SupplierFinanceCard } from "@/components/visits/SupplierFinanceCard";
 import { BatchSettlementCard } from "@/components/visits/BatchSettlementCard";
 import { ProcessingFeeReopen } from "@/components/visits/ProcessingFeeReopen";
@@ -130,11 +131,19 @@ export default async function VisitDetailPage({
     (me.role === "accounting" || me.role === "owner") &&
     (visit.state as string) === "in_accounting" &&
     settlementStatus !== "paid";
+  const visitState = visit.state as string;
   const canDeleteBatch =
     (me.role === "owner" && settlementStatus !== "paid") ||
     (!!me.is_general_manager &&
       settlementStatus !== "approved" &&
-      settlementStatus !== "paid");
+      settlementStatus !== "paid") ||
+    // Processing / receiving may remove a mistaken entry still in their stage.
+    (me.role === "processing" && visitState === "in_processing") ||
+    (me.role === "receiving" && ["in_processing", "in_receiving"].includes(visitState));
+  // Receiving pulls a submitted batch back to add / correct a line, then
+  // re-submits it to QC.
+  const canReopenReceiving =
+    ["receiving", "manager", "owner"].includes(me.role) && visitState === "in_qc";
 
   const visitNorm = {
     id: visit.id as string,
@@ -311,6 +320,7 @@ export default async function VisitDetailPage({
     {["accounting", "owner"].includes(me.role) && visitNorm.state === "stocked" && (
       <ReversePaidSupplyForm visitId={visitNorm.id} />
     )}
+    {canReopenReceiving && <ReopenReceivingCard visitId={visitNorm.id} />}
     <ProcessingFeeReopen
       visitId={visitNorm.id}
       visitState={visitNorm.state}

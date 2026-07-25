@@ -7,6 +7,7 @@ import { updateSupplierAccount } from "@/app/visits/[id]/settlement-actions";
 import { AccountFields } from "@/components/accounts/AccountFields";
 import { fetchKnownAccounts } from "@/lib/accounts/known-accounts";
 import { RecordPaymentForm } from "@/components/visits/RecordPaymentForm";
+import { PayoutSplitPlan } from "@/components/visits/PayoutSplitPlan";
 import { CloseSettlementButton } from "@/components/visits/CloseSettlementButton";
 import { formatTimestamp } from "@/lib/visits/format";
 import type { Role } from "@/lib/auth/roles";
@@ -242,6 +243,11 @@ export async function BatchSettlementCard({
           <p className="border-t border-line pt-3 text-[11px] text-ink-2">
             Apply any deductions here, then submit the priced batch to the owner — on approval this goes straight to accounting.
           </p>
+        )}
+
+        {/* Manager's payout plan: exact amount per account for the accountant. */}
+        {settlementId && status !== "paid" && (
+          <PayoutSplitPlan visitId={visitId} settlementId={settlementId} net={net} viewerRole={viewerRole} />
         )}
 
         {/* Payments ledger — part or full; cash usually by the manager. */}
