@@ -61,13 +61,16 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
   // Outstanding debt + opening balance — visible to every record viewer; only
   // the owner may record/seed the opening balance.
   let outstandingDebt = 0;
+  let processingDebt = 0;
   let hasOpeningBalance = false;
   if (canViewRecords) {
-    const [{ data: debt }, { data: ob }] = await Promise.all([
+    const [{ data: debt }, { data: procDebt }, { data: ob }] = await Promise.all([
       supabase.rpc("supplier_outstanding_debt", { _supplier_id: id }),
+      supabase.rpc("supplier_processing_debt", { _supplier_id: id }),
       supabase.from("advances").select("id").eq("supplier_id", id).eq("purpose", "Opening balance (pre-software)").maybeSingle(),
     ]);
     outstandingDebt = Number(debt ?? 0);
+    processingDebt = Number(procDebt ?? 0);
     hasOpeningBalance = !!ob;
   }
 
@@ -85,7 +88,8 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
           <div>Phone: {(s.phone as string | null) ?? "—"}</div>
           {formerNames.length > 0 && <div className="text-gray-500">Previous names: {formerNames.join(", ")}</div>}
           {canViewRecords && <div>Approved advances to date: <strong>{ngn(approvedAdvances)}</strong></div>}
-          {canViewRecords && <div>Outstanding debt: <strong>{ngn(outstandingDebt)}</strong></div>}
+          {canViewRecords && <div>Advance debt: <strong>{ngn(outstandingDebt)}</strong></div>}
+          {canViewRecords && <div>Processing (light bill) debt: <strong>{ngn(processingDebt)}</strong></div>}
         </CardContent>
       </Card>
 
@@ -161,7 +165,7 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
               />
               {/* Debt cleared outside the app (bank transfer / cash). Any finance
                   role who can view the record may log the repayment. */}
-              <DebtRepaymentForm supplierId={s.id as string} outstandingDebt={outstandingDebt} />
+              <DebtRepaymentForm supplierId={s.id as string} outstandingDebt={outstandingDebt} processingDebt={processingDebt} />
               {/* Overpaid supply/expense/advance → becomes a debt tagged Overpayment. */}
               <OverpaymentForm supplierId={s.id as string} />
             </CardContent>

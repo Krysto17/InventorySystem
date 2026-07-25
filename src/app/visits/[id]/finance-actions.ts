@@ -204,7 +204,10 @@ export async function recordDeduction(formData: FormData): Promise<void> {
   const supplierId = String(formData.get("supplier_id") ?? "");
   const amount = Number(formData.get("amount"));
   const notes = String(formData.get("notes") ?? "").trim() || null;
+  // Which balance this recovery settles: advance debt or processing (light bill).
+  const kind = String(formData.get("kind") ?? "advance");
   if (!supplierId || !(amount > 0)) return;
+  if (!["advance", "processing"].includes(kind)) return;
 
   const supabase = await createClient();
   const { data: profile } = await supabase
@@ -226,6 +229,7 @@ export async function recordDeduction(formData: FormData): Promise<void> {
     ref_visit_id: visitId,
     amount,
     notes,
+    kind,
     recorded_by: me.id,
   });
   if (visitId) revalidatePath(`/visits/${visitId}`);

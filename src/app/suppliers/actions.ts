@@ -73,18 +73,22 @@ export async function recordDebtRepayment(_prev: SupplierEditState, formData: Fo
   const id = String(formData.get("supplier_id") ?? "");
   const amount = Number(formData.get("amount"));
   const note = String(formData.get("note") ?? "").trim() || null;
+  // Which balance this repayment settles: advance debt or processing (light bill).
+  const kind = String(formData.get("kind") ?? "advance");
   if (!id) return { error: "Missing supplier" };
   if (!(amount > 0)) return { error: "Amount must be greater than zero." };
+  if (!["advance", "processing"].includes(kind)) return { error: "Pick which debt to repay." };
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("record_debt_repayment", {
     p_supplier_id: id,
     p_amount: amount,
+    p_kind: kind,
     ...(note ? { p_note: note } : {}),
   });
   if (error) return { error: error.message.replace(/^.*?:\s*/, "") };
   revalidatePath(`/suppliers/${id}`);
-  return { ok: "Repayment recorded — outstanding debt reduced." };
+  return { ok: kind === "processing" ? "Repayment recorded — processing debt reduced." : "Repayment recorded — advance debt reduced." };
 }
 
 // Record an overpayment (supply / expense / advance overpaid to the supplier) as

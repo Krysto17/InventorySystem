@@ -33,7 +33,7 @@ export default async function OwnerApprovalsPage() {
   // Batches the manager has priced, awaiting the owner's approval (#1/#5).
   const { data: pendingPrices } = await supabase
     .from("visits")
-    .select("id, created_at, supplier:suppliers(name), declared_material_type:material_types(name), site:sites(name), pricing:pricing(purchase_amount), materials:visit_materials(weight_kg, unit_price, purchase_amount, material:material_types(name))")
+    .select("id, created_at, supplier:suppliers(name), declared_material_type:material_types(name), site:sites(name), pricing:pricing(purchase_amount), materials:visit_materials(weight_kg, unit_price, purchase_amount, magnetic_analysis, material:material_types(name), xrf:xrf_records(result, weight_kg, submitted))")
     .eq("state", "awaiting_price_approval")
     .order("created_at", { ascending: true });
 
@@ -104,7 +104,9 @@ export default async function OwnerApprovalsPage() {
                 const sup = g1<{ name: string }>((v as { supplier: unknown }).supplier);
                 const site = g1<{ name: string }>((v as { site: unknown }).site);
                 const pr = g1<{ purchase_amount: number }>((v as { pricing: unknown }).pricing);
-                const lines = ((v as { materials: unknown }).materials ?? []) as { weight_kg: number; unit_price: number | null; material: unknown }[];
+                const lines = ((v as { materials: unknown }).materials ?? []) as {
+                  weight_kg: number; unit_price: number | null; magnetic_analysis: string | null; material: unknown; xrf: unknown;
+                }[];
                 return (
                   <li key={v.id as string} className="px-4 py-3 text-sm">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -132,11 +134,20 @@ export default async function OwnerApprovalsPage() {
                       ) : lines.map((l, i) => {
                         const name = g1<{ name: string }>(l.material)?.name ?? "—";
                         const kg = Number(l.weight_kg ?? 0);
+                        const xrf = g1<{ result: string | null; weight_kg: number | null; submitted: boolean }>(l.xrf);
                         return (
-                          <li key={i}>
+                          <li key={i} className="mb-1">
                             <span className="font-medium text-ink">{name}</span>
                             {" · "}{kg.toLocaleString(undefined, { maximumFractionDigits: 3 })} kg
                             {" · "}{l.unit_price != null ? `${ngn(Number(l.unit_price))}/kg` : "unpriced"}
+                            {/* The analyses this price rests on: magnetic (receiving) + XRF (QC). */}
+                            <span className="block">
+                              <span className="text-ore">Magnetic: {l.magnetic_analysis?.trim() || "—"}</span>
+                              {" · "}
+                              XRF: {xrf?.result?.trim() || "—"}
+                              {xrf?.weight_kg != null ? ` (QC ${Number(xrf.weight_kg).toLocaleString(undefined, { maximumFractionDigits: 3 })} kg)` : ""}
+                              {xrf && !xrf.submitted ? " · draft" : ""}
+                            </span>
                           </li>
                         );
                       })}

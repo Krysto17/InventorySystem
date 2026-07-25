@@ -56,6 +56,7 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Reports", href: "/manager/reports", icon: "reports", generalOnly: true },
     { label: "Cost price", href: "/manager/cost-price", icon: "pricing", generalOnly: true },
     { label: "Analyses", href: "/manager/analyses", icon: "qc", generalOnly: true },
+    { label: "Sample analyses", href: "/manager/samples", icon: "qc", generalOnly: true },
     // Technical config — general manager (the technical lead) only.
     { label: "Material types", href: "/owner/material-types", icon: "materials", generalOnly: true },
     { label: "Machines", href: "/owner/machines", icon: "machines", generalOnly: true },
@@ -86,6 +87,7 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Approvals", href: "/owner/approvals", icon: "pricing" },
     { label: "Approved payments", href: "/owner/payments", icon: "accounting" },
     { label: "Analyses", href: "/owner/analyses", icon: "qc" },
+    { label: "Sample analyses", href: "/owner/samples", icon: "qc" },
     { label: "Ledger", href: "/owner/ledger", icon: "accounting" },
     { label: "Finance breakdown", href: "/owner/finance", icon: "reports" },
     { label: "Mixing batches", href: "/owner/cost-batches", icon: "bulkSales" },

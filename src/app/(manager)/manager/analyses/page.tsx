@@ -1,16 +1,14 @@
 import { requireGeneralManager } from "@/lib/auth/require-general-manager";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fetchAllAnalyses, AGREED_STATES } from "@/lib/analyses/all-analyses";
-import { fetchSamples } from "@/lib/analyses/samples";
 import { AllAnalysesTable, type AnalysisRow } from "@/components/analyses/AllAnalysesTable";
-import { SampleAnalysesTable } from "@/components/qc/SampleAnalysesTable";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 
 export default async function ManagerAnalysesPage() {
   await requireGeneralManager();
   const me = await getProfile();
 
-  const [raw, samples] = await Promise.all([fetchAllAnalyses(), fetchSamples()]);
+  const raw = await fetchAllAnalyses();
   // The GM may price lines at their own site (New-Site); other sites are read-only
   // here (cross-site writes belong to the owner).
   // The general manager prices lines at any site; a site manager only its own.
@@ -32,10 +30,6 @@ export default async function ManagerAnalysesPage() {
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">All analyses</h2></CardHeader>
         <CardContent><AllAnalysesTable rows={rows} /></CardContent>
-      </Card>
-      <Card>
-        <CardHeader><h2 className="text-sm font-semibold">Sample analyses</h2></CardHeader>
-        <CardContent><SampleAnalysesTable rows={samples} canPrice /></CardContent>
       </Card>
     </main>
   );
