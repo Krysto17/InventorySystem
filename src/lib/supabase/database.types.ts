@@ -417,7 +417,8 @@ export type Database = {
       settlement_payout_splits: {
         Row: {
           id: string
-          settlement_id: string
+          settlement_id: string | null
+          visit_id: string
           site_id: string
           account_name: string
           account_number: string
@@ -429,7 +430,8 @@ export type Database = {
         }
         Insert: {
           id?: string
-          settlement_id: string
+          settlement_id: string | null
+          visit_id: string
           site_id: string
           account_name: string
           account_number: string
@@ -441,7 +443,8 @@ export type Database = {
         }
         Update: {
           id?: string
-          settlement_id?: string
+          settlement_id?: string | null
+          visit_id?: string
           site_id?: string
           account_name?: string
           account_number?: string

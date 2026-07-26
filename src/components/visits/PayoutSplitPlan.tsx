@@ -10,9 +10,9 @@ const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDi
 // The manager plans exactly how much of a payout goes to each account; the
 // accountant pays against this plan. Finance roles all see it.
 export async function PayoutSplitPlan({
-  visitId, settlementId, net, viewerRole,
+  visitId, net, viewerRole,
 }: {
-  visitId: string; settlementId: string; net: number; viewerRole: Role;
+  visitId: string; net: number; viewerRole: Role;
 }) {
   if (!["manager", "accounting", "owner"].includes(viewerRole)) return null;
 
@@ -20,7 +20,7 @@ export async function PayoutSplitPlan({
   const [{ data: splits }, accounts] = await Promise.all([
     supabase.from("settlement_payout_splits")
       .select("id, amount, account_name, account_number, bank_name, note")
-      .eq("settlement_id", settlementId).order("created_at", { ascending: true }),
+      .eq("visit_id", visitId).order("created_at", { ascending: true }),
     fetchKnownAccounts(),
   ]);
 
@@ -68,7 +68,6 @@ export async function PayoutSplitPlan({
       {canPlan && unplanned > 0.005 && (
         <PayoutSplitForm
           visitId={visitId}
-          settlementId={settlementId}
           unplanned={unplanned}
           accounts={accounts}
           action={addPayoutSplit}

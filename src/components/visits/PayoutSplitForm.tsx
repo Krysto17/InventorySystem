@@ -13,16 +13,15 @@ type Action = (prev: ActionResult, formData: FormData) => Promise<ActionResult>;
 // Manager adds one line of the payout plan: an exact amount into a named
 // account. Repeat to split a payout across two or more accounts.
 export function PayoutSplitForm({
-  visitId, settlementId, unplanned, accounts, action,
+  visitId, unplanned, accounts, action,
 }: {
-  visitId: string; settlementId: string; unplanned: number; accounts: KnownAccount[]; action: Action;
+  visitId: string; unplanned: number; accounts: KnownAccount[]; action: Action;
 }) {
   const [state, formAction, pending] = useActionState(action, init);
 
   return (
     <form action={formAction} data-confirm="skip" className="mt-3 space-y-2 rounded border border-line p-2">
       <input type="hidden" name="visit_id" value={visitId} />
-      <input type="hidden" name="settlement_id" value={settlementId} />
       <div className="text-xs font-medium text-ink-2">Add a split · {ngn(unplanned)} still unallocated</div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label className="text-xs font-medium">

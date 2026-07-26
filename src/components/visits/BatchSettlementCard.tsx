@@ -246,8 +246,8 @@ export async function BatchSettlementCard({
         )}
 
         {/* Manager's payout plan: exact amount per account for the accountant. */}
-        {settlementId && status !== "paid" && (
-          <PayoutSplitPlan visitId={visitId} settlementId={settlementId} net={net} viewerRole={viewerRole} />
+        {net > 0 && status !== "paid" && (
+          <PayoutSplitPlan visitId={visitId} net={net} viewerRole={viewerRole} />
         )}
 
         {/* Payments ledger — part or full; cash usually by the manager. */}

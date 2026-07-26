@@ -159,21 +159,26 @@ export async function addPayoutSplit(_prev: ActionResult, formData: FormData): P
   const me = await getProfile();
   if (!me || !["manager", "owner"].includes(me.role)) return fail("Only the manager or owner can plan the split.");
   const visitId = String(formData.get("visit_id") ?? "");
-  const settlementId = String(formData.get("settlement_id") ?? "");
   const amount = Number(formData.get("amount"));
   const note = String(formData.get("note") ?? "").trim() || null;
-  if (!settlementId) return fail("Missing settlement.");
+  if (!visitId) return fail("Missing visit.");
   if (!(amount > 0)) return fail("Amount must be greater than zero.");
   const acct = accountTrioFromForm(formData);
   if (!acct.ok) return fail(acct.error);
   if (!acct.value.account_name) return fail("Enter the account to pay this portion into.");
 
   const supabase = await createClient();
-  const { data: st } = await supabase.from("batch_settlements").select("site_id").eq("id", settlementId).maybeSingle();
-  if (!st) return fail("Couldn't load this settlement.");
+  // The plan hangs off the visit, so the manager can set it while pricing —
+  // before the owner approves and a settlement exists.
+  const [{ data: v }, { data: st }] = await Promise.all([
+    supabase.from("visits").select("site_id").eq("id", visitId).maybeSingle(),
+    supabase.from("batch_settlements").select("id").eq("visit_id", visitId).maybeSingle(),
+  ]);
+  if (!v) return fail("Couldn't load this visit.");
 
   const { error } = await supabase.from("settlement_payout_splits").insert({
-    settlement_id: settlementId, site_id: st.site_id as string, amount, note,
+    visit_id: visitId, settlement_id: (st?.id as string | undefined) ?? null,
+    site_id: v.site_id as string, amount, note,
     account_name: acct.value.account_name,
     account_number: acct.value.account_number!,
     bank_name: acct.value.bank_name!,
