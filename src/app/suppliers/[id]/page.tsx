@@ -10,6 +10,7 @@ import { DeleteSupplierButton } from "@/components/suppliers/DeleteSupplierButto
 import { OpeningBalanceForm } from "@/components/suppliers/OpeningBalanceForm";
 import { DebtRepaymentForm } from "@/components/suppliers/DebtRepaymentForm";
 import { OverpaymentForm } from "@/components/suppliers/OverpaymentForm";
+import { MergeSupplierTool } from "@/components/suppliers/MergeSupplierTool";
 import { switchSupplierAccount } from "@/app/suppliers/actions";
 import { SupplierStatement } from "@/components/suppliers/SupplierStatement";
 import { formatTimestamp } from "@/lib/visits/format";
@@ -253,6 +254,15 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
           </Card>
 
         </>
+      )}
+
+      {(isOwner || me.is_general_manager) && (
+        <Card>
+          <CardHeader><h2 className="text-sm font-semibold">Merge a duplicate into this supplier</h2></CardHeader>
+          <CardContent>
+            <MergeSupplierTool supplierId={s.id as string} supplierName={s.name as string} />
+          </CardContent>
+        </Card>
       )}
 
       {canEdit && (

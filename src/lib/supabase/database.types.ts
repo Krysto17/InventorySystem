@@ -2182,6 +2182,8 @@ export type Database = {
       remove_line: { Args: { p_line_id: string }; Returns: undefined }
       delete_batch: { Args: { p_visit_id: string }; Returns: undefined }
       delete_supplier: { Args: { p_supplier_id: string }; Returns: undefined }
+      merge_suppliers: { Args: { p_keep: string; p_duplicate: string }; Returns: undefined }
+      find_similar_suppliers: { Args: { p_name?: string; p_account_number?: string; p_exclude?: string }; Returns: { id: string; name: string; supplier_code: string | null; account_name: string | null; account_number: string | null; bank_name: string | null; similarity: number; same_account: boolean }[] }
       reopen_processing_fee: { Args: { p_visit_id: string }; Returns: undefined }
       reopen_receiving: { Args: { p_visit_id: string }; Returns: undefined }
       record_price_correction: { Args: { p_visit_id: string; p_direction: string; p_amount: number; p_reason?: string }; Returns: string }

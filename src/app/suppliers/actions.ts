@@ -130,6 +130,26 @@ export async function recordOverpayment(_prev: SupplierEditState, formData: Form
   return { ok: "Overpayment recorded as supplier debt." };
 }
 
+// Fold a duplicate supplier into this one. The RPC moves every reference,
+// preserves the duplicate's name as history, and removes it — owner/GM only.
+export async function mergeSupplier(_prev: SupplierEditState, formData: FormData): Promise<SupplierEditState> {
+  const me = await getProfile();
+  if (!me || !(me.role === "owner" || me.is_general_manager)) {
+    return { error: "Only the owner or general manager can merge suppliers." };
+  }
+  const keepId = String(formData.get("keep_id") ?? "");
+  const duplicateId = String(formData.get("duplicate_id") ?? "");
+  if (!keepId || !duplicateId) return { error: "Pick the duplicate to merge." };
+  if (keepId === duplicateId) return { error: "That's the same supplier." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("merge_suppliers", { p_keep: keepId, p_duplicate: duplicateId });
+  if (error) return { error: error.message.replace(/^.*?:\s*/, "") };
+  revalidatePath(`/suppliers/${keepId}`);
+  revalidatePath("/suppliers");
+  return { ok: "Merged — all records now belong to this supplier." };
+}
+
 // Manager or owner deletes a supplier that has no records (no visits, advances,
 // stock lots, gate passes, …). The delete_supplier RPC re-checks the role and
 // refuses when anything references the supplier.

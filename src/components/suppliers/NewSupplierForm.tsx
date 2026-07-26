@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { createSupplier, type SupplierEditState } from "@/app/suppliers/actions";
+import { DuplicateWarning } from "@/components/suppliers/DuplicateWarning";
 
 const init: SupplierEditState = {};
 
@@ -9,6 +10,8 @@ const init: SupplierEditState = {};
 // stays out of the way of the searchable directory.
 export function NewSupplierForm() {
   const [state, action, pending] = useActionState(createSupplier, init);
+  // Live duplicate check as the name is typed (advisory, never blocks).
+  const [name, setName] = useState("");
 
   return (
     <details className="rounded border border-line">
@@ -25,10 +28,13 @@ export function NewSupplierForm() {
           <input
             name="name"
             required
-            placeholder="e.g. Ahmed Musa"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Ahmed Musa (full name, not just a title)"
             className="mt-1 block w-full rounded border px-2 py-1 text-sm"
           />
         </label>
+        <DuplicateWarning name={name} />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="block text-xs font-medium">
             Phone <span className="font-normal text-gray-400">(optional)</span>
