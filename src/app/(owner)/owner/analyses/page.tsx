@@ -24,7 +24,7 @@ export default async function OwnerAnalysesPage() {
       </header>
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">All analyses</h2></CardHeader>
-        <CardContent><AllAnalysesTable rows={rows} /></CardContent>
+        <CardContent><AllAnalysesTable rows={rows} isOwner /></CardContent>
       </Card>
     </main>
   );

@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
-import { setLinePrice } from "@/app/visits/[id]/batch-actions";
+import { setLinePrice, setPriceAgreed } from "@/app/visits/[id]/batch-actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { dayLabel, groupByDay } from "@/lib/analyses/group-by-day";
 
@@ -16,6 +16,7 @@ export type AnalysisRow = {
   result: string | null;
   qcWeight: number | null;
   unitPrice: number | null;
+  priceAgreed: boolean;
   state: string;
   canPrice: boolean;
   settlementStatus: string; // 'settled' | 'unsettled'
@@ -53,7 +54,7 @@ function useSorter(rows: AnalysisRow[], sort: SortKey, asc: boolean) {
 
 // One sortable table; the "In pricing" table shows an inline price-setter, the
 // "Settled & closed" table is read-only.
-function Table({ rows, mode }: { rows: AnalysisRow[]; mode: "pricing" | "closed" }) {
+function Table({ rows, mode, isOwner }: { rows: AnalysisRow[]; mode: "pricing" | "closed"; isOwner: boolean }) {
   const [sort, setSort] = useState<SortKey>("date");
   const [asc, setAsc] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -112,14 +113,33 @@ function Table({ rows, mode }: { rows: AnalysisRow[]; mode: "pricing" | "closed"
                     ? <span className="rounded bg-reject px-1.5 py-0.5 text-[10px] font-medium text-white">Withdrawn</span>
                     : <span className="rounded bg-approve-soft px-1.5 py-0.5 text-[10px] font-medium text-approve">Settled</span>
                 ) : r.canPrice ? (
-                  <form action={setLinePrice} className="flex items-center gap-1">
-                    <input type="hidden" name="visit_id" value={r.visitId} />
-                    <input type="hidden" name="visit_material_id" value={r.lineId} />
-                    <input type="number" name="unit_price" step="0.01" min="0" defaultValue={r.unitPrice ?? ""} className="w-24 rounded border px-2 py-1 text-sm" />
-                    <SubmitButton pendingText="…" className="rounded border px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50">Set</SubmitButton>
-                  </form>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <form action={setLinePrice} className="flex items-center gap-1">
+                      <input type="hidden" name="visit_id" value={r.visitId} />
+                      <input type="hidden" name="visit_material_id" value={r.lineId} />
+                      <input type="number" name="unit_price" step="0.01" min="0" defaultValue={r.unitPrice ?? ""} className="w-24 rounded border px-2 py-1 text-sm" />
+                      <SubmitButton pendingText="…" className="rounded border px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50">Set</SubmitButton>
+                    </form>
+                    {/* The owner's explicit "this price is agreed" signal — the
+                        manager forwards for payment on it. Price stays editable. */}
+                    {isOwner && r.unitPrice != null && (
+                      <form action={setPriceAgreed} data-confirm="skip">
+                        <input type="hidden" name="visit_id" value={r.visitId} />
+                        <input type="hidden" name="visit_material_id" value={r.lineId} />
+                        <input type="hidden" name="agreed" value={r.priceAgreed ? "0" : "1"} />
+                        <SubmitButton pendingText="…" className={`rounded px-2 py-1 text-xs disabled:opacity-50 ${r.priceAgreed ? "bg-approve-soft text-approve" : "border border-line hover:bg-zinc-50"}`}>
+                          {r.priceAgreed ? "✓ Agreed" : "Agree price"}
+                        </SubmitButton>
+                      </form>
+                    )}
+                    {!isOwner && r.priceAgreed && (
+                      <span className="rounded bg-approve-soft px-1.5 py-0.5 text-[10px] font-medium text-approve">✓ Price agreed</span>
+                    )}
+                  </div>
                 ) : (
-                  <span className="text-xs text-gray-400">not in pricing</span>
+                  <span className="text-xs text-gray-400">
+                    {r.priceAgreed ? <span className="rounded bg-approve-soft px-1.5 py-0.5 text-[10px] font-medium text-approve">✓ Price agreed</span> : "not in pricing"}
+                  </span>
                 )}
               </td>
             </tr>
@@ -136,7 +156,7 @@ function Table({ rows, mode }: { rows: AnalysisRow[]; mode: "pricing" | "closed"
 // Cross-site XRF analyses: searchable by supplier or material. Analyses still in
 // pricing are the primary table; settled/withdrawn ones live in a separate table
 // so the working view stays clean.
-export function AllAnalysesTable({ rows }: { rows: AnalysisRow[] }) {
+export function AllAnalysesTable({ rows, isOwner = false }: { rows: AnalysisRow[]; isOwner?: boolean }) {
   const [q, setQ] = useState("");
 
   const { inPricing, closed } = useMemo(() => {
@@ -162,11 +182,17 @@ export function AllAnalysesTable({ rows }: { rows: AnalysisRow[] }) {
       />
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-2">In pricing ({inPricing.length})</h3>
-        <Table rows={inPricing} mode="pricing" />
+        <Table isOwner={isOwner} rows={inPricing} mode="pricing" />
       </section>
       <section>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-2">Settled &amp; closed ({closed.length})</h3>
-        <Table rows={closed} mode="closed" />
+        {/* Settled analyses stay folded away so the working view is just what
+            still needs pricing — open it when you want the history. */}
+        <details>
+          <summary className="mb-2 cursor-pointer text-xs font-semibold uppercase tracking-wide text-ink-2 hover:underline">
+            Settled &amp; closed ({closed.length})
+          </summary>
+          <Table isOwner={isOwner} rows={closed} mode="closed" />
+        </details>
       </section>
     </div>
   );

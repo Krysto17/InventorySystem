@@ -1953,6 +1953,9 @@ export type Database = {
           magnetic_analysis: string | null
           material_type_id: string
           price_finalized: boolean
+          price_agreed: boolean
+          price_agreed_at: string | null
+          price_agreed_by: string | null
           priced_by: string | null
           purchase_amount: number | null
           receiving_comment: string | null
@@ -1973,6 +1976,9 @@ export type Database = {
           magnetic_analysis?: string | null
           material_type_id: string
           price_finalized?: boolean
+          price_agreed?: boolean
+          price_agreed_at?: string | null
+          price_agreed_by?: string | null
           priced_by?: string | null
           purchase_amount?: number | null
           receiving_comment?: string | null
@@ -1993,6 +1999,9 @@ export type Database = {
           magnetic_analysis?: string | null
           material_type_id?: string
           price_finalized?: boolean
+          price_agreed?: boolean
+          price_agreed_at?: string | null
+          price_agreed_by?: string | null
           priced_by?: string | null
           purchase_amount?: number | null
           receiving_comment?: string | null

@@ -11,6 +11,7 @@ export type RawAnalysisRow = {
   result: string | null;
   qcWeight: number | null;
   unitPrice: number | null;
+  priceAgreed: boolean;
   state: string;
   settlementStatus: string; // 'settled' | 'unsettled' (withdrawn)
 };
@@ -27,7 +28,7 @@ export async function fetchAllAnalyses(): Promise<RawAnalysisRow[]> {
     .select(`
       id, result, weight_kg, created_at, updated_at,
       visit_material:visit_materials!inner(
-        id, unit_price, settlement_status,
+        id, unit_price, settlement_status, price_agreed,
         material_type:material_types(name),
         visit:visits!inner(id, state, created_at, supplier:suppliers(name), site:sites(name))
       )
@@ -36,7 +37,7 @@ export async function fetchAllAnalyses(): Promise<RawAnalysisRow[]> {
 
   return (data ?? []).map((x) => {
     const vm = g1((x as { visit_material: unknown }).visit_material) as {
-      id?: string; unit_price?: number | null; settlement_status?: string; material_type?: unknown; visit?: unknown;
+      id?: string; unit_price?: number | null; settlement_status?: string; price_agreed?: boolean; material_type?: unknown; visit?: unknown;
     } | null;
     const visit = g1(vm?.visit) as {
       id?: string; state?: string; created_at?: string; supplier?: unknown; site?: unknown;
@@ -51,6 +52,7 @@ export async function fetchAllAnalyses(): Promise<RawAnalysisRow[]> {
       result: (x.result as string | null) ?? null,
       qcWeight: x.weight_kg != null ? Number(x.weight_kg) : null,
       unitPrice: vm?.unit_price != null ? Number(vm.unit_price) : null,
+      priceAgreed: !!vm?.price_agreed,
       state: (visit?.state as string) ?? "",
       settlementStatus: (vm?.settlement_status as string) ?? "settled",
     };

@@ -261,6 +261,24 @@ export async function finalizeLinePrice(formData: FormData): Promise<void> {
   if (visitId) revalidatePath(`/visits/${visitId}`);
 }
 
+// Owner marks a line's price as AGREED — the signal the manager waits for
+// before forwarding the details for payment. The price stays editable; the DB
+// enforces owner-only and stamps who/when.
+export async function setPriceAgreed(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || me.role !== "owner") return;
+  const visitId = String(formData.get("visit_id") ?? "");
+  const lineId = String(formData.get("visit_material_id") ?? "");
+  const agreed = String(formData.get("agreed") ?? "") === "1";
+  if (!lineId) return;
+  const supabase = await createClient();
+  await supabase.from("visit_materials").update({ price_agreed: agreed }).eq("id", lineId);
+  if (visitId) revalidatePath(`/visits/${visitId}`);
+  revalidatePath("/owner/analyses");
+  revalidatePath("/manager/analyses");
+  revalidatePath("/manager");
+}
+
 // Manager / owner assigns the optional per-line price.
 export async function setLinePrice(formData: FormData): Promise<void> {
   const me = await getProfile();
