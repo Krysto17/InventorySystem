@@ -44,7 +44,7 @@ export default async function OwnerDashboard({
     { data: machineUsage },
     { data: consumables },
     { data: pendingBulkSales },
-    { data: salePrices },
+    { data: lotCosts },
     { data: recentMovements },
   ] = await Promise.all([
     supabase.from("sites").select("id, name").order("name"),
@@ -102,11 +102,12 @@ export default async function OwnerDashboard({
       .eq("approval_status", "pending")
       .order("created_at", { ascending: true }),
 
-    // Approved sale prices → average unit price per material (for stock valuation)
+    // Stock is valued at what it COST to buy: the weighted-average purchase
+    // price per material, taken from the lots still in stock.
     supabase
-      .from("bulk_sales")
-      .select("material_type_id, unit_price")
-      .eq("approval_status", "approved"),
+      .from("stock_lots")
+      .select("material_type_id, weight_kg, cost_price_per_kg")
+      .eq("status", "available"),
 
     // Recent stock activity feed
     (() => {
@@ -139,17 +140,21 @@ export default async function OwnerDashboard({
   const totalDecided = agreedCount + rejectedCount;
   const rejectionRate = totalDecided > 0 ? (rejectedCount / totalDecided) * 100 : null;
 
-  // ── Price map: avg approved unit_price per material_type_id ────────────────
-  const priceAgg = new Map<string, { sum: number; n: number }>();
-  for (const s of salePrices ?? []) {
-    const id = s.material_type_id as string;
-    const cur = priceAgg.get(id) ?? { sum: 0, n: 0 };
-    cur.sum += Number(s.unit_price); cur.n += 1;
-    priceAgg.set(id, cur);
+  // ── Cost map: weighted-average PURCHASE cost per material_type_id ─────────
+  // Weighted by kg (not a plain average of prices), so a big cheap lot and a
+  // small dear one value correctly.
+  const costAgg = new Map<string, { cost: number; kg: number }>();
+  for (const l of lotCosts ?? []) {
+    const id = l.material_type_id as string;
+    const kg = Number(l.weight_kg ?? 0);
+    const cur = costAgg.get(id) ?? { cost: 0, kg: 0 };
+    cur.cost += kg * Number(l.cost_price_per_kg ?? 0);
+    cur.kg += kg;
+    costAgg.set(id, cur);
   }
   const avgPrice = (materialTypeId: string) => {
-    const a = priceAgg.get(materialTypeId);
-    return a && a.n > 0 ? a.sum / a.n : 0;
+    const a = costAgg.get(materialTypeId);
+    return a && a.kg > 0 ? a.cost / a.kg : 0;
   };
 
   // ── Stock balance per (site, material, grade) ─────────────────────────────
@@ -230,7 +235,7 @@ export default async function OwnerDashboard({
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard label="Total stock" value={formatWeight(totalStockKg)} icon={<Boxes size={18} />} sub={`${stockRows.length} buckets`} />
-        <KpiCard label="Est. stock value" value={formatNaira(totalStockValue)} icon={<Wallet size={18} />} sub="from approved sale prices" />
+        <KpiCard label="Stock value (at cost)" value={formatNaira(totalStockValue)} icon={<Wallet size={18} />} sub="what it was bought for" />
         <KpiCard label="Visits (period)" value={totalVisits} icon={<ScrollText size={18} />} />
         <KpiCard
           label="Rejection rate"
