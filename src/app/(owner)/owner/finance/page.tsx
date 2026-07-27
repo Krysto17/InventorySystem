@@ -5,6 +5,10 @@ import { SortableFinanceTable, type FinanceItem } from "@/components/finance/Sor
 
 import { ADVANCE_PAID_STATUS } from "@/lib/finance/figures";
 import { one as g1 } from "@/lib/db/relation";
+
+// Financial figures must never be served from cache — a stale balance reads as
+// "the payment did not register". Always render fresh.
+export const dynamic = "force-dynamic";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 function isoWeekKey(d: Date): string {

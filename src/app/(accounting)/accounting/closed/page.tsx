@@ -6,6 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { formatTimestamp } from "@/lib/visits/format";
 import { one as g1 } from "@/lib/db/relation";
 
+
+// Financial figures must never be served from cache — a stale balance reads as
+// "the payment did not register". Always render fresh.
+export const dynamic = "force-dynamic";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 // Every supplier settlement this accountant has closed (marked paid). The

@@ -26,6 +26,10 @@ import { one as get1 } from "@/lib/db/relation";
 import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
 
+
+// Financial figures must never be served from cache — a stale balance reads as
+// "the payment did not register". Always render fresh.
+export const dynamic = "force-dynamic";
 export default async function VisitDetailPage({
   params,
 }: {

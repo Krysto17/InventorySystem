@@ -10,6 +10,10 @@ import { HoldButton } from "@/components/payables/HoldButton";
 import { PayablesReview } from "@/components/payables/PayablesReview";
 
 import { one as g1 } from "@/lib/db/relation";
+
+// Financial figures must never be served from cache — a stale balance reads as
+// "the payment did not register". Always render fresh.
+export const dynamic = "force-dynamic";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 // Accountant's queue of owner-approved items awaiting payment. Only the

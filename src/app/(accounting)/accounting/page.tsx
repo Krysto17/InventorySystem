@@ -5,6 +5,10 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
 
+
+// Financial figures must never be served from cache — a stale balance reads as
+// "the payment did not register". Always render fresh.
+export const dynamic = "force-dynamic";
 export default async function AccountingHomePage() {
   const supabase = await createClient();
 

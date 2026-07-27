@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { PayablesReview } from "@/components/payables/PayablesReview";
 
+
+// Financial figures must never be served from cache — a stale balance reads as
+// "the payment did not register". Always render fresh.
+export const dynamic = "force-dynamic";
 // Manager's payment console (own site; the general manager sees all sites via
 // RLS). Hold or send back any payable awaiting payment, see what's on hold, and
 // pick up items returned for correction. Settlements sent back land in the

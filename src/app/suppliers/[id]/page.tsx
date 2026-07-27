@@ -17,6 +17,10 @@ import { formatTimestamp } from "@/lib/visits/format";
 import { STATE_LABELS, type VisitState } from "@/lib/visits/state-machine";
 import { one as g1 } from "@/lib/db/relation";
 
+
+// Financial figures must never be served from cache — a stale balance reads as
+// "the payment did not register". Always render fresh.
+export const dynamic = "force-dynamic";
 type FormerAccount = { account_name?: string | null; account_number?: string | null; bank_name?: string | null; replaced_at?: string };
 const ngn = (n: number) => `₦${n.toLocaleString()}`;
 

@@ -11,6 +11,10 @@ import { AdvanceEditForm } from "@/components/advances/AdvanceEditForm";
 import { fetchKnownAccounts } from "@/lib/accounts/known-accounts";
 
 import { one as g1 } from "@/lib/db/relation";
+
+// Financial figures must never be served from cache — a stale balance reads as
+// "the payment did not register". Always render fresh.
+export const dynamic = "force-dynamic";
 const ngn = (n: number) => `₦${n.toLocaleString()}`;
 
 export default async function ManagerAdvancesPage() {
