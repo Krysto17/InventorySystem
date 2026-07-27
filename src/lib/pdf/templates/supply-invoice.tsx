@@ -29,10 +29,12 @@ function A4Invoice({ data, docId }: { data: PdfSupplyInvoiceData; docId: string 
           </View>
           {data.items.map((it, i) => (
             <View style={shared.tableRow} key={i}>
-              <Text style={{ flex: 2 }}>{it.material_name ?? "—"}</Text>
+              <Text style={{ flex: 2 }}>
+                {it.material_name ?? "—"}{it.settled ? "" : "  (UNSETTLED — withdrawn)"}
+              </Text>
               <Text style={{ flex: 1, textAlign: "right" }}>{formatKg(it.weight_kg)}</Text>
               <Text style={{ flex: 1, textAlign: "right" }}>{it.unit_price != null ? formatNgn(it.unit_price) : "—"}</Text>
-              <Text style={{ flex: 1.3, textAlign: "right" }}>{formatNgn(it.amount)}</Text>
+              <Text style={{ flex: 1.3, textAlign: "right" }}>{it.settled ? formatNgn(it.amount) : "NOT PAID"}</Text>
             </View>
           ))}
         </View>
@@ -99,9 +101,12 @@ function ThermalInvoice({ data, docId }: { data: PdfSupplyInvoiceData; docId: st
         <View key={i} wrap={false}>
           <View style={t.row}>
             <Text style={t.itemName}>{it.material_name ?? "—"}</Text>
-            <Text style={t.val}>{formatNgn(it.amount)}</Text>
+            <Text style={t.val}>{it.settled ? formatNgn(it.amount) : "NOT PAID"}</Text>
           </View>
-          <Text style={t.itemSub}>{formatKg(it.weight_kg)}{it.unit_price != null ? ` @ ${formatNgn(it.unit_price)}/kg` : ""}</Text>
+          <Text style={t.itemSub}>
+            {formatKg(it.weight_kg)}{it.unit_price != null ? ` @ ${formatNgn(it.unit_price)}/kg` : ""}
+            {it.settled ? "" : " · UNSETTLED (withdrawn)"}
+          </Text>
         </View>
       ))}
 

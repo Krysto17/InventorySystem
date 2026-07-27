@@ -30,7 +30,13 @@ export async function LiveWorkflow({ limit = 100 }: { limit?: number }) {
       ])
     : [{ data: [] as { visit_id: string }[] }, { data: [] as { visit_id: string }[] }];
   const priceApprovedSet = new Set((finalized ?? []).map((r) => r.visit_id as string));
-  const unsettledSet = new Set((unsettled ?? []).map((r) => r.visit_id as string));
+  // Count the withdrawn/unsettled lines per visit so the pipeline can say how
+  // many of a batch's materials were pulled out, not just that some were.
+  const unsettledCount = new Map<string, number>();
+  for (const r of unsettled ?? []) {
+    const id = r.visit_id as string;
+    unsettledCount.set(id, (unsettledCount.get(id) ?? 0) + 1);
+  }
 
   const rows: WorkflowRow[] = (visits ?? []).map((v) => ({
     id: v.id as string,
@@ -40,7 +46,8 @@ export async function LiveWorkflow({ limit = 100 }: { limit?: number }) {
     state: v.state as VisitState,
     entryPath: v.entry_path as "unprocessed" | "processed",
     priceApproved: priceApprovedSet.has(v.id as string),
-    unsettled: unsettledSet.has(v.id as string),
+    unsettled: (unsettledCount.get(v.id as string) ?? 0) > 0,
+    unsettledCount: unsettledCount.get(v.id as string) ?? 0,
     date: v.created_at as string,
   }));
 

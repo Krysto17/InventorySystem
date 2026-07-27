@@ -17,6 +17,7 @@ export type WorkflowRow = {
   entryPath: "unprocessed" | "processed";
   priceApproved: boolean;
   unsettled: boolean;
+  unsettledCount: number;
   date: string;
 };
 
@@ -45,7 +46,7 @@ function RowLine({ v, withChain = true }: { v: WorkflowRow; withChain?: boolean 
             <span className="mono text-[11px] text-ink-2">{new Date(v.date).toLocaleString()}</span>
           </div>
           <div className="flex items-center gap-2">
-            {v.unsettled && <Badge variant="red">Unsettled</Badge>}
+            {v.unsettled && <Badge variant="red">{v.unsettledCount} unsettled</Badge>}
             <Badge variant={stateVariant(v.state)}>{STATE_LABELS[v.state] ?? v.state}</Badge>
           </div>
         </div>
