@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, ok, fromWrite, type ActionResult } from "@/lib/actions/result";
+import { revalidateSupplierFinance } from "@/lib/finance/revalidate";
 
 // Hold / release / send-back apply uniformly to the three payables. Each kind
 // maps to its own SECURITY DEFINER RPC (authorization + site enforced in the DB).
@@ -21,10 +22,9 @@ const SEND_BACK: Record<Kind, "send_settlement_back" | "send_advance_back" | "se
 const REVIEW_ROLES = ["owner", "manager", "accounting"];
 
 function revalidateHubs() {
-  revalidatePath("/owner/payments");
-  revalidatePath("/manager/payments");
-  revalidatePath("/accounting/payouts");
-  revalidatePath("/owner/approvals");
+  // A paid advance becomes supplier debt, so every balance surface must refresh
+  // too — not just the payout hubs.
+  revalidateSupplierFinance();
 }
 
 function kindOf(formData: FormData): Kind | null {

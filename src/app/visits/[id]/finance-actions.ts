@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, ok, type ActionResult } from "@/lib/actions/result";
 import { accountTrioFromForm } from "@/lib/validation/account";
+import { revalidateSupplierFinance } from "@/lib/finance/revalidate";
 
 // Owner / general manager records a price correction on a paid visit (the
 // supplier's material turned out over- or under-priced). The RPC enforces the
@@ -125,10 +126,11 @@ export async function closeDressingOnly(_prev: ActionResult, formData: FormData)
   const supabase = await createClient();
   const { error } = await supabase.rpc("close_dressing_only", { p_visit_id: visitId, p_carry: carry });
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
-  revalidatePath(`/visits/${visitId}`);
   revalidatePath("/processing");
   revalidatePath("/receiving");
   revalidatePath("/manager");
+  // A carried light bill becomes processing debt on the customer's account.
+  revalidateSupplierFinance();
   return ok();
 }
 
@@ -306,7 +308,7 @@ export async function recordDeduction(formData: FormData): Promise<void> {
     kind,
     recorded_by: me.id,
   });
-  if (visitId) revalidatePath(`/visits/${visitId}`);
+  revalidateSupplierFinance();
 }
 
 // Manager/accounting/owner removes an advance deduction applied by mistake. The
@@ -325,7 +327,7 @@ export async function removeDeduction(formData: FormData): Promise<void> {
     if (st?.status === "paid") return; // already disbursed — locked
   }
   await supabase.from("advance_deductions").delete().eq("id", deductionId);
-  if (visitId) revalidatePath(`/visits/${visitId}`);
+  revalidateSupplierFinance();
 }
 
 // Manager/owner removes a utility deduction (processing fee / other charge)

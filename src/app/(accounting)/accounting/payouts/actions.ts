@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, type ActionResult } from "@/lib/actions/result";
+import { revalidateSupplierFinance } from "@/lib/finance/revalidate";
 
 // Only the accountant executes payment. The DB triggers enforce the
 // approved → paid transition + role; these surface failures (incl. an
@@ -16,7 +17,7 @@ export async function markAdvancePaid(_prev: ActionResult, formData: FormData): 
   const supabase = await createClient();
   const res = await supabase.from("advances").update({ approval_status: "paid" }).eq("id", id).select("id");
   const result = fromWrite(res, "Couldn't mark this advance paid — check you have access to its site.");
-  if (result.ok) revalidatePath("/accounting/payouts");
+  if (result.ok) revalidateSupplierFinance();
   return result;
 }
 
@@ -28,7 +29,7 @@ export async function markConsumablePaid(_prev: ActionResult, formData: FormData
   const supabase = await createClient();
   const res = await supabase.from("consumables").update({ approval_status: "paid" }).eq("id", id).select("id");
   const result = fromWrite(res, "Couldn't mark this expense paid — check you have access to its site.");
-  if (result.ok) revalidatePath("/accounting/payouts");
+  if (result.ok) revalidateSupplierFinance();
   return result;
 }
 
@@ -50,7 +51,7 @@ export async function markSettlementPaid(_prev: ActionResult, formData: FormData
     ? await supabase.rpc("record_settlement_payment", { p_settlement_id: id, p_amount: remaining, p_method: "transfer" })
     : await supabase.rpc("close_settlement", { p_id: id });
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
-  revalidatePath("/accounting/payouts");
+  revalidateSupplierFinance();
   return { ok: true };
 }
 
@@ -64,6 +65,6 @@ export async function markCorrectionPaid(_prev: ActionResult, formData: FormData
   const supabase = await createClient();
   const { error } = await supabase.rpc("mark_price_correction_paid", { p_id: id });
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
-  revalidatePath("/accounting/payouts");
+  revalidateSupplierFinance();
   return { ok: true };
 }

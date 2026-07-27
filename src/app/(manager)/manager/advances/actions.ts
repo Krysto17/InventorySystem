@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, ok, type ActionResult } from "@/lib/actions/result";
 import { accountTrioFromForm } from "@/lib/validation/account";
+import { revalidateSupplierFinance } from "@/lib/finance/revalidate";
 
 // Manager records an advance for a supplier (marked to that supplier). Created
 // pending; the owner approves it before it counts toward the supplier's debt.
@@ -32,7 +33,7 @@ export async function recordAdvance(_prev: ActionResult, formData: FormData): Pr
     comment, ...acct.value, recorded_by: me.id,
   }).select("id");
   if (res.error) return fail(res.error.message.replace(/^.*?:\s*/, ""));
-  revalidatePath("/manager/advances");
+  revalidateSupplierFinance();
   return ok();
 }
 
@@ -57,7 +58,7 @@ export async function editAdvance(_prev: ActionResult, formData: FormData): Prom
     .eq("id", id).neq("approval_status", "paid").select("id");
   if (res.error) return fail(res.error.message.replace(/^.*?:\s*/, ""));
   if (!res.data || res.data.length === 0) return fail("Couldn't edit this advance — it may be paid or on another site.");
-  revalidatePath("/manager/advances");
+  revalidateSupplierFinance();
   return ok();
 }
 
@@ -70,7 +71,7 @@ export async function deleteAdvance(formData: FormData): Promise<void> {
   if (!id) return;
   const supabase = await createClient();
   await supabase.from("advances").delete().eq("id", id);
-  revalidatePath("/manager/advances");
+  revalidateSupplierFinance();
 }
 
 // Owner approves / rejects an advance (so it counts toward — or is removed from
@@ -83,5 +84,5 @@ export async function setAdvanceApproval(formData: FormData): Promise<void> {
   if (!id || !["approved", "rejected"].includes(decision)) return;
   const supabase = await createClient();
   await supabase.from("advances").update({ approval_status: decision }).eq("id", id);
-  revalidatePath("/manager/advances");
+  revalidateSupplierFinance();
 }

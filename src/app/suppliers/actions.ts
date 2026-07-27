@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { parseAccountTrio } from "@/lib/validation/account";
+import { revalidateSupplierFinance } from "@/lib/finance/revalidate";
 
 export type SupplierEditState = { error?: string; ok?: string };
 
@@ -87,7 +88,7 @@ export async function recordDebtRepayment(_prev: SupplierEditState, formData: Fo
     ...(note ? { p_note: note } : {}),
   });
   if (error) return { error: error.message.replace(/^.*?:\s*/, "") };
-  revalidatePath(`/suppliers/${id}`);
+  revalidateSupplierFinance();
   return { ok: kind === "processing" ? "Repayment recorded — processing debt reduced." : "Repayment recorded — advance debt reduced." };
 }
 
@@ -126,7 +127,7 @@ export async function recordOverpayment(_prev: SupplierEditState, formData: Form
     paid_by: me.id, paid_at: new Date().toISOString(), recorded_by: me.id,
   });
   if (error) return { error: error.message.replace(/^.*?:\s*/, "") };
-  revalidatePath(`/suppliers/${id}`);
+  revalidateSupplierFinance();
   return { ok: "Overpayment recorded as supplier debt." };
 }
 
@@ -145,6 +146,8 @@ export async function mergeSupplier(_prev: SupplierEditState, formData: FormData
   const supabase = await createClient();
   const { error } = await supabase.rpc("merge_suppliers", { p_keep: keepId, p_duplicate: duplicateId });
   if (error) return { error: error.message.replace(/^.*?:\s*/, "") };
+  // Balances move with the records.
+  revalidateSupplierFinance();
   revalidatePath(`/suppliers/${keepId}`);
   revalidatePath("/suppliers");
   return { ok: "Merged — all records now belong to this supplier." };
