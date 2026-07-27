@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 //   Processing/light-bill recoveries are a SEPARATE balance and never touch it.
 //
 //   PROCESSING FEES (light bills)
+//     (a write-off reduces the debt but is NOT collected — excluded below)
 //     collected = netted off a settlement that was actually PAID
 //               + paid in cash at a dressing-only close (bill not carried)
 //               + a carried bill later recovered (kind 'processing')
@@ -52,7 +53,10 @@ export async function fetchFinanceFigures(): Promise<FinanceFigures> {
     supabase.from("batch_settlements").select("light_bill_total").eq("status", "paid"),
     supabase.from("utility_charges").select("amount, visit:visits!inner(dressing_only)")
       .eq("kind", "light_bill").eq("carried", false).eq("visits.dressing_only", true),
-    supabase.from("advance_deductions").select("amount").eq("kind", PROCESSING_RECOVERY_KIND),
+    // Write-offs reduce the debt but were never received — exclude them from
+    // collected revenue.
+    supabase.from("advance_deductions").select("amount")
+      .eq("kind", PROCESSING_RECOVERY_KIND).eq("is_write_off", false),
     supabase.from("utility_charges").select("amount").eq("kind", "light_bill"),
   ]);
 

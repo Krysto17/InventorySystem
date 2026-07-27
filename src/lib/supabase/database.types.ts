@@ -39,6 +39,7 @@ export type Database = {
           amount: number
           created_at: string
           kind: string
+          is_write_off: boolean
           id: string
           notes: string | null
           recorded_by: string | null
@@ -50,6 +51,7 @@ export type Database = {
           amount: number
           created_at?: string
           kind?: string
+          is_write_off?: boolean
           id?: string
           notes?: string | null
           recorded_by?: string | null
@@ -61,6 +63,7 @@ export type Database = {
           amount?: number
           created_at?: string
           kind?: string
+          is_write_off?: boolean
           id?: string
           notes?: string | null
           recorded_by?: string | null
@@ -2202,6 +2205,7 @@ export type Database = {
       mark_price_correction_paid: { Args: { p_id: string }; Returns: undefined }
       accountant_send_back_to_owner: { Args: { p_visit_id: string; p_reason: string }; Returns: undefined }
       reverse_paid_supply: { Args: { p_visit_id: string; p_reason: string }; Returns: undefined }
+      write_off_processing_debt: { Args: { p_supplier_id: string; p_note?: string }; Returns: number }
       record_debt_repayment: { Args: { p_supplier_id: string; p_amount: number; p_note?: string; p_kind?: string }; Returns: string }
       settlement_totals: { Args: { p_visit_id: string }; Returns: { materials: number; processing_fee: number; other_deductions: number; advances: number; net: number; remaining_debt: number }[] }
       settlement_paid_total: { Args: { p_settlement_id: string }; Returns: number }
