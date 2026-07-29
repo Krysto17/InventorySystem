@@ -102,6 +102,36 @@ export type Database = {
           },
         ]
       }
+      advance_shares: {
+        Row: {
+          id: string
+          advance_id: string
+          supplier_id: string
+          amount: number
+          note: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          advance_id: string
+          supplier_id: string
+          amount: number
+          note?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          advance_id?: string
+          supplier_id?: string
+          amount?: number
+          note?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       advances: {
         Row: {
           amount_naira: number

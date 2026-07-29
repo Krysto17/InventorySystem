@@ -8,6 +8,7 @@ import { formatTimestamp } from "@/lib/visits/format";
 import { setAdvanceApproval, deleteAdvance } from "./actions";
 import { AdvanceForm } from "@/components/advances/AdvanceForm";
 import { AdvanceEditForm } from "@/components/advances/AdvanceEditForm";
+import { AdvanceShares } from "@/components/advances/AdvanceShares";
 import { fetchKnownAccounts } from "@/lib/accounts/known-accounts";
 
 import { one as g1 } from "@/lib/db/relation";
@@ -31,7 +32,8 @@ export default async function ManagerAdvancesPage() {
     .from("advances")
     .select(`
       id, purpose, amount_naira, approval_status, created_at, comment, account_number, account_name, bank_name,
-      supplier:suppliers(name, supplier_code)
+      supplier:suppliers(name, supplier_code),
+      shares:advance_shares(id, amount, note, supplier:suppliers(name))
     `)
     .order("created_at", { ascending: false })
     .limit(40);
@@ -101,6 +103,25 @@ export default async function ManagerAdvancesPage() {
                         </form>
                       )}
                     </div>
+                    {/* One customer may have collected for a group — apportion the debt. */}
+                    <div className="w-full">
+                      <AdvanceShares
+                        advanceId={a.id as string}
+                        amount={Number(a.amount_naira)}
+                        collector={sup?.name ?? "—"}
+                        canEdit={canManage}
+                        suppliers={(suppliers ?? [])
+                          .filter((x) => (x.name as string) !== (sup?.name ?? ""))
+                          .map((x) => ({ id: x.id as string, name: x.name as string, code: (x.supplier_code as string | null) ?? null }))}
+                        shares={(((a as { shares: unknown }).shares ?? []) as Record<string, unknown>[]).map((sh) => ({
+                          id: sh.id as string,
+                          amount: Number(sh.amount),
+                          note: (sh.note as string | null) ?? null,
+                          supplier: g1<{ name: string }>((sh as { supplier: unknown }).supplier)?.name ?? "—",
+                        }))}
+                      />
+                    </div>
+
                     {/* Manager/owner may edit an advance before it is paid. */}
                     {canManage && st !== "paid" && (
                       <div className="w-full">

@@ -86,3 +86,41 @@ export async function setAdvanceApproval(formData: FormData): Promise<void> {
   await supabase.from("advances").update({ approval_status: decision }).eq("id", id);
   revalidateSupplierFinance();
 }
+
+// ─── Sharing one advance across several suppliers ────────────────────────────
+// One customer collects on behalf of a group; each member carries their own
+// share of the DEBT while the collector keeps whatever isn't apportioned.
+
+export async function addAdvanceShare(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const me = await getProfile();
+  if (!me || !["manager", "owner"].includes(me.role)) return fail("Not authorized.");
+  const advanceId = String(formData.get("advance_id") ?? "");
+  const supplierId = String(formData.get("supplier_id") ?? "");
+  const amount = Number(formData.get("amount"));
+  const note = String(formData.get("note") ?? "").trim() || null;
+  if (!advanceId) return fail("Missing advance.");
+  if (!supplierId) return fail("Pick the supplier who owes this share.");
+  if (!(amount > 0)) return fail("Share must be greater than zero.");
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("advance_shares").insert({
+    advance_id: advanceId, supplier_id: supplierId, amount, note, created_by: me.id,
+  });
+  if (error) {
+    // 23505 = this supplier already has a share on the advance.
+    if (error.code === "23505") return fail("That supplier already has a share on this advance.");
+    return fail(error.message.replace(/^.*?:\s*/, ""));
+  }
+  revalidatePath("/manager/advances");
+  return ok("Share added — their debt balance now carries it.");
+}
+
+export async function removeAdvanceShare(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || !["manager", "owner"].includes(me.role)) return;
+  const id = String(formData.get("share_id") ?? "");
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.from("advance_shares").delete().eq("id", id);
+  revalidatePath("/manager/advances");
+}
