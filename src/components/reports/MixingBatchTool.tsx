@@ -67,7 +67,10 @@ export function MixingBatchTool({ lots }: { lots: Lot[] }) {
         (l) =>
           l.material_name.toLowerCase().includes(q) ||
           (l.supplier ?? "").toLowerCase().includes(q) ||
-          (l.site ?? "").toLowerCase().includes(q),
+          (l.site ?? "").toLowerCase().includes(q) ||
+          // numeric matches: weight in kg, or cost per kg
+          String(l.weight).includes(q) ||
+          (l.cost != null && String(l.cost).includes(q)),
       );
     }
     rows.sort((a, b) => {
@@ -117,8 +120,8 @@ export function MixingBatchTool({ lots }: { lots: Lot[] }) {
             <option value="weight_desc">Weight ↓</option>
           </select>
         </label>
-        <label className="flex-1 text-xs font-medium">Search supplier / site
-          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="name…" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
+        <label className="flex-1 text-xs font-medium">Search name / weight / price
+          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="supplier, material, weight or ₦/kg…" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
         </label>
       </div>
 

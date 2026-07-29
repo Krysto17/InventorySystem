@@ -46,6 +46,20 @@ export default async function AccountingPayoutsPage() {
     : { data: [] as { settlement_id: string; amount: number }[] };
   const paidBy = new Map<string, number>();
   for (const p of paidRows ?? []) paidBy.set(p.settlement_id as string, (paidBy.get(p.settlement_id as string) ?? 0) + Number(p.amount));
+
+  // The manager's payout plan — exactly which account gets what. The accountant
+  // pays against this rather than the supplier's default account.
+  const visitIds = (supplies ?? []).map((s) => s.visit_id as string).filter(Boolean);
+  const { data: splitRows } = visitIds.length
+    ? await supabase.from("settlement_payout_splits")
+        .select("visit_id, amount, account_name, account_number, bank_name, note")
+        .in("visit_id", visitIds).order("created_at", { ascending: true })
+    : { data: [] as Record<string, unknown>[] };
+  const splitsByVisit = new Map<string, Record<string, unknown>[]>();
+  for (const r of splitRows ?? []) {
+    const k = r.visit_id as string;
+    splitsByVisit.set(k, [...(splitsByVisit.get(k) ?? []), r as Record<string, unknown>]);
+  }
   const remainingOf = (s: { id: string; net_balance: number }) => Number(s.net_balance) - (paidBy.get(s.id) ?? 0);
 
   const count = (supplies?.length ?? 0) + (advances?.length ?? 0) + (expenses?.length ?? 0) + (corrections?.length ?? 0);
@@ -81,11 +95,38 @@ export default async function AccountingPayoutsPage() {
                     <span>
                       <Link href={`/visits/${s.visit_id}`} className="font-medium underline">{sup?.name ?? "—"}</Link>
                       <span className="text-ink-2"> · {ngn(remaining)} to pay{partly ? ` (of ${ngn(Number(s.net_balance))})` : ""} · {formatTimestamp(s.created_at as string)}</span>
-                      <span className="block text-xs text-ink-2">
-                        {hasAcct
-                          ? <>{sup?.account_name ?? "—"} · <span className="mono">{sup?.account_number ?? "—"}</span> · {sup?.bank_name ?? "—"}</>
-                          : "No account details on file"}
-                      </span>
+                      {(() => {
+                        const plan = splitsByVisit.get(s.visit_id as string) ?? [];
+                        if (plan.length === 0) {
+                          return (
+                            <span className="block text-xs text-ink-2">
+                              {hasAcct
+                                ? <>{sup?.account_name ?? "—"} · <span className="mono">{sup?.account_number ?? "—"}</span> · {sup?.bank_name ?? "—"}</>
+                                : "No account details on file"}
+                            </span>
+                          );
+                        }
+                        const planned = plan.reduce((a, p) => a + Number(p.amount), 0);
+                        return (
+                          <span className="mt-1 block rounded border border-ore/40 bg-ore/5 p-1.5 text-xs">
+                            <span className="font-semibold text-ore">Split payment — pay each account exactly:</span>
+                            {plan.map((p, i) => (
+                              <span key={i} className="mt-0.5 flex justify-between gap-2">
+                                <span>
+                                  {p.account_name as string} · <span className="mono">{p.account_number as string}</span> · {p.bank_name as string}
+                                  {p.note ? ` · ${p.note as string}` : ""}
+                                </span>
+                                <span className="font-semibold">{ngn(Number(p.amount))}</span>
+                              </span>
+                            ))}
+                            {Math.abs(planned - remaining) > 0.005 && (
+                              <span className="mt-0.5 block text-ink-2">
+                                {ngn(planned)} planned of {ngn(remaining)} to pay
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })()}
                     </span>
                     <span className="flex items-center gap-2">
                       {!partly && <HoldButton kind="settlement" id={s.id as string} />}

@@ -161,7 +161,17 @@ export function AllAnalysesTable({ rows, isOwner = false }: { rows: AnalysisRow[
 
   const { inPricing, closed } = useMemo(() => {
     const t = q.trim().toLowerCase();
-    const f = t ? rows.filter((r) => r.supplier.toLowerCase().includes(t) || r.material.toLowerCase().includes(t)) : rows;
+    // Match supplier / material / site by text, and QC weight or price by
+    // number — so "65" finds a 65kg line as readily as a ₦65/kg one.
+    const num = (v: number | null) => (v == null ? "" : String(v));
+    const f = t
+      ? rows.filter((r) =>
+          r.supplier.toLowerCase().includes(t) ||
+          r.material.toLowerCase().includes(t) ||
+          r.site.toLowerCase().includes(t) ||
+          num(r.qcWeight).includes(t) ||
+          num(r.unitPrice).includes(t))
+      : rows;
     return {
       inPricing: f.filter((r) => !r.agreed && r.settlementStatus !== "unsettled"),
       closed: f.filter((r) => r.agreed || r.settlementStatus === "unsettled"),

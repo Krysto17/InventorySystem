@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { SupplierPicker } from "@/components/suppliers/SupplierPicker";
 import { getProfile } from "@/lib/auth/get-profile";
 import { createStockLot, createLotSale, setLotSaleApproval } from "./actions";
 import { formatTimestamp } from "@/lib/visits/format";
@@ -49,12 +50,10 @@ export default async function LotSalesPage() {
               {(materialTypes ?? []).map((m) => <option key={m.id as string} value={m.id as string}>{m.name as string}</option>)}
             </select>
           </label>
-          <label className="text-sm">Supplier
-            <select name="supplier_id" defaultValue="" className="mt-1 block w-full border rounded px-2 py-1 text-sm">
-              <option value="">—</option>
-              {(suppliers ?? []).map((s) => <option key={s.id as string} value={s.id as string}>{s.name as string}</option>)}
-            </select>
-          </label>
+          <SupplierPicker
+            required={false}
+            suppliers={(suppliers ?? []).map((s) => ({ id: s.id as string, name: s.name as string, code: null }))}
+          />
           <label className="text-sm">Weight (kg)
             <input type="number" name="weight_kg" step="0.001" min="0" required className="mt-1 block w-full border rounded px-2 py-1 text-sm" />
           </label>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { SupplierPicker } from "@/components/suppliers/SupplierPicker";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Stamp } from "@/components/ui/stamp";
@@ -53,12 +54,11 @@ export default async function ManagerGatePassesPage() {
                 })}
               </select>
             </label>
-            <label className="text-xs font-medium">Supplier
-              <select name="supplier_id" defaultValue="" className="mt-1 block w-full rounded border px-2 py-1 text-sm">
-                <option value="">— (or type owner below)</option>
-                {(suppliers ?? []).map((s) => <option key={s.id as string} value={s.id as string}>{s.name as string}</option>)}
-              </select>
-            </label>
+            <SupplierPicker
+              required={false}
+              label="Supplier (or type owner below)"
+              suppliers={(suppliers ?? []).map((s) => ({ id: s.id as string, name: s.name as string, code: null }))}
+            />
             <label className="text-xs font-medium">Material owner (free text)
               <input type="text" name="material_owner" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
             </label>

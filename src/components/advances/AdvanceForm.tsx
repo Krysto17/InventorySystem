@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { recordAdvance } from "@/app/(manager)/manager/advances/actions";
+import { SupplierPicker } from "@/components/suppliers/SupplierPicker";
 import { AccountFields } from "@/components/accounts/AccountFields";
 import type { KnownAccount } from "@/lib/accounts/known-accounts";
 import type { ActionResult } from "@/lib/actions/result";
@@ -14,12 +15,9 @@ export function AdvanceForm({ suppliers, accounts }: { suppliers: { id: string; 
   const [state, action, pending] = useActionState(recordAdvance, init);
   return (
     <form action={action} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <label className="text-sm sm:col-span-2">Supplier
-        <select name="supplier_id" required defaultValue="" className="mt-1 block w-full rounded border px-2 py-1 text-sm">
-          <option value="" disabled>Select supplier…</option>
-          {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.code ?? "—"})</option>)}
-        </select>
-      </label>
+      <div className="sm:col-span-2">
+        <SupplierPicker suppliers={suppliers} />
+      </div>
       <label className="text-sm">Purpose
         <input type="text" name="purpose" required className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
       </label>
