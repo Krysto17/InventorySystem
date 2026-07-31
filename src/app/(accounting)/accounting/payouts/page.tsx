@@ -119,9 +119,21 @@ export default async function AccountingPayoutsPage() {
                                 <span className="font-semibold">{ngn(Number(p.amount))}</span>
                               </span>
                             ))}
-                            {Math.abs(planned - remaining) > 0.005 && (
-                              <span className="mt-0.5 block text-ink-2">
-                                {ngn(planned)} planned of {ngn(remaining)} to pay
+                            {/* Whatever wasn't split goes to the supplier's own account. */}
+                            {remaining - planned > 0.005 && (
+                              <span className="mt-0.5 flex justify-between gap-2 border-t border-ore/30 pt-0.5">
+                                <span>
+                                  {sup?.name ?? "Supplier"} (own account)
+                                  {hasAcct
+                                    ? <> · {sup?.account_name ?? "—"} · <span className="mono">{sup?.account_number ?? "—"}</span> · {sup?.bank_name ?? "—"}</>
+                                    : " · no account on file"}
+                                </span>
+                                <span className="font-semibold">{ngn(remaining - planned)}</span>
+                              </span>
+                            )}
+                            {planned - remaining > 0.005 && (
+                              <span className="mt-0.5 block text-reject">
+                                Plan ({ngn(planned)}) exceeds the {ngn(remaining)} still to pay — check with the manager.
                               </span>
                             )}
                           </span>
