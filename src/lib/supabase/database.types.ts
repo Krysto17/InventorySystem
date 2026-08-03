@@ -997,6 +997,9 @@ export type Database = {
           reason: string
           site_id: string
           status: string
+          requested_by: string | null
+          authorized_by: string | null
+          authorized_at: string | null
           stock_lot_id: string | null
           supplier_id: string | null
           visit_material_id: string | null
@@ -1016,6 +1019,9 @@ export type Database = {
           reason: string
           site_id: string
           status?: string
+          requested_by?: string | null
+          authorized_by?: string | null
+          authorized_at?: string | null
           stock_lot_id?: string | null
           supplier_id?: string | null
           visit_material_id?: string | null
@@ -1035,6 +1041,9 @@ export type Database = {
           reason?: string
           site_id?: string
           status?: string
+          requested_by?: string | null
+          authorized_by?: string | null
+          authorized_at?: string | null
           stock_lot_id?: string | null
           supplier_id?: string | null
           visit_material_id?: string | null
@@ -2231,6 +2240,7 @@ export type Database = {
       find_similar_suppliers: { Args: { p_name?: string; p_account_number?: string; p_exclude?: string }; Returns: { id: string; name: string; supplier_code: string | null; account_name: string | null; account_number: string | null; bank_name: string | null; similarity: number; same_account: boolean }[] }
       reopen_processing_fee: { Args: { p_visit_id: string }; Returns: undefined }
       reopen_receiving: { Args: { p_visit_id: string }; Returns: undefined }
+      authorize_gate_pass: { Args: { p_pass_id: string }; Returns: undefined }
       record_price_correction: { Args: { p_visit_id: string; p_direction: string; p_amount: number; p_reason?: string }; Returns: string }
       mark_price_correction_paid: { Args: { p_id: string }; Returns: undefined }
       accountant_send_back_to_owner: { Args: { p_visit_id: string; p_reason: string }; Returns: undefined }

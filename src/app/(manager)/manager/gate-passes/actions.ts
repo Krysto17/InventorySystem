@@ -9,7 +9,10 @@ import { getProfile } from "@/lib/auth/get-profile";
 // (traceable back to receiving) — on acknowledgement that lot leaves stock.
 export async function issueGatePass(formData: FormData): Promise<void> {
   const me = await getProfile();
-  if (!me || (me.role !== "manager" && me.role !== "owner")) return;
+  if (!me || !["manager", "owner", "receiving"].includes(me.role)) return;
+  // Receiving raises a request; it carries no authority until a manager signs
+  // it off. Manager/owner passes are authorised on the spot.
+  const isRequest = me.role === "receiving";
 
   const supabase = await createClient();
   const { data: profile } = await supabase.from("profiles").select("site_id").eq("id", me.id).single();
@@ -49,8 +52,12 @@ export async function issueGatePass(formData: FormData): Promise<void> {
     weight_kg: weightKg,
     reason,
     issued_by: me.id,
+    ...(isRequest
+      ? { status: "pending", requested_by: me.id }
+      : { status: "issued", authorized_by: me.id, authorized_at: new Date().toISOString() }),
   });
   revalidatePath("/manager/gate-passes");
+  revalidatePath("/receiving");
 }
 
 export async function cancelGatePass(formData: FormData): Promise<void> {
@@ -61,4 +68,17 @@ export async function cancelGatePass(formData: FormData): Promise<void> {
   const supabase = await createClient();
   await supabase.from("gate_passes").update({ status: "cancelled" }).eq("id", id);
   revalidatePath("/manager/gate-passes");
+}
+
+// Manager (or owner) authorises a gate pass raised by receiving — only then is
+// it valid at the gate. The RPC re-checks the role, site and pending status.
+export async function authorizeGatePass(formData: FormData): Promise<void> {
+  const me = await getProfile();
+  if (!me || !["manager", "owner"].includes(me.role)) return;
+  const id = String(formData.get("pass_id") ?? "");
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase.rpc("authorize_gate_pass", { p_pass_id: id });
+  revalidatePath("/manager/gate-passes");
+  revalidatePath("/receiving");
 }
