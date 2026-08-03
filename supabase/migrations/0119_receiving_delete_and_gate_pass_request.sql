@@ -57,6 +57,7 @@ alter table public.gate_passes
   add column if not exists authorized_at  timestamptz;
 
 -- Receiving raises a pass on their own site; it must start unauthorised.
+drop policy if exists "gate_passes: receiving requests own site" on public.gate_passes;
 create policy "gate_passes: receiving requests own site"
   on public.gate_passes for insert to authenticated
   with check (
@@ -64,6 +65,74 @@ create policy "gate_passes: receiving requests own site"
     and site_id = public.current_site()
     and status = 'pending'
   );
+
+-- Reading was limited to the gate role and cross-site readers, so the receiving
+-- clerk couldn't see the pass they just raised and a SITE manager couldn't see
+-- one to authorise it. Both need their own site's passes.
+drop policy if exists "gate_passes: gate own-site or cross-site reader" on public.gate_passes;
+drop policy if exists "gate_passes: own-site roles or cross-site reader" on public.gate_passes;
+create policy "gate_passes: own-site roles or cross-site reader"
+  on public.gate_passes for select to authenticated
+  using (
+    (public.current_role() in ('gate', 'receiving', 'manager') and site_id = public.current_site())
+    or public.has_cross_site_read()
+  );
+
+-- The transition guard predates 'pending', so teach it the two new edges:
+-- authorising a request (pending → issued) and dropping one (pending →
+-- cancelled). Everything else is left exactly as it was.
+create or replace function public._gate_passes_transition()
+  returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  lot record;
+  out_weight numeric(12,3);
+begin
+  if NEW.status = OLD.status then return NEW; end if;
+
+  if OLD.status = 'pending' and NEW.status = 'issued' then
+    -- Authorisation is done through authorize_gate_pass(), which checks the
+    -- role and site and stamps who signed it off.
+    null;
+
+  elsif OLD.status = 'pending' and NEW.status = 'cancelled' then
+    if auth.uid() is not null
+       and not (public.is_owner() or public.current_role() in ('manager', 'receiving')) then
+      raise exception 'only the manager, owner or the raising clerk can drop a request';
+    end if;
+
+  elsif OLD.status = 'issued' and NEW.status = 'acknowledged' then
+    if auth.uid() is not null and public.current_role() <> 'gate' then
+      raise exception 'only the gate can acknowledge a gate pass';
+    end if;
+    NEW.acknowledged_by := coalesce(NEW.acknowledged_by, auth.uid());
+    NEW.acknowledged_at := coalesce(NEW.acknowledged_at, now());
+
+    -- Material tied to a stock lot leaves stock on acknowledgement.
+    if NEW.stock_lot_id is not null then
+      select * into lot from public.stock_lots where id = NEW.stock_lot_id;
+      if lot.id is not null then
+        out_weight := coalesce(NEW.weight_kg, lot.weight_kg);
+        insert into public.stock_movements (
+          site_id, material_type_id, grade, weight, direction, recorded_by, reason
+        ) values (
+          lot.site_id, lot.material_type_id, null, out_weight, 'out',
+          coalesce(auth.uid(), NEW.issued_by), 'gate_release'
+        );
+      end if;
+    end if;
+
+  elsif OLD.status = 'issued' and NEW.status = 'cancelled' then
+    if auth.uid() is not null and not (public.is_owner() or public.current_role() = 'manager') then
+      raise exception 'only a manager or owner can cancel a gate pass';
+    end if;
+
+  else
+    raise exception 'illegal gate pass transition: % → %', OLD.status, NEW.status
+      using errcode = '22000';
+  end if;
+
+  return NEW;
+end; $$;
 
 -- A pending pass carries no authority until the manager signs it off.
 create or replace function public.authorize_gate_pass(p_pass_id uuid)

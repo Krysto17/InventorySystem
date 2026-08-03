@@ -2,7 +2,9 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
 
 // A light bill on a dressing-only (no-supply) visit is carried to the customer's
-// account, joins their outstanding balance, and is recovered like an advance.
+// account and recovered like an advance — but it sits in its own PROCESSING debt
+// balance, kept apart from advance debt, and is cleared by a deduction of
+// kind 'processing'.
 describe("carried light bills + dressing-only close", () => {
   let siteId: string, monazite: string, supplierId: string;
   let owner: TestUser, mgr: TestUser, inv: TestUser, recv: TestUser;
@@ -30,10 +32,12 @@ describe("carried light bills + dressing-only close", () => {
     });
     return v!.id as string;
   }
-  const debt = async () => Number((await adminClient().rpc("supplier_outstanding_debt", { _supplier_id: supplierId })).data ?? 0);
+  const advanceDebt = async () => Number((await adminClient().rpc("supplier_outstanding_debt", { _supplier_id: supplierId })).data ?? 0);
+  const processingDebt = async () => Number((await adminClient().rpc("supplier_processing_debt", { _supplier_id: supplierId })).data ?? 0);
 
-  it("dressing-only close carries the light bill into the customer balance", async () => {
-    const before = await debt();
+  it("dressing-only close carries the light bill into the PROCESSING balance", async () => {
+    const beforeProcessing = await processingDebt();
+    const beforeAdvance = await advanceDebt();
     const id = await processedVisit(5000);
     const { error } = await mgr.client.rpc("close_dressing_only", { p_visit_id: id });
     expect(error).toBeNull();
@@ -43,16 +47,19 @@ describe("carried light bills + dressing-only close", () => {
     expect(v.dressing_only).toBe(true);
     const uc = (await adminClient().from("utility_charges").select("carried").eq("visit_id", id).single()).data!;
     expect(uc.carried).toBe(true);
-    expect(await debt()).toBe(before + 5000);
+    expect(await processingDebt()).toBe(beforeProcessing + 5000);
+    expect(await advanceDebt()).toBe(beforeAdvance); // never mixed into advance debt
   });
 
-  it("the carried balance is recovered like an advance (deduction clears it)", async () => {
-    const start = await debt();
+  it("the carried balance is recovered by a 'processing' deduction", async () => {
+    const start = await processingDebt();
+    expect(start).toBeGreaterThan(0);
     const { error } = await mgr.client.from("advance_deductions").insert({
-      supplier_id: supplierId, site_id: siteId, amount: start, notes: "Recovered from New-Site supply", recorded_by: mgr.userId,
+      supplier_id: supplierId, site_id: siteId, amount: start, kind: "processing",
+      notes: "Recovered from New-Site supply", recorded_by: mgr.userId,
     });
     expect(error).toBeNull();
-    expect(await debt()).toBe(0);
+    expect(await processingDebt()).toBe(0);
   });
 
   it("inventory cannot close a visit as dressing-only", async () => {

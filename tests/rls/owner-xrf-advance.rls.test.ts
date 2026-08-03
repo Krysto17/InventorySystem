@@ -35,7 +35,9 @@ describe("XRF read-only for owner + manager deletes pending advance", () => {
     expect(qcTry.error).toBeNull();
   });
 
-  it("manager deletes a pending advance but not an approved one", async () => {
+  // The manager may withdraw an advance right up until it is PAID — an approved
+  // one is still only a promise, and corrections happen at that stage.
+  it("manager deletes an unpaid advance but not a paid one", async () => {
     const { data: pend } = await adminClient().from("advances").insert({
       supplier_id: supplierId, site_id: siteId, purpose: "seed", amount_naira: 1000, approval_status: "pending", recorded_by: mgr.userId,
     }).select("id").single();
@@ -47,7 +49,14 @@ describe("XRF read-only for owner + manager deletes pending advance", () => {
       supplier_id: supplierId, site_id: siteId, purpose: "seed2", amount_naira: 2000, approval_status: "approved", recorded_by: mgr.userId,
     }).select("id").single();
     await mgr.client.from("advances").delete().eq("id", appr!.id);
-    const { data: still } = await adminClient().from("advances").select("id").eq("id", appr!.id);
-    expect(still ?? []).toHaveLength(1); // approved advance can't be deleted by manager
+    const { data: apprGone } = await adminClient().from("advances").select("id").eq("id", appr!.id);
+    expect(apprGone ?? []).toHaveLength(0); // approved but unpaid — still correctable
+
+    const { data: paid } = await adminClient().from("advances").insert({
+      supplier_id: supplierId, site_id: siteId, purpose: "seed3", amount_naira: 3000, approval_status: "paid", recorded_by: mgr.userId,
+    }).select("id").single();
+    await mgr.client.from("advances").delete().eq("id", paid!.id);
+    const { data: still } = await adminClient().from("advances").select("id").eq("id", paid!.id);
+    expect(still ?? []).toHaveLength(1); // money has left — the manager can't erase it
   });
 });

@@ -135,8 +135,16 @@ describe("payout splits, visit delete, receiving reopen", () => {
     expect(await exists(v)).toBe(false);
   });
 
-  it("receiving cannot delete once it has moved to QC", async () => {
+  // Since 0119 the window is wider — a mistaken batch is usually spotted after
+  // it has moved on — and closes only once money or stock is involved.
+  it("receiving still deletes it after it has moved to QC", async () => {
     const v = await visit("in_qc");
+    expect((await recv.client.rpc("delete_batch", { p_visit_id: v })).error).toBeNull();
+    expect(await exists(v)).toBe(false);
+  });
+
+  it("receiving cannot delete once it is stocked", async () => {
+    const v = await visit("stocked");
     expect((await recv.client.rpc("delete_batch", { p_visit_id: v })).error).not.toBeNull();
     expect(await exists(v)).toBe(true);
   });
