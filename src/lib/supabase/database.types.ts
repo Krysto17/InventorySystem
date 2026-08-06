@@ -2224,7 +2224,26 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      // Aggregated in SQL so the dashboards never sum the raw ledger (0121).
+      stock_balances: {
+        Row: {
+          site_id: string
+          site_name: string
+          material_type_id: string
+          material_name: string
+          grade: string | null
+          weight_kg: number
+        }
+        Relationships: []
+      }
+      material_cost_basis: {
+        Row: {
+          material_type_id: string
+          cost_per_kg: number | null
+          uncosted_kg: number
+        }
+        Relationships: []
+      }
     }
     Functions: {
       submit_visit_to_manager: { Args: { p_visit_id: string }; Returns: undefined }

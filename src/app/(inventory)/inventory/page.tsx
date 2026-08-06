@@ -33,31 +33,25 @@ export default async function InventoryPage() {
     .eq("state", "awaiting_stock_intake")
     .order("created_at", { ascending: true });
 
-  // Current stock balance grouped by material_type + grade
-  const { data: movements } = await supabase
-    .from("stock_movements")
-    .select("material_type_id, grade, weight, direction, material_type:material_types(name)");
-
-  // Aggregate in JS: group by (material_type_id, grade) → sum in/out
+  // Current stock at hand, grouped by material + grade. Aggregated in the
+  // database: summing the raw ledger here lost everything past PostgREST's
+  // 1000-row cap once the ledger grew (see 0121).
   type StockRow = { material_type_id: string; material_name: string; grade: string | null; balance: number };
+  const { data: balances } = await supabase
+    .from("stock_balances")
+    .select("material_type_id, material_name, grade, weight_kg");
+
   const stockMap = new Map<string, StockRow>();
-  for (const m of movements ?? []) {
-    const mt = (m as { material_type: { name?: string } | { name?: string }[] | null }).material_type;
-    const materialName =
-      (Array.isArray(mt) ? mt[0]?.name : (mt as { name?: string } | null)?.name) ?? "—";
-    const key = `${m.material_type_id}::${m.grade ?? ""}`;
+  for (const b of balances ?? []) {
+    const key = `${b.material_type_id}::${b.grade ?? ""}`;
     const existing = stockMap.get(key);
-    const delta = (m.direction === "in" ? 1 : -1) * Number(m.weight);
-    if (existing) {
-      existing.balance += delta;
-    } else {
-      stockMap.set(key, {
-        material_type_id: m.material_type_id as string,
-        material_name: materialName,
-        grade: m.grade as string | null,
-        balance: delta,
-      });
-    }
+    if (existing) existing.balance += Number(b.weight_kg);
+    else stockMap.set(key, {
+      material_type_id: b.material_type_id as string,
+      material_name: (b.material_name as string) ?? "—",
+      grade: b.grade as string | null,
+      balance: Number(b.weight_kg),
+    });
   }
   const stockRows = Array.from(stockMap.values()).filter((r) => r.balance > 0);
 

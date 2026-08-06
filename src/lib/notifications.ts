@@ -11,9 +11,15 @@ export async function roleNotifications(role: Role): Promise<NotificationItem[]>
   const items: NotificationItem[] = [];
 
   // Run a head/count query with an equality filter, RLS-scoped to the viewer.
+  // The table and column are dynamic, so this describes just the shape it uses
+  // rather than leaning on the generated table union.
+  type CountQuery = {
+    select: (columns: string, options: { count: "exact"; head: true }) => {
+      eq: (column: string, value: string) => PromiseLike<{ count: number | null }>;
+    };
+  };
   const countWhere = async (table: string, column: string, value: string): Promise<number> => {
-    // Dynamic table/column count — opt out of the typed-table overload.
-    const { count } = await (supabase.from(table as never) as ReturnType<typeof supabase.from>)
+    const { count } = await (supabase.from(table as never) as unknown as CountQuery)
       .select("id", { count: "exact", head: true })
       .eq(column, value);
     return count ?? 0;

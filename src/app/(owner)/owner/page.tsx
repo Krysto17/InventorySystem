@@ -9,7 +9,6 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge, stateVariant } from "@/components/ui/badge";
 import { formatNaira, formatWeight, formatTimestamp } from "@/lib/visits/format";
 import { STATE_LABELS } from "@/lib/visits/state-machine";
-import { valueStock } from "@/lib/inventory/stock-value";
 import { approveBulkSale, rejectBulkSale } from "@/app/(inventory)/inventory/bulk-sales/actions";
 
 function defaultFrom() {
@@ -45,11 +44,11 @@ export default async function OwnerDashboard({
     { data: sites },
     { data: allVisits },
     { data: pricingRows },
-    { data: stockMovements },
+    { data: stockBalances },
     { data: machineUsage },
     { data: consumables },
     { data: pendingBulkSales },
-    { data: lotCosts },
+    { data: costBasis },
     { data: recentMovements },
   ] = await Promise.all([
     supabase.from("sites").select("id, name").order("name"),
@@ -68,10 +67,12 @@ export default async function OwnerDashboard({
       .from("pricing")
       .select("agreement_status, visit_id, visit:visits(site_id, created_at)"),
 
+    // Aggregated in the database — summing the raw ledger here silently lost
+    // everything past PostgREST's 1000-row cap (see 0121).
     (() => {
       let q = supabase
-        .from("stock_movements")
-        .select("site_id, material_type_id, grade, weight, direction, material_type:material_types(name), site:sites(name)");
+        .from("stock_balances")
+        .select("site_id, site_name, material_type_id, material_name, grade, weight_kg");
       if (siteFilter) q = q.eq("site_id", siteFilter);
       return q;
     })(),
@@ -110,9 +111,8 @@ export default async function OwnerDashboard({
     // Stock is valued at what it COST to buy, from the lots still at hand.
     // Sold material is out of the yard and out of these figures entirely.
     supabase
-      .from("stock_lots")
-      .select("material_type_id, weight_kg, cost_price_per_kg")
-      .eq("status", "available"),
+      .from("material_cost_basis")
+      .select("material_type_id, cost_per_kg, uncosted_kg"),
 
     // Recent stock activity feed
     (() => {
@@ -146,33 +146,24 @@ export default async function OwnerDashboard({
   const rejectionRate = totalDecided > 0 ? (rejectedCount / totalDecided) * 100 : null;
 
   // ── Cost basis per material: weighted-average PURCHASE cost ───────────────
-  // Weighted by kg (not a plain average of prices) and built only from lots
-  // that carry a cost, so every kg at hand is valued — see stock-value.ts.
-  const { costPerKg, uncostedKg } = valueStock(
-    (lotCosts ?? []) as { material_type_id: string; weight_kg: number | null; cost_price_per_kg: number | null }[],
-  );
+  // Weighted by kg (not a plain average of prices) and built only from costed
+  // lots still at hand, so every kg on hand is valued (0121).
+  const costPerKg = new Map<string, number>();
+  let uncostedKg = 0;
+  for (const c of costBasis ?? []) {
+    if (c.cost_per_kg != null) costPerKg.set(c.material_type_id as string, Number(c.cost_per_kg));
+    uncostedKg += Number(c.uncosted_kg ?? 0);
+  }
   const avgPrice = (materialTypeId: string) => costPerKg.get(materialTypeId) ?? 0;
 
-  // ── Stock balance per (site, material, grade) ─────────────────────────────
-  const stockMap = new Map<string, { material: string; site: string; grade: string | null; weight: number; materialTypeId: string }>();
-  for (const m of stockMovements ?? []) {
-    const materialName = g1<{ name: string }>((m as { material_type: unknown }).material_type)?.name ?? "—";
-    const siteName = g1<{ name: string }>((m as { site: unknown }).site)?.name ?? "—";
-    const key = `${m.site_id}::${m.material_type_id}::${m.grade ?? ""}`;
-    const delta = (m.direction === "in" ? 1 : -1) * Number(m.weight);
-    const existing = stockMap.get(key);
-    if (existing) existing.weight += delta;
-    else stockMap.set(key, { material: materialName, site: siteName, grade: m.grade as string | null, weight: delta, materialTypeId: m.material_type_id as string });
-  }
-  const stockRows: StockRow[] = Array.from(stockMap.values())
-    .filter((r) => r.weight > 0)
-    .map((r) => ({
-      material: r.material,
-      site: r.site,
-      grade: r.grade,
-      weight: r.weight,
-      value: r.weight * avgPrice(r.materialTypeId),
-    }));
+  // ── Stock at hand per (site, material, grade) ─────────────────────────────
+  const stockRows: StockRow[] = (stockBalances ?? []).map((r) => ({
+    material: (r.material_name as string) ?? "—",
+    site: (r.site_name as string) ?? "—",
+    grade: r.grade as string | null,
+    weight: Number(r.weight_kg),
+    value: Number(r.weight_kg) * avgPrice(r.material_type_id as string),
+  }));
   const totalStockKg = stockRows.reduce((s, r) => s + r.weight, 0);
   const totalStockValue = stockRows.reduce((s, r) => s + r.value, 0);
 

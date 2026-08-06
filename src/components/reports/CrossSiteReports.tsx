@@ -11,10 +11,10 @@ const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDi
 export async function CrossSiteReports() {
   const supabase = await createClient();
 
-  const [{ data: sites }, { data: movements }, { data: lots }, { data: advances }, { data: payments }] =
+  const [{ data: sites }, { data: balances }, { data: lots }, { data: advances }, { data: payments }] =
     await Promise.all([
       supabase.from("sites").select("id, name").order("name"),
-      supabase.from("stock_movements").select("site_id, material_type_id, weight, direction, material:material_types(name)"),
+      supabase.from("stock_balances").select("site_id, material_name, weight_kg"),
       supabase.from("stock_lots").select("site_id, weight_kg, cost_price_per_kg, status"),
       supabase.from("advances").select("site_id, amount_naira, approval_status"),
       supabase.from("payments").select("direction, amount, visit:visits!inner(site_id)"),
@@ -22,14 +22,12 @@ export async function CrossSiteReports() {
 
   const siteName = new Map((sites ?? []).map((s) => [s.id as string, s.name as string]));
 
-  // Stock balance by site × material from the movements ledger.
+  // Stock at hand by site × material, aggregated in the database (0121).
   const stockKey = (siteId: string, mat: string) => `${siteId}|${mat}`;
   const stock = new Map<string, number>();
-  for (const m of movements ?? []) {
-    const mat = g1<{ name: string }>((m as { material: unknown }).material)?.name ?? "—";
-    const key = stockKey(m.site_id as string, mat);
-    const delta = (m.direction === "in" ? 1 : -1) * Number(m.weight);
-    stock.set(key, (stock.get(key) ?? 0) + delta);
+  for (const b of balances ?? []) {
+    const key = stockKey(b.site_id as string, (b.material_name as string) ?? "—");
+    stock.set(key, (stock.get(key) ?? 0) + Number(b.weight_kg));
   }
 
   // Per-site rollups.

@@ -20,8 +20,8 @@ export default async function OwnerApprovalsPage() {
   const supabase = await createClient();
 
   // Money figures come from the canonical source so every module agrees.
-  const [{ data: movements }, { data: pendingAdvances }, figures] = await Promise.all([
-    supabase.from("stock_movements").select("weight, direction, material:material_types(name)"),
+  const [{ data: balances }, { data: pendingAdvances }, figures] = await Promise.all([
+    supabase.from("stock_balances").select("material_name, weight_kg"),
     supabase.from("advances")
       .select("id, purpose, amount_naira, created_at, supplier:suppliers(name, supplier_code)")
       .eq("approval_status", "pending").order("created_at", { ascending: true }),
@@ -41,11 +41,12 @@ export default async function OwnerApprovalsPage() {
     .eq("state", "awaiting_price_approval")
     .order("created_at", { ascending: true });
 
-  // Overview: materials on hand (ledger balance), light bills deducted, advances out.
+  // Overview: materials on hand (ledger balance, aggregated in SQL — see 0121),
+  // light bills deducted, advances out. Per-site buckets roll up per material.
   const onHand = new Map<string, number>();
-  for (const m of movements ?? []) {
-    const name = g1<{ name: string }>((m as { material: unknown }).material)?.name ?? "—";
-    onHand.set(name, (onHand.get(name) ?? 0) + (m.direction === "in" ? 1 : -1) * Number(m.weight));
+  for (const b of balances ?? []) {
+    const name = (b.material_name as string) ?? "—";
+    onHand.set(name, (onHand.get(name) ?? 0) + Number(b.weight_kg));
   }
   const onHandRows = [...onHand.entries()].filter(([, kg]) => kg > 0.0005).sort((a, b) => a[0].localeCompare(b[0]));
   const { feesNetted, feesCash, feesRecovered, feesCollected: lightBillsDeducted,
