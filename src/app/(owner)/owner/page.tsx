@@ -9,6 +9,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge, stateVariant } from "@/components/ui/badge";
 import { formatNaira, formatWeight, formatTimestamp } from "@/lib/visits/format";
 import { STATE_LABELS } from "@/lib/visits/state-machine";
+import { valueStock } from "@/lib/inventory/stock-value";
 import { approveBulkSale, rejectBulkSale } from "@/app/(inventory)/inventory/bulk-sales/actions";
 
 function defaultFrom() {
@@ -106,12 +107,13 @@ export default async function OwnerDashboard({
       .eq("approval_status", "pending")
       .order("created_at", { ascending: true }),
 
-    // Stock is valued at what it COST to buy: the weighted-average purchase
-    // price per material, taken from the lots still in stock.
+    // Stock is valued at what it COST to buy. Sold lots come along so a
+    // material with nothing costed at hand can still fall back to what it
+    // historically cost, rather than being valued at nothing.
     supabase
       .from("stock_lots")
-      .select("material_type_id, weight_kg, cost_price_per_kg")
-      .eq("status", "available"),
+      .select("material_type_id, weight_kg, cost_price_per_kg, status")
+      .in("status", ["available", "sold"]),
 
     // Recent stock activity feed
     (() => {
@@ -144,22 +146,13 @@ export default async function OwnerDashboard({
   const totalDecided = agreedCount + rejectedCount;
   const rejectionRate = totalDecided > 0 ? (rejectedCount / totalDecided) * 100 : null;
 
-  // ── Cost map: weighted-average PURCHASE cost per material_type_id ─────────
-  // Weighted by kg (not a plain average of prices), so a big cheap lot and a
-  // small dear one value correctly.
-  const costAgg = new Map<string, { cost: number; kg: number }>();
-  for (const l of lotCosts ?? []) {
-    const id = l.material_type_id as string;
-    const kg = Number(l.weight_kg ?? 0);
-    const cur = costAgg.get(id) ?? { cost: 0, kg: 0 };
-    cur.cost += kg * Number(l.cost_price_per_kg ?? 0);
-    cur.kg += kg;
-    costAgg.set(id, cur);
-  }
-  const avgPrice = (materialTypeId: string) => {
-    const a = costAgg.get(materialTypeId);
-    return a && a.kg > 0 ? a.cost / a.kg : 0;
-  };
+  // ── Cost basis per material: weighted-average PURCHASE cost ───────────────
+  // Weighted by kg (not a plain average of prices) and built only from lots
+  // that carry a cost, so every kg at hand is valued — see stock-value.ts.
+  const { costPerKg, uncostedKg } = valueStock(
+    (lotCosts ?? []) as { material_type_id: string; weight_kg: number | null; cost_price_per_kg: number | null; status: string | null }[],
+  );
+  const avgPrice = (materialTypeId: string) => costPerKg.get(materialTypeId) ?? 0;
 
   // ── Stock balance per (site, material, grade) ─────────────────────────────
   const stockMap = new Map<string, { material: string; site: string; grade: string | null; weight: number; materialTypeId: string }>();
@@ -239,7 +232,14 @@ export default async function OwnerDashboard({
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard label="Total stock" value={formatWeight(totalStockKg)} icon={<Boxes size={18} />} sub={`${stockRows.length} buckets`} />
-        <KpiCard label="Stock value (at cost)" value={formatNaira(totalStockValue)} icon={<Wallet size={18} />} sub="what it was bought for" />
+        <KpiCard
+          label="Stock value (at cost)"
+          value={formatNaira(totalStockValue)}
+          icon={<Wallet size={18} />}
+          sub={uncostedKg > 0
+            ? `what it was bought for · ${formatWeight(uncostedKg)} priced at the material average`
+            : "what it was bought for"}
+        />
         <KpiCard label="Visits (period)" value={totalVisits} icon={<ScrollText size={18} />} />
         <KpiCard
           label="Rejection rate"
