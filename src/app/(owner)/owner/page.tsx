@@ -107,13 +107,12 @@ export default async function OwnerDashboard({
       .eq("approval_status", "pending")
       .order("created_at", { ascending: true }),
 
-    // Stock is valued at what it COST to buy. Sold lots come along so a
-    // material with nothing costed at hand can still fall back to what it
-    // historically cost, rather than being valued at nothing.
+    // Stock is valued at what it COST to buy, from the lots still at hand.
+    // Sold material is out of the yard and out of these figures entirely.
     supabase
       .from("stock_lots")
-      .select("material_type_id, weight_kg, cost_price_per_kg, status")
-      .in("status", ["available", "sold"]),
+      .select("material_type_id, weight_kg, cost_price_per_kg")
+      .eq("status", "available"),
 
     // Recent stock activity feed
     (() => {
@@ -150,7 +149,7 @@ export default async function OwnerDashboard({
   // Weighted by kg (not a plain average of prices) and built only from lots
   // that carry a cost, so every kg at hand is valued — see stock-value.ts.
   const { costPerKg, uncostedKg } = valueStock(
-    (lotCosts ?? []) as { material_type_id: string; weight_kg: number | null; cost_price_per_kg: number | null; status: string | null }[],
+    (lotCosts ?? []) as { material_type_id: string; weight_kg: number | null; cost_price_per_kg: number | null }[],
   );
   const avgPrice = (materialTypeId: string) => costPerKg.get(materialTypeId) ?? 0;
 
