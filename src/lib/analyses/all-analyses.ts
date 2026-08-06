@@ -13,7 +13,9 @@ export type RawAnalysisRow = {
   unitPrice: number | null;
   priceAgreed: boolean;
   state: string;
-  settlementStatus: string; // 'settled' | 'unsettled' (withdrawn)
+  settlementStatus: string; // 'settled' | 'unsettled' (released)
+  unsettledReason: string | null;
+  gatePassId: string | null; // the pass raised when the material was released
 };
 
 // The price is agreed/settled once the batch has left pricing (owner gate onward).
@@ -28,7 +30,8 @@ export async function fetchAllAnalyses(): Promise<RawAnalysisRow[]> {
     .select(`
       id, result, weight_kg, created_at, updated_at,
       visit_material:visit_materials!inner(
-        id, unit_price, settlement_status, price_agreed,
+        id, unit_price, settlement_status, price_agreed, unsettled_reason,
+        gate_passes(id, status),
         material_type:material_types(name),
         visit:visits!inner(id, state, created_at, supplier:suppliers(name), site:sites(name))
       )
@@ -37,7 +40,8 @@ export async function fetchAllAnalyses(): Promise<RawAnalysisRow[]> {
 
   return (data ?? []).map((x) => {
     const vm = g1((x as { visit_material: unknown }).visit_material) as {
-      id?: string; unit_price?: number | null; settlement_status?: string; price_agreed?: boolean; material_type?: unknown; visit?: unknown;
+      id?: string; unit_price?: number | null; settlement_status?: string; price_agreed?: boolean;
+      unsettled_reason?: string | null; gate_passes?: unknown; material_type?: unknown; visit?: unknown;
     } | null;
     const visit = g1(vm?.visit) as {
       id?: string; state?: string; created_at?: string; supplier?: unknown; site?: unknown;
@@ -55,6 +59,9 @@ export async function fetchAllAnalyses(): Promise<RawAnalysisRow[]> {
       priceAgreed: !!vm?.price_agreed,
       state: (visit?.state as string) ?? "",
       settlementStatus: (vm?.settlement_status as string) ?? "settled",
+      unsettledReason: (vm?.unsettled_reason as string | null) ?? null,
+      gatePassId: ((Array.isArray(vm?.gate_passes) ? vm?.gate_passes : [])
+        .find((p) => (p as { status?: string }).status !== "cancelled") as { id?: string } | undefined)?.id ?? null,
     };
   });
 }

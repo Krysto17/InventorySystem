@@ -46,13 +46,15 @@ describe("consumables RLS (categorized log)", () => {
     expect(error).not.toBeNull();
   });
 
-  it("inventory at site B cannot log a consumable for site A", async () => {
+  // One inventory officer keeps expenses for the whole organisation, so they
+  // log against whichever site the expense belongs to.
+  it("inventory at site B logs a consumable for site A", async () => {
     const { error } = await invB.client.from("consumables").insert({
       site_id: siteAId,
-      name: "Diesel-Hack",
+      name: "Diesel-CrossSite",
       category: "transport",
     });
-    expect(error).not.toBeNull();
+    expect(error).toBeNull();
   });
 
   it("non-inventory role cannot log a consumable", async () => {
@@ -74,13 +76,13 @@ describe("consumables RLS (categorized log)", () => {
     expect(data!.length).toBeGreaterThan(0);
   });
 
-  it("inventory at site A cannot read site B consumables", async () => {
+  it("inventory at site A reads site B consumables", async () => {
     await insertConsumable(siteBId);
     const { data } = await invA.client
       .from("consumables")
       .select("id")
       .eq("site_id", siteBId);
-    expect(data?.length).toBe(0);
+    expect(data!.length).toBeGreaterThan(0);
   });
 
   it("owner can read all consumables across sites", async () => {

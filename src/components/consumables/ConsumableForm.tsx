@@ -9,16 +9,36 @@ import type { ActionResult } from "@/lib/actions/result";
 
 const init: ActionResult = { ok: false };
 
+export type SiteOption = { id: string; name: string };
+
 // Log-an-expense form. Account details (name / number / bank) are entered as a
-// complete set with autofill — enforced by the action and the DB.
-export function ConsumableForm({ today, accounts }: { today: string; accounts: KnownAccount[] }) {
+// complete set with autofill — enforced by the action and the DB. The inventory
+// officer keeps every site's expenses, so they pick the site it belongs to.
+export function ConsumableForm({
+  today, accounts, sites = [], defaultSiteId = null,
+}: {
+  today: string;
+  accounts: KnownAccount[];
+  sites?: SiteOption[];
+  defaultSiteId?: string | null;
+}) {
   const [state, action, pending] = useActionState(createConsumable, init);
+  const pickSite = sites.length > 1;
   return (
     <form action={action} className="space-y-3 max-w-md">
       <label className="block text-sm font-medium">Name *
         <input type="text" name="name" required placeholder="e.g. Diesel, Generator repair, Office paper"
           className="mt-1 block w-full border rounded px-2 py-1 text-sm" />
       </label>
+      {pickSite && (
+        <label className="block text-sm font-medium">Site *
+          <select name="site_id" required defaultValue={defaultSiteId ?? ""}
+            className="mt-1 block w-full border rounded px-2 py-1 text-sm">
+            <option value="" disabled>Which site is this expense for?</option>
+            {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </label>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <label className="block text-sm font-medium">Category *
           <select name="category" required defaultValue="" className="mt-1 block w-full border rounded px-2 py-1 text-sm">

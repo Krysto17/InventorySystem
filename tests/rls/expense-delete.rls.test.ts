@@ -58,9 +58,15 @@ describe("expense delete (before payment)", () => {
     expect(await exists(id)).toBe(true);
   });
 
-  it("inventory cannot delete an expense", async () => {
-    const id = await expense("pending");
-    await inv.client.from("consumables").delete().eq("id", id);
-    expect(await exists(id)).toBe(true);
+  // Inventory owns the expense log, so it withdraws its own mistakes — but only
+  // until the owner has ruled on them.
+  it("inventory withdraws a pending expense, not an approved one", async () => {
+    const pending = await expense("pending");
+    await inv.client.from("consumables").delete().eq("id", pending);
+    expect(await exists(pending)).toBe(false);
+
+    const approved = await expense("approved");
+    await inv.client.from("consumables").delete().eq("id", approved);
+    expect(await exists(approved)).toBe(true);
   });
 });

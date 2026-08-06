@@ -42,8 +42,11 @@ export async function BatchSettlementCard({
   const supabase = await createClient();
   const [{ data: lines }, { data: charges }, { data: deds }, { data: debt }, { data: settlement }, { data: totals }] =
     await Promise.all([
+      // Only what is actually being supplied. A released line left on a gate
+      // pass is not part of this settlement, and listing it with its old price
+      // beside a total that excludes it is what confuses people.
       supabase.from("visit_materials")
-        .select("id, weight_kg, unit_price, purchase_amount, material:material_types(name)")
+        .select("id, weight_kg, unit_price, purchase_amount, settlement_status, material:material_types(name)")
         .eq("visit_id", visitId).order("created_at", { ascending: true }),
       supabase.from("utility_charges").select("id, kind, description, amount").eq("visit_id", visitId),
       supabase.from("advance_deductions").select("id, amount, notes, created_at").eq("ref_visit_id", visitId),
@@ -67,6 +70,10 @@ export async function BatchSettlementCard({
   // Totals come from a single source: the stored snapshot once a settlement
   // exists (authoritative + reconciles), otherwise the live settlement_totals
   // function. "other" charges stay itemised here for the per-line remove button.
+  const allLines = lines ?? [];
+  const suppliedLines = allLines.filter((l) => l.settlement_status !== "unsettled");
+  const releasedCount = allLines.length - suppliedLines.length;
+
   const otherCharges = (charges ?? []).filter((c) => c.kind === "other");
   const t = (totals ?? [])[0] as { materials: number; processing_fee: number; other_deductions: number; advances: number; net: number } | undefined;
   const snap = settlement as Record<string, unknown> | null;
@@ -121,7 +128,7 @@ export async function BatchSettlementCard({
               </tr>
             </thead>
             <tbody>
-              {(lines ?? []).map((l) => {
+              {suppliedLines.map((l) => {
                 const mat = g1<{ name: string }>((l as { material: unknown }).material);
                 return (
                   <tr key={l.id as string} className="border-t border-line">
@@ -134,6 +141,15 @@ export async function BatchSettlementCard({
               })}
             </tbody>
           </table></div>
+          {/* Nothing is hidden silently — say what left, without pricing it. */}
+          {releasedCount > 0 && (
+            <p className="mt-1 text-xs text-ink-2">
+              {releasedCount} material{releasedCount > 1 ? "s" : ""} released to the supplier on a gate pass — not part of this supply.
+            </p>
+          )}
+          {suppliedLines.length === 0 && (
+            <p className="mt-1 text-xs text-reject">Every material on this batch was released — there is nothing to settle.</p>
+          )}
         </div>
 
         {/* Breakdown */}

@@ -51,9 +51,13 @@ describe("unsettle / re-settle / remove a material line (integration)", () => {
     const { data: line } = await adminClient().from("visit_materials").select("settlement_status, unsettled_reason").eq("id", lineA).single();
     expect(line!.settlement_status).toBe("unsettled");
     expect(line!.unsettled_reason).toBe("low grade");
-    const { data: gp } = await adminClient().from("gate_passes").select("status, weight_kg").eq("visit_material_id", lineA).single();
+    const { data: gp } = await adminClient().from("gate_passes")
+      .select("status, weight_kg, authorized_by, authorized_at").eq("visit_material_id", lineA).single();
     expect(gp!.status).toBe("issued");
     expect(Number(gp!.weight_kg)).toBe(100);
+    // The pass is signed by whoever released the material.
+    expect(gp!.authorized_by).toBe(mgr.userId);
+    expect(gp!.authorized_at).not.toBeNull();
     expect(await total(visitId)).toBe(1000); // lineA excluded
 
     await mgr.client.rpc("resettle_line", { p_line_id: lineA });

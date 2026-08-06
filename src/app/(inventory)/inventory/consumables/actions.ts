@@ -23,9 +23,13 @@ export async function createConsumable(_prev: ActionResult, formData: FormData):
   if (!acct.ok) return fail(acct.error);
 
   const supabase = await createClient();
+  // Inventory keeps expenses for the whole organisation, so they choose the
+  // site; everyone else logs against their own posting. RLS re-checks this.
   const { data: profile } = await supabase.from("profiles").select("site_id").eq("id", me.id).single();
-  const siteId = profile?.site_id as string | null;
-  if (!siteId) return fail("No site on your profile.");
+  const chosenSite = String(formData.get("site_id") ?? "").trim();
+  const canChooseSite = me.role === "inventory" || me.role === "owner";
+  const siteId = (canChooseSite && chosenSite) || (profile?.site_id as string | null);
+  if (!siteId) return fail(canChooseSite ? "Pick the site this expense belongs to." : "No site on your profile.");
 
   const res = await supabase.from("consumables").insert({
     site_id: siteId, name, category, entry_date: entryDate ?? undefined, comment,
@@ -36,11 +40,12 @@ export async function createConsumable(_prev: ActionResult, formData: FormData):
   return ok();
 }
 
-// Manager (own site) / owner edits an expense before it is paid. RLS scopes the
-// site; the DB locks a paid expense and re-checks the account trio.
+// Manager (own site) / owner edits an expense before it is paid; the inventory
+// officer corrects their own entries until the owner rules on them. RLS scopes
+// all of that; the DB locks a paid expense and re-checks the account trio.
 export async function editConsumable(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || !["manager", "owner"].includes(me.role)) return fail("Not authorized.");
+  if (!me || !["manager", "owner", "inventory"].includes(me.role)) return fail("Not authorized.");
   const id = String(formData.get("consumable_id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const category = String(formData.get("category") ?? "") as ConsumableCategory;
@@ -64,10 +69,11 @@ export async function editConsumable(_prev: ActionResult, formData: FormData): P
 }
 
 // Manager (own site) / owner / general manager deletes an expense before it is
-// paid. RLS re-checks the role + site + not-paid; a paid expense can't be removed.
+// paid, and inventory withdraws a still-pending one. RLS re-checks the role +
+// site + status; a paid expense can't be removed.
 export async function deleteConsumable(formData: FormData): Promise<void> {
   const me = await getProfile();
-  if (!me || !["manager", "owner"].includes(me.role)) return;
+  if (!me || !["manager", "owner", "inventory"].includes(me.role)) return;
   const id = String(formData.get("consumable_id") ?? "");
   if (!id) return;
   const supabase = await createClient();

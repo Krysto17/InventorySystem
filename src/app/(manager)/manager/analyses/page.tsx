@@ -16,6 +16,7 @@ export default async function ManagerAnalysesPage() {
   const rows: AnalysisRow[] = raw.map((r) => ({
     ...r,
     canPrice: r.state === "pricing" && r.settlementStatus !== "unsettled" && (gm || r.site === (me?.site_name ?? "")),
+    canRelease: false, // releasing material back to the supplier is the owner's call
     agreed: AGREED_STATES.includes(r.state),
   }));
 

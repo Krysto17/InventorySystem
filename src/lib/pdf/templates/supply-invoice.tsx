@@ -29,15 +29,20 @@ function A4Invoice({ data, docId }: { data: PdfSupplyInvoiceData; docId: string 
           </View>
           {data.items.map((it, i) => (
             <View style={shared.tableRow} key={i}>
-              <Text style={{ flex: 2 }}>
-                {it.material_name ?? "—"}{it.settled ? "" : "  (UNSETTLED — withdrawn)"}
-              </Text>
+              <Text style={{ flex: 2 }}>{it.material_name ?? "—"}</Text>
               <Text style={{ flex: 1, textAlign: "right" }}>{formatKg(it.weight_kg)}</Text>
               <Text style={{ flex: 1, textAlign: "right" }}>{it.unit_price != null ? formatNgn(it.unit_price) : "—"}</Text>
-              <Text style={{ flex: 1.3, textAlign: "right" }}>{it.settled ? formatNgn(it.amount) : "NOT PAID"}</Text>
+              <Text style={{ flex: 1.3, textAlign: "right" }}>{formatNgn(it.amount)}</Text>
             </View>
           ))}
         </View>
+        {/* Released material never reaches the invoice; the note keeps the
+            paperwork honest about what went back out on a gate pass. */}
+        {data.released_count > 0 && (
+          <Text style={{ fontSize: 8, color: "#555", marginTop: 6 }}>
+            {data.released_count} material{data.released_count > 1 ? "s" : ""} released to the supplier on a gate pass — not invoiced.
+          </Text>
+        )}
 
         <View style={[shared.section, { marginTop: 14 }]}>
           <View style={shared.row}><Text style={shared.label}>Materials total</Text><Text style={shared.value}>{formatNgn(data.materials_total)}</Text></View>
@@ -101,14 +106,18 @@ function ThermalInvoice({ data, docId }: { data: PdfSupplyInvoiceData; docId: st
         <View key={i} wrap={false}>
           <View style={t.row}>
             <Text style={t.itemName}>{it.material_name ?? "—"}</Text>
-            <Text style={t.val}>{it.settled ? formatNgn(it.amount) : "NOT PAID"}</Text>
+            <Text style={t.val}>{formatNgn(it.amount)}</Text>
           </View>
           <Text style={t.itemSub}>
             {formatKg(it.weight_kg)}{it.unit_price != null ? ` @ ${formatNgn(it.unit_price)}/kg` : ""}
-            {it.settled ? "" : " · UNSETTLED (withdrawn)"}
           </Text>
         </View>
       ))}
+      {data.released_count > 0 && (
+        <Text style={t.itemSub}>
+          {data.released_count} material{data.released_count > 1 ? "s" : ""} released on a gate pass — not invoiced.
+        </Text>
+      )}
 
       <View style={t.hr} />
       <View style={t.row}><Text style={t.lbl}>Materials total</Text><Text style={t.val}>{formatNgn(data.materials_total)}</Text></View>

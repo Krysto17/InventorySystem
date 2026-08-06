@@ -9,10 +9,12 @@ export default async function OwnerAnalysesPage() {
   if (!me || me.role !== "owner") redirect("/login");
 
   const raw = await fetchAllAnalyses();
-  // Owner may price a line in the pricing stage; agreed → Settled, withdrawn → Withdrawn (#3).
+  // Owner may price a line in the pricing stage, and release material that is
+  // out of spec or that no price was agreed on — which raises its gate pass.
   const rows: AnalysisRow[] = raw.map((r) => ({
     ...r,
     canPrice: r.state === "pricing" && r.settlementStatus !== "unsettled",
+    canRelease: r.state === "pricing" && r.settlementStatus !== "unsettled",
     agreed: AGREED_STATES.includes(r.state),
   }));
 

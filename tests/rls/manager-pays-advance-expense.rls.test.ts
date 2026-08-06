@@ -50,9 +50,12 @@ describe("manager marks an advance / expense paid", () => {
     expect(error).not.toBeNull();
   });
 
+  // Inventory logs expenses; paying them is never theirs. An approved expense is
+  // outside their write scope entirely, so the update simply matches no row.
   it("inventory cannot mark an expense paid", async () => {
     const { data } = await approvedExpense();
-    const { error } = await inv.client.from("consumables").update({ approval_status: "paid" }).eq("id", data!.id);
-    expect(error).not.toBeNull();
+    await inv.client.from("consumables").update({ approval_status: "paid" }).eq("id", data!.id);
+    expect((await adminClient().from("consumables").select("approval_status").eq("id", data!.id).single()).data!.approval_status)
+      .toBe("approved");
   });
 });

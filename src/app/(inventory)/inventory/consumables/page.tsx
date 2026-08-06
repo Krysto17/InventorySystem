@@ -17,14 +17,20 @@ const STATUS_BADGE: Record<string, string> = {
 export default async function ConsumablesPage() {
   const me = await getProfile();
   const isOwner = me?.role === "owner";
-  const canDelete = isOwner || me?.role === "manager"; // before payment
+  const isInventory = me?.role === "inventory";
   const supabase = await createClient();
   const accounts = await fetchKnownAccounts();
+
+  // The inventory officer keeps expenses for every site, so they pick the site
+  // an expense belongs to and see all of them here.
+  const { data: sites } = await supabase.from("sites").select("id, name").order("name");
+  const siteOptions = (sites ?? []).map((s) => ({ id: s.id as string, name: s.name as string }));
+  const siteName = new Map(siteOptions.map((s) => [s.id, s.name]));
 
   const { data: consumables } = await supabase
     .from("consumables")
     .select(`
-      id, name, category, entry_date, comment, created_at, amount_naira, approval_status,
+      id, name, category, entry_date, comment, created_at, amount_naira, approval_status, site_id,
       account_name, account_number, bank_name,
       recorded_by_profile:profiles!consumables_recorded_by_fkey(full_name)
     `)
@@ -44,7 +50,9 @@ export default async function ConsumablesPage() {
 
       <section className="border rounded p-4">
         <h2 className="font-semibold mb-3">Log a consumable</h2>
-        <ConsumableForm today={today} accounts={accounts} />
+        <ConsumableForm today={today} accounts={accounts}
+          sites={isInventory || isOwner ? siteOptions : []}
+          defaultSiteId={(me?.site_id as string | null) ?? null} />
       </section>
 
       <section>
@@ -59,6 +67,7 @@ export default async function ConsumablesPage() {
               <thead className="bg-gray-50 text-left text-xs text-gray-500">
                 <tr>
                   <th className="px-3 py-2">Date</th>
+                  <th className="px-3 py-2">Site</th>
                   <th className="px-3 py-2">Name</th>
                   <th className="px-3 py-2">Category</th>
                   <th className="px-3 py-2">Amount</th>
@@ -76,9 +85,13 @@ export default async function ConsumablesPage() {
                       : (rec as { full_name?: string } | null)?.full_name) ?? "—";
                   const category = c.category as keyof typeof CATEGORY_LABELS;
                   const status = c.approval_status as string;
+                  // Inventory corrects its own entries until the owner rules on
+                  // them; manager/owner can still fix one right up to payment.
+                  const canAmend = isOwner || me?.role === "manager" || (isInventory && status === "pending");
                   return (
                     <tr key={c.id as string} className="hover:bg-gray-50">
                       <td className="px-3 py-2 whitespace-nowrap">{c.entry_date as string}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-gray-600">{siteName.get(c.site_id as string) ?? "—"}</td>
                       <td className="px-3 py-2 font-medium">{c.name as string}</td>
                       <td className="px-3 py-2">{CATEGORY_LABELS[category] ?? category}</td>
                       <td className="px-3 py-2 whitespace-nowrap">
@@ -107,7 +120,7 @@ export default async function ConsumablesPage() {
                       <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
                         <span className="inline-flex items-center gap-2">
                           <span>{recName} · {formatTimestamp(c.created_at as string)}</span>
-                          {canDelete && status !== "paid" && (
+                          {canAmend && status !== "paid" && (
                             <>
                               <ConsumableEditForm
                                 accounts={accounts}

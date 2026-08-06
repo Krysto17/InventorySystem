@@ -555,9 +555,6 @@ export type PdfSupplyInvoiceItem = {
   weight_kg: number;
   unit_price: number | null;
   amount: number;
-  // A withdrawn line stays on the invoice for the record but is excluded from
-  // the amount payable — it must be visibly tagged so the two reconcile.
-  settled: boolean;
 };
 
 export type PdfSupplyInvoiceData = {
@@ -568,6 +565,9 @@ export type PdfSupplyInvoiceData = {
   created_at: string;
   status: string | null;
   items: PdfSupplyInvoiceItem[];
+  // Lines released back to the supplier on a gate pass. They are not invoiced —
+  // the count is printed as a note so the paperwork still accounts for them.
+  released_count: number;
   materials_total: number;
   light_bill_total: number;
   // "Other" deductions itemised by their description (the deduction type).
@@ -652,18 +652,20 @@ export async function fetchSupplyInvoiceData(visitId: string): Promise<PdfSupply
         .eq("visit_id", visitId).maybeSingle(),
     ]);
 
-  const items: PdfSupplyInvoiceItem[] = ((lines as unknown[]) ?? []).map((l) => {
-    const row = l as { weight_kg: unknown; unit_price: unknown; purchase_amount: unknown; settlement_status: unknown; material: unknown };
-    const settled = (row.settlement_status as string | null) !== "unsettled";
-    return {
-      material_name: g1<{ name: string }>(row.material)?.name ?? null,
-      weight_kg: num(row.weight_kg),
-      unit_price: row.unit_price != null ? num(row.unit_price) : null,
-      // A withdrawn line contributes nothing to what is owed.
-      amount: settled ? num(row.purchase_amount) : 0,
-      settled,
-    };
-  });
+  // The invoice bills what was supplied. A released line went back out on a
+  // gate pass, so it is left off entirely rather than listed at ₦0.
+  const allRows = ((lines as unknown[]) ?? []).map(
+    (l) => l as { weight_kg: unknown; unit_price: unknown; purchase_amount: unknown; settlement_status: unknown; material: unknown },
+  );
+  const suppliedRows = allRows.filter((row) => (row.settlement_status as string | null) !== "unsettled");
+  const releasedCount = allRows.length - suppliedRows.length;
+
+  const items: PdfSupplyInvoiceItem[] = suppliedRows.map((row) => ({
+    material_name: g1<{ name: string }>(row.material)?.name ?? null,
+    weight_kg: num(row.weight_kg),
+    unit_price: row.unit_price != null ? num(row.unit_price) : null,
+    amount: num(row.purchase_amount),
+  }));
 
   // Split charges: processing fee (light bill) vs. itemised "other" deductions.
   const chargeRows = (charges as { kind?: string; description?: string | null; amount: unknown }[]) ?? [];
@@ -674,7 +676,7 @@ export async function fetchSupplyInvoiceData(visitId: string): Promise<PdfSupply
   const otherTotal = otherDeductions.reduce((a, d) => a + d.amount, 0);
 
   // Prefer the submitted settlement's snapshot for totals; otherwise compute live.
-  const materials = settlement ? num(settlement.materials_total) : items.filter((i) => i.settled).reduce((a, i) => a + i.amount, 0);
+  const materials = settlement ? num(settlement.materials_total) : items.reduce((a, i) => a + i.amount, 0);
   const advance = settlement ? num(settlement.advance_deducted) : (deds ?? []).reduce((a, d) => a + num(d.amount), 0);
   const net = settlement ? num(settlement.net_balance) : materials - lightBill - otherTotal - advance;
   const remaining = settlement ? num(settlement.remaining_debt) : num(debt);
@@ -687,6 +689,7 @@ export async function fetchSupplyInvoiceData(visitId: string): Promise<PdfSupply
     created_at: v.created_at as string,
     status: (settlement?.status as string | undefined) ?? null,
     items,
+    released_count: releasedCount,
     materials_total: materials,
     light_bill_total: lightBill,
     other_deductions: otherDeductions,

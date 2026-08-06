@@ -141,6 +141,9 @@ async function lineAction(formData: FormData, rpc: "unsettle_line" | "resettle_l
   }
   if (visitId) revalidatePath(`/visits/${visitId}`);
   revalidatePath("/manager");
+  // Releases are raised from the analyses screens too.
+  revalidatePath("/owner/analyses");
+  revalidatePath("/manager/analyses");
 }
 
 // Manager/owner submits the priced batch to the owner for approval: records an

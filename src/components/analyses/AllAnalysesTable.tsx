@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
-import { setLinePrice, setPriceAgreed } from "@/app/visits/[id]/batch-actions";
+import { setLinePrice, setPriceAgreed, unsettleLine } from "@/app/visits/[id]/batch-actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { dayLabel, groupByDay } from "@/lib/analyses/group-by-day";
 
@@ -19,9 +19,42 @@ export type AnalysisRow = {
   priceAgreed: boolean;
   state: string;
   canPrice: boolean;
-  settlementStatus: string; // 'settled' | 'unsettled'
+  settlementStatus: string; // 'settled' | 'unsettled' (released)
   agreed: boolean;          // price agreed (past the pricing stage)
+  unsettledReason: string | null;
+  gatePassId: string | null;
+  canRelease: boolean;      // owner may hand the material back on a gate pass
 };
+
+// Material that fails XRF spec, or that no price was agreed on, goes back to the
+// supplier. Releasing it withdraws the line from the batch and raises the gate
+// pass it leaves the yard on, in one step.
+function ReleaseMaterial({ row }: { row: AnalysisRow }) {
+  const [open, setOpen] = useState(false);
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)}
+        className="rounded border border-reject px-2 py-1 text-xs text-reject hover:bg-reject-soft">
+        Release
+      </button>
+    );
+  }
+  return (
+    <form action={unsettleLine} className="flex items-center gap-1"
+      data-confirm={`Release this ${row.material} back to ${row.supplier} and issue a gate pass? It leaves the batch.`}>
+      <input type="hidden" name="visit_id" value={row.visitId} />
+      <input type="hidden" name="visit_material_id" value={row.lineId} />
+      <input type="text" name="reason" required placeholder="Reason (out of spec / no price)"
+        className="w-52 rounded border px-2 py-1 text-xs" autoComplete="off" autoFocus />
+      <SubmitButton pendingText="…" className="rounded bg-reject px-2 py-1 text-xs text-white disabled:opacity-50">
+        Release
+      </SubmitButton>
+      <button type="button" onClick={() => setOpen(false)} className="px-1 text-xs text-ink-2 hover:underline">
+        Cancel
+      </button>
+    </form>
+  );
+}
 
 type SortKey = "date" | "supplier" | "site" | "material" | "qcWeight" | "unitPrice";
 const COLS: { key: SortKey; label: string; numeric?: boolean }[] = [
@@ -109,9 +142,21 @@ function Table({ rows, mode, isOwner }: { rows: AnalysisRow[]; mode: "pricing" |
               <td className="max-w-[18rem] px-3 py-2 text-xs text-gray-600">{r.result ?? "—"}</td>
               <td className="px-3 py-2">
                 {mode === "closed" ? (
-                  r.settlementStatus === "unsettled"
-                    ? <span className="rounded bg-reject px-1.5 py-0.5 text-[10px] font-medium text-white">Withdrawn</span>
-                    : <span className="rounded bg-approve-soft px-1.5 py-0.5 text-[10px] font-medium text-approve">Settled</span>
+                  r.settlementStatus === "unsettled" ? (
+                    <span className="flex flex-wrap items-center gap-1">
+                      <span className="rounded bg-reject px-1.5 py-0.5 text-[10px] font-medium text-white" title={r.unsettledReason ?? undefined}>
+                        Released
+                      </span>
+                      {r.gatePassId && (
+                        <a href={`/api/pdf/gate-pass/${r.gatePassId}`} target="_blank" rel="noopener"
+                          className="rounded border px-1.5 py-0.5 text-[10px] hover:bg-zinc-50">
+                          Gate pass
+                        </a>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="rounded bg-approve-soft px-1.5 py-0.5 text-[10px] font-medium text-approve">Settled</span>
+                  )
                 ) : r.canPrice ? (
                   <div className="flex flex-wrap items-center gap-1">
                     <form action={setLinePrice} className="flex items-center gap-1">
@@ -135,6 +180,7 @@ function Table({ rows, mode, isOwner }: { rows: AnalysisRow[]; mode: "pricing" |
                     {!isOwner && r.priceAgreed && (
                       <span className="rounded bg-approve-soft px-1.5 py-0.5 text-[10px] font-medium text-approve">✓ Price agreed</span>
                     )}
+                    {r.canRelease && <ReleaseMaterial row={r} />}
                   </div>
                 ) : (
                   <span className="text-xs text-gray-400">
