@@ -2,6 +2,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { setLinePrice, setPriceAgreed, unsettleLine } from "@/app/visits/[id]/batch-actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { dayLabel, groupByDay } from "@/lib/analyses/group-by-day";
@@ -202,40 +203,66 @@ function Table({ rows, mode, isOwner }: { rows: AnalysisRow[]; mode: "pricing" |
 // Cross-site XRF analyses: searchable by supplier or material. Analyses still in
 // pricing are the primary table; settled/withdrawn ones live in a separate table
 // so the working view stays clean.
-export function AllAnalysesTable({ rows, isOwner = false }: { rows: AnalysisRow[]; isOwner?: boolean }) {
-  const [q, setQ] = useState("");
+export function AllAnalysesTable({
+  rows, isOwner = false, query = "", basePath = "/owner/analyses",
+}: {
+  rows: AnalysisRow[];
+  isOwner?: boolean;
+  query?: string;
+  basePath?: string;
+}) {
+  const router = useRouter();
+  // Supplier / material / site / result are matched in Postgres — this table
+  // gains a row per material line forever. Weight and price are matched here,
+  // over the page already loaded, so "65" still finds a 65kg line.
+  const [draft, setDraft] = useState(query);
+  const [numeric, setNumeric] = useState("");
 
   const { inPricing, closed } = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    // Match supplier / material / site by text, and QC weight or price by
-    // number — so "65" finds a 65kg line as readily as a ₦65/kg one.
+    const t = numeric.trim();
     const num = (v: number | null) => (v == null ? "" : String(v));
     const f = t
-      ? rows.filter((r) =>
-          r.supplier.toLowerCase().includes(t) ||
-          r.material.toLowerCase().includes(t) ||
-          r.site.toLowerCase().includes(t) ||
-          num(r.qcWeight).includes(t) ||
-          num(r.unitPrice).includes(t))
+      ? rows.filter((r) => num(r.qcWeight).includes(t) || num(r.unitPrice).includes(t))
       : rows;
     return {
       inPricing: f.filter((r) => !r.agreed && r.settlementStatus !== "unsettled"),
       closed: f.filter((r) => r.agreed || r.settlementStatus === "unsettled"),
     };
-  }, [rows, q]);
+  }, [rows, numeric]);
 
   if (rows.length === 0) return <p className="text-sm text-gray-500">No XRF analyses yet.</p>;
 
   return (
     <div className="space-y-6">
-      <input
-        type="text"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Search by supplier or material…"
-        className="w-full max-w-xs rounded border px-2 py-1 text-sm"
-        autoComplete="off"
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <form
+          data-confirm="skip"
+          onSubmit={(e) => { e.preventDefault(); router.push(draft ? `${basePath}?q=${encodeURIComponent(draft)}` : basePath); }}
+          className="flex items-center gap-1"
+        >
+          <input
+            type="search"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Search supplier, material, site, result…"
+            className="w-full max-w-xs rounded border px-2 py-1 text-sm"
+            autoComplete="off"
+          />
+          <button type="submit" className="rounded border px-2 py-1 text-xs hover:bg-zinc-50">Search</button>
+          {query && (
+            <button type="button" onClick={() => { setDraft(""); router.push(basePath); }}
+              className="px-1 text-xs text-ink-2 hover:underline">Clear</button>
+          )}
+        </form>
+        <input
+          type="search"
+          value={numeric}
+          onChange={(e) => setNumeric(e.target.value)}
+          placeholder="Filter by weight or price…"
+          className="w-44 rounded border px-2 py-1 text-sm"
+          autoComplete="off"
+        />
+      </div>
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-2">In pricing ({inPricing.length})</h3>
         <Table isOwner={isOwner} rows={inPricing} mode="pricing" />

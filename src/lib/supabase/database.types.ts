@@ -2324,6 +2324,41 @@ export type Database = {
         }
         Relationships: []
       }
+      visit_pipeline: {
+        Row: {
+          id: string
+          state: string
+          entry_path: string
+          created_at: string
+          site_id: string
+          site_name: string | null
+          supplier_name: string | null
+          material_name: string | null
+          price_approved: boolean
+          unsettled_count: number
+        }
+        Relationships: []
+      }
+      xrf_analyses: {
+        Row: {
+          id: string
+          line_id: string
+          visit_id: string
+          recorded_at: string
+          supplier_name: string | null
+          site_name: string | null
+          material_name: string | null
+          result: string | null
+          qc_weight_kg: number | null
+          unit_price: number | null
+          price_agreed: boolean
+          settlement_status: string
+          unsettled_reason: string | null
+          visit_state: string
+          gate_pass_id: string | null
+        }
+        Relationships: []
+      }
       material_cost_basis: {
         Row: {
           material_type_id: string
@@ -2338,6 +2373,11 @@ export type Database = {
       manager_skip_to_pricing: { Args: { p_visit_id: string }; Returns: undefined }
       approve_pricing: { Args: { p_visit_id: string }; Returns: undefined }
       reject_pricing: { Args: { p_visit_id: string }; Returns: undefined }
+      machine_utilization: {
+        Args: { p_from: string; p_to: string; p_site?: string }
+        Returns: { machine_name: string; charge_basis: string; total_measurement: number; total_fee: number }[]
+      }
+      my_pending_counts: { Args: Record<string, never>; Returns: Json }
       record_stock_check: { Args: { p_lot_id: string; p_status: string; p_counted_weight?: number; p_note?: string }; Returns: undefined }
       unsettle_line: { Args: { p_line_id: string; p_reason?: string }; Returns: undefined }
       resettle_line: { Args: { p_line_id: string }; Returns: undefined }

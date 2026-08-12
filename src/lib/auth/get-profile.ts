@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { one } from "@/lib/db/relation";
 import type { Role } from "@/lib/auth/roles";
@@ -17,7 +18,14 @@ export type Profile = {
   is_general_manager: boolean;
 };
 
-export async function getProfile(): Promise<Profile | null> {
+/**
+ * The signed-in user's profile.
+ *
+ * Deduped per request with React's cache(): the layout and the page both need
+ * it, and each uncached call costs an auth round-trip plus a profiles select.
+ * Server actions run in their own request, so they still pay for one.
+ */
+export const getProfile = cache(async function getProfile(): Promise<Profile | null> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
@@ -40,4 +48,4 @@ export async function getProfile(): Promise<Profile | null> {
     status: data.status as "active" | "disabled",
     is_general_manager: data.role === "manager" && site_name === "New-Site",
   };
-}
+});

@@ -1,5 +1,6 @@
 import { Boxes, Wallet, ScrollText, Percent } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getSites } from "@/lib/reference";
 import { FilterBar } from "@/components/dashboard/FilterBar";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { InventoryTable, type StockRow } from "@/components/dashboard/InventoryTable";
@@ -44,13 +45,13 @@ export default async function OwnerDashboard({
     { data: allVisits },
     { data: pricingRows },
     { data: stockBalances },
-    { data: machineUsage },
+    { data: machineRowsRaw },
     { data: consumables },
     { data: pendingBulkSales },
     { data: costBasis },
     { data: recentMovements },
   ] = await Promise.all([
-    supabase.from("sites").select("id, name").order("name"),
+    Promise.resolve({ data: await getSites() }),
 
     (() => {
       let q = supabase
@@ -76,15 +77,13 @@ export default async function OwnerDashboard({
       return q;
     })(),
 
-    supabase
-      .from("processing_machine_usage")
-      .select(`
-        measurement, line_cost,
-        machine:machines(name, charge_basis, site_id),
-        processing_record:processing_records(completed_at, discount_percent, visit:visits(site_id))
-      `)
-      .gte("processing_records.completed_at", dateFromISO)
-      .lte("processing_records.completed_at", dateToISO),
+    // Totalled in SQL: one row per machine instead of every usage row in the
+    // period with its record and visit nested inside (0137).
+    supabase.rpc("machine_utilization", {
+      p_from: dateFromISO,
+      p_to: dateToISO,
+      p_site: siteFilter || undefined,
+    }),
 
     (() => {
       let q = supabase
@@ -178,27 +177,13 @@ export default async function OwnerDashboard({
     at: m.created_at as string,
   }));
 
-  // ── Machine utilization ───────────────────────────────────────────────────
-  const machineMap = new Map<string, { name: string; totalMeasurement: number; totalFee: number; charge_basis: string }>();
-  for (const u of machineUsage ?? []) {
-    const pr = g1<{ visit?: unknown; discount_percent?: number }>((u as { processing_record: unknown }).processing_record);
-    if (!pr) continue;
-    const visit = g1<{ site_id?: string }>(pr.visit);
-    if (siteFilter && visit?.site_id !== siteFilter) continue;
-    const machine = g1<{ name?: string; charge_basis?: string }>((u as { machine: unknown }).machine);
-    const name = machine?.name ?? "—";
-    // The fee actually deducted from the supplier is net of the per-batch
-    // discount (= the light-bill charge), not the gross machine cost.
-    const netFee = Number(u.line_cost) * (1 - (Number(pr.discount_percent) || 0) / 100);
-    const existing = machineMap.get(name);
-    if (existing) {
-      existing.totalMeasurement += Number(u.measurement);
-      existing.totalFee += netFee;
-    } else {
-      machineMap.set(name, { name, totalMeasurement: Number(u.measurement), totalFee: netFee, charge_basis: machine?.charge_basis ?? "" });
-    }
-  }
-  const machineRows = Array.from(machineMap.values()).sort((a, b) => b.totalFee - a.totalFee);
+  // ── Machine utilization (totalled in SQL, fee net of the batch discount) ──
+  const machineRows = (machineRowsRaw ?? []).map((r) => ({
+    name: (r.machine_name as string) ?? "—",
+    charge_basis: (r.charge_basis as string) ?? "",
+    totalMeasurement: Number(r.total_measurement ?? 0),
+    totalFee: Number(r.total_fee ?? 0),
+  }));
 
   const sitesTyped = (sites ?? []) as { id: string; name: string }[];
 

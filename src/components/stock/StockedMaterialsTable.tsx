@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useActionState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { confirmLot, disputeLot, clearCheck } from "@/app/stocked-materials/actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { ActionResult } from "@/lib/actions/result";
@@ -139,43 +140,42 @@ function CheckCell({ row, canCheck }: { row: StockedRow; canCheck: boolean }) {
 // Every stocked material — supplier, type, weight, paid status — and the store
 // check against it. Whoever counts the store ticks a lot off right here.
 export function StockedMaterialsTable({
-  rows, canCheck = false,
+  rows, canCheck = false, query = "", only = "", includeSold = false,
 }: {
   rows: StockedRow[];
   canCheck?: boolean;
+  query?: string;
+  only?: string;
+  includeSold?: boolean;
 }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [asc, setAsc] = useState(false);
-  const [q, setQ] = useState("");
-  const [only, setOnly] = useState<"all" | "uncounted" | "disputed">("all");
+  // The search box and the filter chips are URL state: the log grows with every
+  // lot, so Postgres does the filtering and the page only ever holds a page of
+  // rows. Sorting stays client-side — it reorders what is already here.
+  const [draft, setDraft] = useState(query);
+
+  const go = (next: Record<string, string>) => {
+    const p = new URLSearchParams(searchParams.toString());
+    for (const [k, v] of Object.entries(next)) {
+      if (v) p.set(k, v); else p.delete(k);
+    }
+    router.push(`/stocked-materials${p.toString() ? `?${p}` : ""}`);
+  };
 
   const view = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    const filtered = rows.filter((r) => {
-      if (only === "uncounted" && !(checkable(r) && r.check === "unchecked")) return false;
-      if (only === "disputed" && r.check !== "disputed") return false;
-      if (!t) return true;
-      return r.supplier.toLowerCase().includes(t)
-        || r.material.toLowerCase().includes(t)
-        || (r.supplierCode ?? "").toLowerCase().includes(t)
-        || r.site.toLowerCase().includes(t)
-        || String(r.weight).includes(t);
-    });
-    return [...filtered].sort((a, b) => {
+    return [...rows].sort((a, b) => {
       const cmp =
         sortKey === "weight"
           ? a.weight - b.weight
           : String(a[sortKey]).localeCompare(String(b[sortKey]));
       return asc ? cmp : -cmp;
     });
-  }, [rows, sortKey, asc, q, only]);
+  }, [rows, sortKey, asc]);
 
   const totalWeight = view.reduce((s, r) => s + r.weight, 0);
-  const counts = {
-    uncounted: rows.filter((r) => checkable(r) && r.check === "unchecked").length,
-    disputed: rows.filter((r) => r.check === "disputed").length,
-    confirmed: rows.filter((r) => r.check === "confirmed").length,
-  };
 
   const onSort = (key: SortKey) => {
     if (sortKey === key) setAsc((v) => !v);
@@ -200,22 +200,33 @@ export function StockedMaterialsTable({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="text"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search supplier, material, site, weight…"
-          className="w-full max-w-xs rounded border px-3 py-1.5 text-sm"
-          autoComplete="off"
-        />
-        {(["all", "uncounted", "disputed"] as const).map((k) => (
-          <button key={k} type="button" onClick={() => setOnly(k)}
+        <form
+          data-confirm="skip"
+          onSubmit={(e) => { e.preventDefault(); go({ q: draft }); }}
+          className="flex items-center gap-1"
+        >
+          <input
+            type="search"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Search supplier, material, site…"
+            className="w-full max-w-xs rounded border px-3 py-1.5 text-sm"
+            autoComplete="off"
+          />
+          <button type="submit" className="rounded border px-2 py-1.5 text-xs hover:bg-zinc-50">Search</button>
+          {query && (
+            <button type="button" onClick={() => { setDraft(""); go({ q: "" }); }}
+              className="px-1 text-xs text-ink-2 hover:underline">Clear</button>
+          )}
+        </form>
+        {([["", "All"], ["uncounted", "Not counted"], ["disputed", "Disputed"]] as const).map(([k, label]) => (
+          <button key={k || "all"} type="button" onClick={() => go({ only: k })}
             className={`rounded px-2 py-1 text-xs ${only === k ? "bg-black text-white" : "border hover:bg-zinc-50"}`}>
-            {k === "all" ? "All" : k === "uncounted" ? `Not counted (${counts.uncounted})` : `Disputed (${counts.disputed})`}
+            {label}
           </button>
         ))}
         <span className="ml-auto text-xs text-zinc-500">
-          {view.length} lots · <span className="font-semibold text-ink">{kg(totalWeight)} kg</span>
+          {view.length} lots{includeSold ? "" : " in stock"} · <span className="font-semibold text-ink">{kg(totalWeight)} kg</span>
         </span>
       </div>
 

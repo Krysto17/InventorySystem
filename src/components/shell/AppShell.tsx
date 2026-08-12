@@ -14,11 +14,20 @@ import type { NotificationItem } from "@/lib/notifications";
 
 const BARE_PREFIXES = ["/login", "/set-password"];
 
-// Tables whose changes can alter a role's "awaiting your action" counts.
-const NOTIFY_TABLES = [
-  "visits", "gate_passes", "bulk_sales", "lot_sales", "advances",
-  "consumables", "cost_price_runs", "batch_settlements", "payments",
-];
+// Only the tables that can move THIS role's counts, so a write nobody in the
+// room cares about doesn't wake every open tab. Deletes never raise a count, so
+// insert/update is enough.
+const NOTIFY_TABLES: Record<Role, string[]> = {
+  owner:      ["visits", "bulk_sales", "lot_sales", "advances", "consumables", "cost_price_runs", "payments"],
+  manager:    ["visits"],
+  accounting: ["batch_settlements", "advances", "consumables"],
+  gate:       ["gate_passes", "visits"],
+  processing: ["visits"],
+  receiving:  ["visits"],
+  qc:         ["visits"],
+  inventory:  ["visits"],
+  stock_keeper: [],
+};
 
 type Props = {
   profile: { role: Role; fullName: string; username: string; isGeneralManager: boolean } | null;
@@ -83,9 +92,16 @@ export function AppShell({ profile, notificationItems, children }: Props) {
       }, 400);
     };
 
+    const tables = NOTIFY_TABLES[role] ?? [];
+    if (tables.length === 0) return;
+
+    // The bell is no longer rendered by the server, so fetch it once on mount.
+    refresh();
+
     const channel = supabase.channel("role-notifications");
-    for (const table of NOTIFY_TABLES) {
-      channel.on("postgres_changes", { event: "*", schema: "public", table }, refresh);
+    for (const table of tables) {
+      channel.on("postgres_changes", { event: "INSERT", schema: "public", table }, refresh);
+      channel.on("postgres_changes", { event: "UPDATE", schema: "public", table }, refresh);
     }
     channel.subscribe();
 

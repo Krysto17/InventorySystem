@@ -27,9 +27,13 @@ export default async function StockedMaterialsPage({
   if (!me) redirect("/login");
   const params = await searchParams;
   const includeSold = String(params.sold ?? "") === "1";
+  // Searching in Postgres rather than shipping the whole log to the browser to
+  // filter it there — this list grows with every lot, forever.
+  const q = String(params.q ?? "").trim();
+  const only = String(params.only ?? "");
 
   const supabase = await createClient();
-  let q = supabase
+  let query = supabase
     .from("stocked_materials")
     .select(`
       id, created_at, site_name, material_name, supplier_name, supplier_code,
@@ -38,8 +42,16 @@ export default async function StockedMaterialsPage({
     `)
     .order("created_at", { ascending: false })
     .limit(PAGE_LIMIT);
-  if (!includeSold) q = q.eq("status", "available");
-  const { data } = await q;
+  if (!includeSold) query = query.eq("status", "available");
+  if (only === "disputed") query = query.eq("check_status", "disputed");
+  if (only === "uncounted") query = query.is("check_status", null).eq("is_paid", true);
+  if (q) {
+    const safe = q.replace(/[,()*%]/g, "");
+    query = query.or(
+      `material_name.ilike.%${safe}%,supplier_name.ilike.%${safe}%,site_name.ilike.%${safe}%,supplier_code.ilike.%${safe}%`,
+    );
+  }
+  const { data } = await query;
 
   const rows: StockedRow[] = (data ?? []).map((l) => ({
     id: l.id as string,
@@ -85,7 +97,9 @@ export default async function StockedMaterialsPage({
             </Link>
           </div>
         </CardHeader>
-        <CardContent><StockedMaterialsTable rows={rows} canCheck={canCheck} /></CardContent>
+        <CardContent>
+          <StockedMaterialsTable rows={rows} canCheck={canCheck} query={q} only={only} includeSold={includeSold} />
+        </CardContent>
       </Card>
     </main>
   );

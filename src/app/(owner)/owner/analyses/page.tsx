@@ -4,11 +4,14 @@ import { fetchAllAnalyses, AGREED_STATES } from "@/lib/analyses/all-analyses";
 import { AllAnalysesTable, type AnalysisRow } from "@/components/analyses/AllAnalysesTable";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 
-export default async function OwnerAnalysesPage() {
+export default async function OwnerAnalysesPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const me = await getProfile();
   if (!me || me.role !== "owner") redirect("/login");
 
-  const raw = await fetchAllAnalyses();
+  const q = String((await searchParams).q ?? "").trim();
+  const raw = await fetchAllAnalyses({ q });
   // Owner may price a line in the pricing stage, and release material that is
   // out of spec or that no price was agreed on — which raises its gate pass.
   const rows: AnalysisRow[] = raw.map((r) => ({
@@ -26,7 +29,7 @@ export default async function OwnerAnalysesPage() {
       </header>
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">All analyses</h2></CardHeader>
-        <CardContent><AllAnalysesTable rows={rows} isOwner /></CardContent>
+        <CardContent><AllAnalysesTable rows={rows} isOwner query={q} basePath="/owner/analyses" /></CardContent>
       </Card>
     </main>
   );

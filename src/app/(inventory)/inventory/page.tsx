@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveMaterialTypes, getSites } from "@/lib/reference";
 import { getProfile } from "@/lib/auth/get-profile";
 import { formatWeight, formatTimestamp } from "@/lib/visits/format";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
@@ -15,8 +16,8 @@ export default async function InventoryPage() {
   // Owner-only manual stock adjustment needs the site + material lists.
   const [{ data: adjSites }, { data: adjMaterials }] = isOwner
     ? await Promise.all([
-        supabase.from("sites").select("id, name").order("name"),
-        supabase.from("material_types").select("id, name").eq("active", true).order("name"),
+        Promise.resolve({ data: await getSites() }),
+        Promise.resolve({ data: await getActiveMaterialTypes() }),
       ])
     : [{ data: null }, { data: null }];
 

@@ -51,7 +51,9 @@ export async function BatchSettlementCard({
       supabase.from("utility_charges").select("id, kind, description, amount").eq("visit_id", visitId),
       supabase.from("advance_deductions").select("id, amount, notes, created_at").eq("ref_visit_id", visitId),
       supabase.rpc("supplier_outstanding_debt", { _supplier_id: supplierId }),
-      supabase.from("batch_settlements").select("*").eq("visit_id", visitId).maybeSingle(),
+      supabase.from("batch_settlements")
+        .select("id, status, materials_total, light_bill_total, other_deductions_total, advance_deducted, net_balance, remaining_debt, rejection_note")
+        .eq("visit_id", visitId).maybeSingle(),
       supabase.rpc("settlement_totals", { p_visit_id: visitId }),
     ]);
 

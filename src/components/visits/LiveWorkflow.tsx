@@ -2,52 +2,31 @@ import { createClient } from "@/lib/supabase/server";
 import { LiveWorkflowList, type WorkflowRow } from "@/components/visits/LiveWorkflowList";
 import type { VisitState } from "@/lib/visits/state-machine";
 
-import { one as g1 } from "@/lib/db/relation";
-
 // Shared "Live workflow — supply pipeline" panel shown on every role's home.
 // Lists the visits the viewer is allowed to see (RLS-scoped); the client list
 // handles search/sort and collapsing to 10 rows (#6/#7).
+//
+// One read from visit_pipeline (0134) — this used to be three round-trips: the
+// visits with three nested joins, then two more passes over visit_materials to
+// work out the price/withdrawn flags.
 export async function LiveWorkflow({ limit = 100 }: { limit?: number }) {
   const supabase = await createClient();
-  const { data: visits } = await supabase
-    .from("visits")
-    .select(`
-      id, state, entry_path, created_at,
-      supplier:suppliers(name),
-      declared_material_type:material_types(name),
-      site:sites(name)
-    `)
+  const { data } = await supabase
+    .from("visit_pipeline")
+    .select("id, state, entry_path, created_at, site_name, supplier_name, material_name, price_approved, unsettled_count")
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  // Which of these visits have an owner-finalised price (green "Director OK"),
-  // and which have any withdrawn/unsettled line (marked "Unsettled", #3).
-  const visitIds = (visits ?? []).map((v) => v.id as string);
-  const [{ data: finalized }, { data: unsettled }] = visitIds.length
-    ? await Promise.all([
-        supabase.from("visit_materials").select("visit_id").in("visit_id", visitIds).eq("price_finalized", true),
-        supabase.from("visit_materials").select("visit_id").in("visit_id", visitIds).eq("settlement_status", "unsettled"),
-      ])
-    : [{ data: [] as { visit_id: string }[] }, { data: [] as { visit_id: string }[] }];
-  const priceApprovedSet = new Set((finalized ?? []).map((r) => r.visit_id as string));
-  // Count the withdrawn/unsettled lines per visit so the pipeline can say how
-  // many of a batch's materials were pulled out, not just that some were.
-  const unsettledCount = new Map<string, number>();
-  for (const r of unsettled ?? []) {
-    const id = r.visit_id as string;
-    unsettledCount.set(id, (unsettledCount.get(id) ?? 0) + 1);
-  }
-
-  const rows: WorkflowRow[] = (visits ?? []).map((v) => ({
+  const rows: WorkflowRow[] = (data ?? []).map((v) => ({
     id: v.id as string,
-    supplier: g1<{ name: string }>(v.supplier)?.name ?? "—",
-    material: g1<{ name: string }>(v.declared_material_type)?.name ?? "—",
-    site: g1<{ name: string }>(v.site)?.name ?? "—",
+    supplier: (v.supplier_name as string) ?? "—",
+    material: (v.material_name as string) ?? "—",
+    site: (v.site_name as string) ?? "—",
     state: v.state as VisitState,
     entryPath: v.entry_path as "unprocessed" | "processed",
-    priceApproved: priceApprovedSet.has(v.id as string),
-    unsettled: (unsettledCount.get(v.id as string) ?? 0) > 0,
-    unsettledCount: unsettledCount.get(v.id as string) ?? 0,
+    priceApproved: Boolean(v.price_approved),
+    unsettled: Number(v.unsettled_count ?? 0) > 0,
+    unsettledCount: Number(v.unsettled_count ?? 0),
     date: v.created_at as string,
   }));
 

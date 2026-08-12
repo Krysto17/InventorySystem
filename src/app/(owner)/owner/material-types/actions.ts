@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateReference } from "@/lib/reference";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 
@@ -11,6 +12,7 @@ export async function createMaterialType(formData: FormData): Promise<void> {
   if (!name) return;
   const supabase = await createClient();
   await supabase.from("material_types").insert({ name, created_by: me.id });
+  revalidateReference("materials");
   revalidatePath("/owner/material-types");
 }
 
@@ -21,5 +23,6 @@ export async function toggleMaterialType(formData: FormData): Promise<void> {
   const active = formData.get("active") === "true";
   const supabase = await createClient();
   await supabase.from("material_types").update({ active }).eq("id", id);
+  revalidateReference("materials");
   revalidatePath("/owner/material-types");
 }

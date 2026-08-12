@@ -4,7 +4,6 @@ import { ThemeProvider } from "@/components/shell/ThemeProvider";
 import { AppShell } from "@/components/shell/AppShell";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 import { getProfile } from "@/lib/auth/get-profile";
-import { roleNotifications } from "@/lib/notifications";
 
 // Industrial-ledger type system: Archivo (sans) + IBM Plex Mono (IDs, figures),
 // loaded at runtime via <link> (see <head> below) with a system-font fallback,
@@ -30,8 +29,10 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // The bell is filled in by the client after paint (AppShell fetches it on
+  // mount and keeps it live over realtime). Blocking the whole shell on a
+  // count query just to draw a badge made every navigation wait for it.
   const profile = await getProfile();
-  const notificationItems = profile ? await roleNotifications(profile.role) : [];
 
   return (
     <html
@@ -61,7 +62,7 @@ export default async function RootLayout({
                   }
                 : null
             }
-            notificationItems={notificationItems}
+            notificationItems={[]}
           >
             {children}
           </AppShell>

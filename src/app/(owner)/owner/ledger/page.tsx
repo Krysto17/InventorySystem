@@ -98,7 +98,7 @@ export default async function OwnerLedgerPage({
                 {ledger.map((r) => (
                   <tr key={r.id} className="border-t border-line">
                     <td className="py-1.5">
-                      <Link href={`/owner/suppliers/${r.id}`} className="font-medium underline">{r.name}</Link>
+                      <Link href={`/suppliers/${r.id}`} className="font-medium underline">{r.name}</Link>
                       {r.code && <span className="ml-2"><Stamp>{r.code}</Stamp></span>}
                     </td>
                     <td className="py-1.5 text-right">{ngn(r.out)}</td>

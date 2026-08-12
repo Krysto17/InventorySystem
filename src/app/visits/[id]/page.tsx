@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveMaterialTypes } from "@/lib/reference";
 import { getProfile } from "@/lib/auth/get-profile";
 import { VisitTimeline } from "@/components/visits/VisitTimeline";
 import { ApprovalChain } from "@/components/visits/ApprovalChain";
@@ -94,7 +95,7 @@ export default async function VisitDetailPage({
       `)
       .eq("visit_id", id)
       .maybeSingle(),
-    supabase.from("material_types").select("id, name").eq("active", true).order("name"),
+    Promise.resolve({ data: await getActiveMaterialTypes() }),
     supabase.from("machines").select("id, name, charge_basis, rate").eq("active", true),
     supabase
       .from("visit_materials")

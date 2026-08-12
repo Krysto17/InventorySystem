@@ -3,83 +3,57 @@ import type { Role } from "@/lib/auth/roles";
 
 export type NotificationItem = { label: string; href: string; count: number };
 
-// Per-role "awaiting your action" counts, surfaced in the header bell. Queries
-// run as the signed-in user, so RLS scopes them to the viewer's site (owner sees
-// all). Only non-zero items are returned.
+type Counts = Record<string, number>;
+
+// Which counts each role is shown, and where each one leads. Roles that share a
+// queue share the entry — the counts themselves are RLS-scoped in Postgres, so
+// a site manager's "in analysis" is their own site's.
+const FOR_ROLE: Record<Role, { key: string; label: string; href: string }[]> = {
+  owner: [
+    { key: "prices_to_approve", label: "Prices to approve",         href: "/owner/approvals" },
+    { key: "bulk_sales",        label: "Bulk sales to approve",     href: "/owner/approvals" },
+    { key: "lot_sales",         label: "Lot sales to approve",      href: "/owner/approvals" },
+    { key: "advances_pending",  label: "Advances to approve",       href: "/owner/approvals" },
+    { key: "expenses_pending",  label: "Expenses to approve",       href: "/owner/approvals" },
+    { key: "cost_runs",         label: "Mixing batches to approve", href: "/owner/cost-batches" },
+    { key: "payments_pending",  label: "Payments to approve",       href: "/owner/approvals" },
+  ],
+  manager: [
+    { key: "in_qc",              label: "Batches in analysis", href: "/manager" },
+    { key: "awaiting_gate_exit", label: "Exits to authorise",  href: "/manager" },
+    { key: "in_pricing",         label: "Visits to price",     href: "/manager" },
+  ],
+  accounting: [
+    { key: "settlements_to_pay", label: "Settlements to pay", href: "/accounting/payouts" },
+    { key: "advances_to_pay",    label: "Advances to pay",    href: "/accounting/payouts" },
+    { key: "expenses_to_pay",    label: "Expenses to pay",    href: "/accounting/payouts" },
+  ],
+  gate: [
+    { key: "passes_to_ack",      label: "Gate passes to acknowledge", href: "/gate" },
+    { key: "awaiting_gate_exit", label: "Suppliers awaiting release", href: "/gate" },
+  ],
+  processing:  [{ key: "in_processing",   label: "Visits in processing",  href: "/processing" }],
+  receiving:   [{ key: "in_receiving",    label: "Visits in receiving",   href: "/receiving" }],
+  qc:          [{ key: "in_qc",           label: "Visits awaiting XRF",   href: "/qc" }],
+  inventory:   [{ key: "awaiting_intake", label: "Awaiting stock intake", href: "/inventory" }],
+  stock_keeper: [],
+};
+
+/**
+ * Per-role "awaiting your action" counts for the header bell.
+ *
+ * One RPC, one row. This used to be a count query per item — seven of them for
+ * the owner — re-run by every open tab on every realtime event.
+ */
 export async function roleNotifications(role: Role): Promise<NotificationItem[]> {
+  const wanted = FOR_ROLE[role] ?? [];
+  if (wanted.length === 0) return [];
+
   const supabase = await createClient();
-  const items: NotificationItem[] = [];
+  const { data } = await supabase.rpc("my_pending_counts");
+  const counts = (data ?? {}) as Counts;
 
-  // Run a head/count query with an equality filter, RLS-scoped to the viewer.
-  // The table and column are dynamic, so this describes just the shape it uses
-  // rather than leaning on the generated table union.
-  type CountQuery = {
-    select: (columns: string, options: { count: "exact"; head: true }) => {
-      eq: (column: string, value: string) => PromiseLike<{ count: number | null }>;
-    };
-  };
-  const countWhere = async (table: string, column: string, value: string): Promise<number> => {
-    const { count } = await (supabase.from(table as never) as unknown as CountQuery)
-      .select("id", { count: "exact", head: true })
-      .eq(column, value);
-    return count ?? 0;
-  };
-
-  const push = (label: string, href: string, count: number) => {
-    if (count > 0) items.push({ label, href, count });
-  };
-
-  if (role === "owner") {
-    const [prices, bulk, lots, adv, exp, batches, pays] = await Promise.all([
-      countWhere("visits", "state", "awaiting_price_approval"),
-      countWhere("bulk_sales", "approval_status", "pending"),
-      countWhere("lot_sales", "approval_status", "pending"),
-      countWhere("advances", "approval_status", "pending"),
-      countWhere("consumables", "approval_status", "pending"),
-      countWhere("cost_price_runs", "approval_status", "pending"),
-      countWhere("payments", "status", "pending"),
-    ]);
-    push("Prices to approve", "/owner/approvals", prices);
-    push("Bulk sales to approve", "/owner/approvals", bulk);
-    push("Lot sales to approve", "/owner/approvals", lots);
-    push("Advances to approve", "/owner/approvals", adv);
-    push("Expenses to approve", "/owner/approvals", exp);
-    push("Mixing batches to approve", "/owner/cost-batches", batches);
-    push("Payments to approve", "/owner/approvals", pays);
-  } else if (role === "manager") {
-    const [analysis, exits, pricing] = await Promise.all([
-      countWhere("visits", "state", "in_qc"),
-      countWhere("visits", "state", "awaiting_gate_exit"),
-      countWhere("visits", "state", "pricing"),
-    ]);
-    push("Batches in analysis", "/manager", analysis);
-    push("Exits to authorise", "/manager", exits);
-    push("Visits to price", "/manager", pricing);
-  } else if (role === "accounting") {
-    const [settles, adv, exp] = await Promise.all([
-      countWhere("batch_settlements", "status", "approved"),
-      countWhere("advances", "approval_status", "approved"),
-      countWhere("consumables", "approval_status", "approved"),
-    ]);
-    push("Settlements to pay", "/accounting/payouts", settles);
-    push("Advances to pay", "/accounting/payouts", adv);
-    push("Expenses to pay", "/accounting/payouts", exp);
-  } else if (role === "gate") {
-    const [passes, exits] = await Promise.all([
-      countWhere("gate_passes", "status", "issued"),
-      countWhere("visits", "state", "awaiting_gate_exit"),
-    ]);
-    push("Gate passes to acknowledge", "/gate", passes);
-    push("Suppliers awaiting release", "/gate", exits);
-  } else if (role === "processing") {
-    push("Visits in processing", "/processing", await countWhere("visits", "state", "in_processing"));
-  } else if (role === "receiving") {
-    push("Visits in receiving", "/receiving", await countWhere("visits", "state", "in_receiving"));
-  } else if (role === "qc") {
-    push("Visits awaiting XRF", "/qc", await countWhere("visits", "state", "in_qc"));
-  } else if (role === "inventory") {
-    push("Awaiting stock intake", "/inventory", await countWhere("visits", "state", "awaiting_stock_intake"));
-  }
-
-  return items;
+  return wanted
+    .map((w) => ({ label: w.label, href: w.href, count: Number(counts[w.key] ?? 0) }))
+    .filter((i) => i.count > 0);
 }
