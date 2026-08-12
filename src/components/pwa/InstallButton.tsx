@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useMounted } from "@/lib/hooks/use-mounted";
 
 // Captured beforeinstallprompt event (Chrome/Android/desktop Chrome).
 type InstallPromptEvent = Event & {
@@ -14,16 +15,19 @@ type InstallPromptEvent = Event & {
 // hidden — those users install via Share → Add to Home Screen.
 export function InstallButton() {
   const [deferred, setDeferred] = useState<InstallPromptEvent | null>(null);
-  const [hidden, setHidden] = useState(false);
+  const [installed, setInstalled] = useState(false);
+  // Running standalone already? That is a fact about the browser, read on the
+  // client rather than discovered by an effect.
+  const mounted = useMounted();
+  const standalone = mounted && (window.matchMedia?.("(display-mode: standalone)").matches ?? false);
 
   useEffect(() => {
-    if (window.matchMedia?.("(display-mode: standalone)").matches) setHidden(true);
     const onPrompt = (e: Event) => {
       e.preventDefault();
       setDeferred(e as InstallPromptEvent);
     };
     const onInstalled = () => {
-      setHidden(true);
+      setInstalled(true);
       setDeferred(null);
     };
     window.addEventListener("beforeinstallprompt", onPrompt);
@@ -34,7 +38,7 @@ export function InstallButton() {
     };
   }, []);
 
-  if (hidden || !deferred) return null;
+  if (standalone || installed || !deferred) return null;
 
   async function install() {
     const evt = deferred;

@@ -1,26 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useMounted } from "@/lib/hooks/use-mounted";
 
 // Prompts the user to allow browser notifications for the site. Once granted (or
 // denied/unsupported) the button disappears. When granted, AppShell fires a
 // system pop-up on new queue/approval items via the existing realtime.
 export function NotificationButton() {
-  const [perm, setPerm] = useState<NotificationPermission | "unsupported">("default");
-
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof Notification === "undefined") {
-      setPerm("unsupported");
-      return;
-    }
-    setPerm(Notification.permission);
-  }, []);
+  // The browser's own permission, read on the client; `asked` holds the answer
+  // once the user has responded to the prompt.
+  const mounted = useMounted();
+  const [asked, setAsked] = useState<NotificationPermission | null>(null);
+  const perm: NotificationPermission | "unsupported" =
+    !mounted ? "default"
+      : typeof Notification === "undefined" ? "unsupported"
+        : asked ?? Notification.permission;
 
   if (perm !== "default") return null;
 
   async function enable() {
     try {
-      setPerm(await Notification.requestPermission());
+      setAsked(await Notification.requestPermission());
     } catch {
       /* permission request not available */
     }

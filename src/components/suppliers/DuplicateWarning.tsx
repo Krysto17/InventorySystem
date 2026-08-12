@@ -19,12 +19,17 @@ export function DuplicateWarning({
 }: {
   name: string; accountNumber?: string; excludeId?: string;
 }) {
-  const [matches, setMatches] = useState<SimilarSupplier[]>([]);
+  // Matches are stamped with the query they answer, so a query too short to
+  // search simply has no answer — no need to clear state from the effect.
+  const [found, setFound] = useState<{ key: string; rows: SimilarSupplier[] }>({ key: "", rows: [] });
+
+  const n = name.trim();
+  const acct = (accountNumber ?? "").trim();
+  const worthSearching = n.length >= 3 || acct.length >= 10;
+  const key = `${n}|${acct}|${excludeId ?? ""}`;
 
   useEffect(() => {
-    const n = name.trim();
-    const acct = (accountNumber ?? "").trim();
-    if (n.length < 3 && acct.length < 10) { setMatches([]); return; }
+    if (!worthSearching) return;
 
     let cancelled = false;
     // Debounce so we aren't querying on every keystroke.
@@ -35,12 +40,13 @@ export function DuplicateWarning({
         p_account_number: acct || undefined,
         p_exclude: excludeId || undefined,
       });
-      if (!cancelled) setMatches((data ?? []) as SimilarSupplier[]);
+      if (!cancelled) setFound({ key, rows: (data ?? []) as SimilarSupplier[] });
     }, 350);
 
     return () => { cancelled = true; clearTimeout(t); };
-  }, [name, accountNumber, excludeId]);
+  }, [key, n, acct, excludeId, worthSearching]);
 
+  const matches = worthSearching && found.key === key ? found.rows : [];
   if (matches.length === 0) return null;
   const accountClash = matches.some((m) => m.same_account);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 import { addSample, type SampleState } from "@/app/(qc)/qc/samples/actions";
 import { useSupplierSearch } from "@/app/(processing)/processing/intake/useSupplierSearch";
 
@@ -13,10 +13,14 @@ export function SampleForm({ materialTypes }: { materialTypes: MaterialType[] })
   const [supplierId, setSupplierId] = useState("");
   const { results } = useSupplierSearch(name);
 
-  // Clear the supplier picker after a successful save (form resets the rest).
-  useEffect(() => {
+  // Clear the supplier picker once a save succeeds (the form resets the rest).
+  // Keyed off the action result during render rather than an effect, so the
+  // cleared field paints in the same pass as the success message.
+  const [seenState, setSeenState] = useState(state);
+  if (seenState !== state) {
+    setSeenState(state);
     if (state.ok) { setName(""); setSupplierId(""); }
-  }, [state]);
+  }
 
   return (
     <form action={action} className="space-y-3 rounded border border-line p-4 max-w-lg">

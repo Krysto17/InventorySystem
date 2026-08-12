@@ -3,7 +3,7 @@ import { Document, Page, View, Text } from "@react-pdf/renderer";
 import { BrandHeader, PageFooter } from "../brand";
 import { shared } from "../styles";
 import type { PdfVisitData } from "../fetch-data";
-import { formatTs, formatNgn, formatKg } from "../format";
+import { formatTs, formatNgn } from "../format";
 
 function Row({ label, value }: { label: string; value: string }) {
   return (

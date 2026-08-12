@@ -79,7 +79,6 @@ export async function BatchSettlementCard({
   const snap = settlement as Record<string, unknown> | null;
   const materials = snap ? Number(snap.materials_total) : Number(t?.materials ?? 0);
   const lightBill = snap ? Number(snap.light_bill_total) : Number(t?.processing_fee ?? 0);
-  const otherTotal = snap ? Number(snap.other_deductions_total) : Number(t?.other_deductions ?? 0);
   const advance = snap ? Number(snap.advance_deducted) : Number(t?.advances ?? 0);
   const net = snap ? Number(snap.net_balance) : Number(t?.net ?? 0);
   const outstandingDebt = Number(debt ?? 0);

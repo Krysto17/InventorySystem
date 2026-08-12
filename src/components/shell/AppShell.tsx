@@ -33,9 +33,19 @@ export function AppShell({ profile, notificationItems, children }: Props) {
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTotal = useRef(notificationItems.reduce((s, i) => s + i.count, 0));
 
-  // Keep in sync with the server-rendered value on navigation.
-  useEffect(() => {
+  // Realtime keeps `items` fresh between navigations, but a new server render
+  // is the more authoritative count. Adopt it during render — mirroring a prop
+  // through an effect costs a second pass and a flash of the stale value.
+  const [seenProp, setSeenProp] = useState(notificationItems);
+  if (seenProp !== notificationItems) {
+    setSeenProp(notificationItems);
     setItems(notificationItems);
+  }
+
+  // A fresh server count is the new baseline for "has the total grown?", so a
+  // navigation never re-announces items the viewer has already seen. Written
+  // from an effect because refs must not be touched during render.
+  useEffect(() => {
     lastTotal.current = notificationItems.reduce((s, i) => s + i.count, 0);
   }, [notificationItems]);
 

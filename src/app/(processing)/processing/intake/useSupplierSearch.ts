@@ -9,18 +9,16 @@ export type SupplierRow = { id: string; name: string; phone: string | null };
 // suggest matches as the user types (so they pick an existing supplier instead
 // of creating a duplicate). Empty until the query reaches `minLen` characters.
 export function useSupplierSearch(query: string, minLen = 2, delayMs = 250) {
-  const [results, setResults] = useState<SupplierRow[]>([]);
-  const [searching, setSearching] = useState(false);
+  // Results are stamped with the term they answer, so "still searching" is
+  // simply "the answer we hold is for an older term" — derived, never stored.
+  const [hits, setHits] = useState<{ term: string; rows: SupplierRow[] }>({ term: "", rows: [] });
+
+  // Strip characters that would break the PostgREST or() filter syntax.
+  const term = query.trim().replace(/[,()*%]/g, "");
+  const active = term.length >= minLen;
 
   useEffect(() => {
-    // Strip characters that would break the PostgREST or() filter syntax.
-    const term = query.trim().replace(/[,()*%]/g, "");
-    if (term.length < minLen) {
-      setResults([]);
-      setSearching(false);
-      return;
-    }
-    setSearching(true);
+    if (!active) return;
     const handle = setTimeout(async () => {
       const supabase = createClient();
       const { data } = await supabase
@@ -29,11 +27,11 @@ export function useSupplierSearch(query: string, minLen = 2, delayMs = 250) {
         .or(`name.ilike.%${term}%,phone.ilike.%${term}%`)
         .order("name")
         .limit(8);
-      setResults((data ?? []) as SupplierRow[]);
-      setSearching(false);
+      setHits({ term, rows: (data ?? []) as SupplierRow[] });
     }, delayMs);
     return () => clearTimeout(handle);
-  }, [query, minLen, delayMs]);
+  }, [term, active, delayMs]);
 
-  return { results, searching };
+  if (!active) return { results: [] as SupplierRow[], searching: false };
+  return { results: hits.term === term ? hits.rows : [], searching: hits.term !== term };
 }

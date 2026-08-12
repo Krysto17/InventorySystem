@@ -91,6 +91,7 @@ export async function recordAdjustment(
     weight,
     direction,
     reason: "adjustment",
+    note: notes,
     recorded_by: me.id,
     ref_visit_id: null,
   });

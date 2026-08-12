@@ -1825,6 +1825,7 @@ export type Database = {
           id: string
           material_type_id: string
           reason: string
+          note: string | null
           recorded_by: string | null
           ref_bulk_sale_id: string | null
           ref_visit_id: string | null
@@ -1838,6 +1839,7 @@ export type Database = {
           id?: string
           material_type_id: string
           reason: string
+          note?: string | null
           recorded_by?: string | null
           ref_bulk_sale_id?: string | null
           ref_visit_id?: string | null
@@ -1851,6 +1853,7 @@ export type Database = {
           id?: string
           material_type_id?: string
           reason?: string
+          note?: string | null
           recorded_by?: string | null
           ref_bulk_sale_id?: string | null
           ref_visit_id?: string | null
