@@ -32,7 +32,7 @@ const EXTRA_ROLE_PREFIXES: Record<string, string[]> = {
   // employees). Those config pages gate themselves to the GM (requireConfigManager)
   // and RLS restricts the writes, so exposing the path to all managers is safe.
   manager: [
-    "/inventory", "/receiving",
+    "/inventory", "/receiving", "/stock-keeper",
     "/owner/material-types", "/owner/machines", "/owner/employees",
   ],
 };

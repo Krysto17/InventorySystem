@@ -11,10 +11,10 @@ export const dynamic = "force-dynamic";
 
 export default async function StockKeeperPage() {
   const me = await getProfile();
-  if (!me || (me.role !== "stock_keeper" && me.role !== "owner")) redirect("/login");
+  if (!me || !["stock_keeper", "manager", "owner"].includes(me.role)) redirect("/login");
 
   const supabase = await createClient();
-  // RLS scopes lots to the keeper's own site.
+  // RLS scopes lots to the checker's own site.
   const [{ data: lots }, { data: checks }] = await Promise.all([
     supabase.from("stock_lots")
       .select("id, weight_kg, created_at, material:material_types(name)")

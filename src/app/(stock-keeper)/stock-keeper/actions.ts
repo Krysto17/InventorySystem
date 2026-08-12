@@ -5,12 +5,15 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, ok, type ActionResult } from "@/lib/actions/result";
 
+// A store without its own keeper is walked by the site manager.
+const CAN_CHECK = ["stock_keeper", "manager", "owner"];
+
 // The keeper ticks a lot as present, or disputes it. The RPC re-checks the
 // role and takes the site from the lot, so this cannot file against another
 // store's stock.
 export async function confirmLot(formData: FormData): Promise<void> {
   const me = await getProfile();
-  if (!me || (me.role !== "stock_keeper" && me.role !== "owner")) return;
+  if (!me || !CAN_CHECK.includes(me.role)) return;
   const lotId = String(formData.get("stock_lot_id") ?? "");
   const counted = String(formData.get("counted_weight_kg") ?? "").trim();
   if (!lotId) return;
@@ -23,11 +26,12 @@ export async function confirmLot(formData: FormData): Promise<void> {
     p_note: undefined,
   });
   revalidatePath("/stock-keeper");
+  revalidatePath("/inventory");
 }
 
 export async function disputeLot(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || (me.role !== "stock_keeper" && me.role !== "owner")) return fail("Not authorized.");
+  if (!me || !CAN_CHECK.includes(me.role)) return fail("Not authorized.");
   const lotId = String(formData.get("stock_lot_id") ?? "");
   const note = String(formData.get("dispute_note") ?? "").trim();
   const counted = String(formData.get("counted_weight_kg") ?? "").trim();
@@ -50,10 +54,11 @@ export async function disputeLot(_prev: ActionResult, formData: FormData): Promi
 // unchecked list.
 export async function clearCheck(formData: FormData): Promise<void> {
   const me = await getProfile();
-  if (!me || (me.role !== "stock_keeper" && me.role !== "owner")) return;
+  if (!me || !CAN_CHECK.includes(me.role)) return;
   const lotId = String(formData.get("stock_lot_id") ?? "");
   if (!lotId) return;
   const supabase = await createClient();
   await supabase.from("stock_confirmations").delete().eq("stock_lot_id", lotId);
   revalidatePath("/stock-keeper");
+  revalidatePath("/inventory");
 }

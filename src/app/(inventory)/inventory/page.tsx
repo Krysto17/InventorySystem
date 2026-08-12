@@ -6,6 +6,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
 import { StockAdjustmentForm } from "@/components/inventory/StockAdjustmentForm";
+import { StoreCheckRecord } from "@/components/stock/StoreCheckRecord";
 
 export default async function InventoryPage() {
   const me = await getProfile();
@@ -160,6 +161,10 @@ export default async function InventoryPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* What the store keeper actually found — manager sees their own site,
+          owner sees every site (RLS decides). */}
+      <StoreCheckRecord />
 
       {isOwner && (
         <Card>

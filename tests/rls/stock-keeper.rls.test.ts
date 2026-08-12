@@ -102,16 +102,49 @@ describe("store keeper confirms and disputes stock", () => {
       .not.toBeNull();
   });
 
-  it("the manager and owner can read what the keeper found, but not file it", async () => {
+  it("the manager and owner see everything the keeper recorded", async () => {
     const id = await lot(siteA, 12);
-    await keeper.client.rpc("record_stock_check", { p_lot_id: id, p_status: "disputed", p_note: "Short" });
+    await keeper.client.rpc("record_stock_check", {
+      p_lot_id: id, p_status: "disputed", p_counted_weight: 5, p_note: "Short by 7kg",
+    });
 
-    expect((await mgrA.client.from("stock_confirmations").select("id").eq("stock_lot_id", id)).data).toHaveLength(1);
+    const seen = (await mgrA.client.from("stock_confirmations")
+      .select("status, counted_weight_kg, dispute_note, checked_by").eq("stock_lot_id", id)).data;
+    expect(seen).toHaveLength(1);
+    expect(seen![0].dispute_note).toBe("Short by 7kg");
+    expect(Number(seen![0].counted_weight_kg)).toBe(5);
+    expect(seen![0].checked_by).toBe(keeper.userId);
+
     expect((await owner.client.from("stock_confirmations").select("id").eq("stock_lot_id", id)).data).toHaveLength(1);
+  });
 
-    const other = await lot(siteA);
-    expect((await mgrA.client.rpc("record_stock_check", { p_lot_id: other, p_status: "confirmed" })).error)
+  // A store with no keeper of its own is walked by the site manager.
+  it("the site manager can run the check on their own store", async () => {
+    const id = await lot(siteA, 20);
+    expect((await mgrA.client.rpc("record_stock_check", {
+      p_lot_id: id, p_status: "confirmed", p_counted_weight: 20,
+    })).error).toBeNull();
+    const row = await check(id);
+    expect(row!.status).toBe("confirmed");
+    expect(row!.checked_by).toBe(mgrA.userId);
+
+    // …and disputes it the same way.
+    await mgrA.client.rpc("record_stock_check", { p_lot_id: id, p_status: "disputed", p_note: "Recounted, 5kg missing" });
+    expect((await check(id))!.status).toBe("disputed");
+  });
+
+  it("a manager cannot check another site's store", async () => {
+    const id = await lot(siteB);
+    expect((await mgrA.client.rpc("record_stock_check", { p_lot_id: id, p_status: "confirmed" })).error)
       .not.toBeNull();
+    expect(await check(id)).toBeNull();
+  });
+
+  it("roles with no business in the store still cannot check it", async () => {
+    const id = await lot(siteA);
+    expect((await recv.client.rpc("record_stock_check", { p_lot_id: id, p_status: "confirmed" })).error)
+      .not.toBeNull();
+    expect(await check(id)).toBeNull();
   });
 
   it("keeps the keeper out of the rest of the business", async () => {
