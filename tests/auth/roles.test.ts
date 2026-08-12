@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest";
 import { ROLE_HOME, ROLES } from "@/lib/auth/roles";
 
 describe("roles", () => {
-  it("defines all roles (qc P9; auditor/director = owner P10; gate restored as pipeline entry)", () => {
+  it("defines all roles (qc P9; auditor/director = owner P10; store keeper counts the store)", () => {
     expect(ROLES).toEqual([
-      "processing", "receiving", "qc", "manager", "accounting", "inventory", "gate", "owner",
+      "processing", "receiving", "qc", "manager", "accounting", "inventory", "stock_keeper", "gate", "owner",
     ]);
   });
 
   it("maps every role to a home path", () => {
     for (const role of ROLES) {
-      expect(ROLE_HOME[role]).toMatch(/^\/[a-z]+$/);
+      expect(ROLE_HOME[role]).toMatch(/^\/[a-z-]+$/);
     }
   });
 
@@ -25,6 +25,7 @@ describe("roles", () => {
       manager: "/manager",
       accounting: "/accounting",
       inventory: "/inventory",
+      stock_keeper: "/stock-keeper",
       gate: "/gate",
       owner: "/owner",
     });

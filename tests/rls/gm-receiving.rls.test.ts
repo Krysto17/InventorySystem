@@ -30,7 +30,7 @@ describe("general manager receiving module", () => {
     expect(vErr).toBeNull();
     const visitId = v!.id as string;
 
-    // Record a material line (no analysis required so it goes straight to pricing).
+    // Record a material line (no analysis required — QC still weighs it).
     const { data: line, error: lErr } = await gm.client.from("visit_materials").insert({
       visit_id: visitId, material_type_id: monaziteId, weight_kg: 80,
       magnetic_analysis: "Monazite 3%", requires_analysis: false, recorded_by: gm.userId,
@@ -44,11 +44,11 @@ describe("general manager receiving module", () => {
     const { error: dErr } = await gm.client.from("visit_materials").delete().eq("id", draft!.id);
     expect(dErr).toBeNull();
 
-    // Submit the batch → exempt lines send it to pricing.
+    // Submit the batch → every batch is weighed by QC (0123).
     const { error: sErr } = await gm.client.rpc("submit_visit_to_manager", { p_visit_id: visitId });
     expect(sErr).toBeNull();
     const { data: after } = await adminClient().from("visits").select("state").eq("id", visitId).single();
-    expect(after!.state).toBe("pricing");
+    expect(after!.state).toBe("in_qc");
     expect(line).toBeTruthy();
   });
 

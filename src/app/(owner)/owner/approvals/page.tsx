@@ -28,6 +28,18 @@ export default async function OwnerApprovalsPage() {
     fetchFinanceFigures(),
   ]);
 
+  // What the store keeper found missing or short — stock the books claim but
+  // the store does not have.
+  const { data: disputes } = await supabase
+    .from("stock_confirmations")
+    .select(`
+      stock_lot_id, counted_weight_kg, dispute_note, updated_at,
+      lot:stock_lots(weight_kg, material:material_types(name), site:sites(name)),
+      keeper:profiles!stock_confirmations_checked_by_fkey(full_name)
+    `)
+    .eq("status", "disputed")
+    .order("updated_at", { ascending: false });
+
   const { data: pendingExpenses } = await supabase
     .from("consumables")
     .select("id, name, category, amount_naira, entry_date, site:sites(name)")
@@ -82,6 +94,43 @@ export default async function OwnerApprovalsPage() {
           <CardContent><div className="mono text-2xl font-bold text-ore">{(pendingPrices?.length ?? 0) + (pendingAdvances?.length ?? 0) + (pendingExpenses?.length ?? 0)}</div></CardContent>
         </Card>
       </div>
+
+      {(disputes ?? []).length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Store disputes</h2>
+              <Badge variant="red">{disputes!.length}</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ul className="divide-y divide-line text-sm">
+              {disputes!.map((d) => {
+                const lot = g1<{ weight_kg: number; material: unknown; site: unknown }>((d as { lot: unknown }).lot);
+                const found = d.counted_weight_kg != null ? Number(d.counted_weight_kg) : null;
+                return (
+                  <li key={d.stock_lot_id as string} className="px-4 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium">
+                        {g1<{ name: string }>(lot?.material)?.name ?? "—"}
+                        <span className="ml-2 text-xs text-ink-2">{g1<{ name: string }>(lot?.site)?.name ?? "—"}</span>
+                      </span>
+                      <span className="mono text-xs">
+                        books {Number(lot?.weight_kg ?? 0).toFixed(3)} kg
+                        {found != null ? ` · found ${found.toFixed(3)} kg` : " · not found"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-reject">{d.dispute_note as string}</p>
+                    <p className="text-[11px] text-ink-2">
+                      {g1<{ full_name: string }>((d as { keeper: unknown }).keeper)?.full_name ?? "—"} · {formatTimestamp(d.updated_at as string)}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">Materials at hand</h2></CardHeader>

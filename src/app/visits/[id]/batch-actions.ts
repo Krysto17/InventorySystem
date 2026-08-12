@@ -224,13 +224,19 @@ export async function recordXrf(formData: FormData): Promise<void> {
   const weightKg = weightRaw === "" ? null : Number(weightRaw);
   if (!lineId) return;
 
-  // Submitting requires the XRF result to be entered and the QC analyst to
-  // confirm the entries are correct; otherwise it is kept as a draft.
-  if (submitted && (!result || formData.get("confirm") == null)) {
-    submitted = false;
-  }
-
   const supabase = await createClient();
+
+  // A line marked "no analysis required" still passes through QC to be weighed,
+  // so it is confirmed with a weight and no XRF result. Every other line needs
+  // the result typed in before it can be submitted.
+  const { data: line } = await supabase
+    .from("visit_materials").select("requires_analysis").eq("id", lineId).maybeSingle();
+  const exempt = line != null && line.requires_analysis === false;
+
+  // Submitting always needs the QC analyst to confirm the entries are correct.
+  if (submitted && formData.get("confirm") == null) submitted = false;
+  if (submitted && !exempt && !result) submitted = false;
+  if (submitted && exempt && weightKg == null) submitted = false;
   // Upsert one XRF record per line (visit_material_id is unique).
   const { data: existing } = await supabase
     .from("xrf_records")

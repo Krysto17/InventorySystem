@@ -246,14 +246,22 @@ export async function BatchMaterials({
                   <form action={recordXrf} className="mt-2 space-y-2">
                     <input type="hidden" name="visit_id" value={visitId} />
                     <input type="hidden" name="visit_material_id" value={l.id} />
-                    <textarea
-                      name="result"
-                      rows={2}
-                      required
-                      defaultValue={l.xrf?.result ?? ""}
-                      placeholder="Type XRF analysis result…"
-                      className="block w-full rounded border px-2 py-1 text-sm"
-                    />
+                    {/* An exempt line still comes to QC to be weighed — it is
+                        confirmed on the weight alone, with no XRF result. */}
+                    {l.requires_analysis ? (
+                      <textarea
+                        name="result"
+                        rows={2}
+                        required
+                        defaultValue={l.xrf?.result ?? ""}
+                        placeholder="Type XRF analysis result…"
+                        className="block w-full rounded border px-2 py-1 text-sm"
+                      />
+                    ) : (
+                      <p className="text-xs text-ink-2">
+                        No analysis required — weigh it and confirm.
+                      </p>
+                    )}
                     <label className="block text-xs">
                       Weight as measured by QC (kg)
                       <input
@@ -261,13 +269,16 @@ export async function BatchMaterials({
                         name="weight_kg"
                         step="0.001"
                         min="0"
+                        required={!l.requires_analysis}
                         defaultValue={l.xrf?.weight_kg ?? ""}
                         className="mt-1 block w-40 rounded border px-2 py-1 text-sm"
                       />
                     </label>
                     <label className="flex items-center gap-2 text-xs">
                       <input type="checkbox" name="confirm" required />
-                      I confirm the XRF entries for this line are correct
+                      {l.requires_analysis
+                        ? "I confirm the XRF entries for this line are correct"
+                        : "I confirm I weighed this material"}
                     </label>
                     <div className="flex gap-2">
                       <SubmitButton name="submitted" value="false" formNoValidate pendingText="Saving…" className="rounded border px-3 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50">

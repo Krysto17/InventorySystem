@@ -13,6 +13,7 @@ const ROLE_HOME: Record<string, string> = {
   manager: "/manager",
   accounting: "/accounting",
   inventory: "/inventory",
+  stock_keeper: "/stock-keeper",
   gate: "/gate",
   owner: "/owner",
 };
@@ -36,7 +37,12 @@ const EXTRA_ROLE_PREFIXES: Record<string, string[]> = {
   ],
 };
 
-function isSharedAuthenticatedPath(path: string): boolean {
+// The store keeper's login is their store and nothing else — the shared
+// supplier directory and visit records are not part of their job.
+const NO_SHARED_PATHS_ROLES = ["stock_keeper"];
+
+function isSharedAuthenticatedPath(path: string, role: string): boolean {
+  if (NO_SHARED_PATHS_ROLES.includes(role)) return false;
   return SHARED_AUTHENTICATED_PREFIXES.some((p) => path.startsWith(p));
 }
 
@@ -98,7 +104,7 @@ export async function proxy(req: NextRequest) {
     profile.role !== "owner"
     && !path.startsWith(home)
     && !PUBLIC_PATHS.includes(path)
-    && !isSharedAuthenticatedPath(path)
+    && !isSharedAuthenticatedPath(path, profile.role)
     && !extraPrefixes.some((p) => path.startsWith(p))
   ) {
     return redirectWithSession(req, res, home);

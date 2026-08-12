@@ -39,6 +39,7 @@ const ROLE_LABEL: Record<Role, string> = {
   manager: "Manager",
   accounting: "Accounting",
   inventory: "Inventory",
+  stock_keeper: "Store Keeper",
   gate: "Gate",
   owner: "Owner",
 };

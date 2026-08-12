@@ -1691,6 +1691,57 @@ export type Database = {
         }
         Relationships: []
       }
+      stock_confirmations: {
+        Row: {
+          id: string
+          stock_lot_id: string
+          site_id: string
+          status: string
+          counted_weight_kg: number | null
+          dispute_note: string | null
+          checked_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          stock_lot_id: string
+          site_id: string
+          status: string
+          counted_weight_kg?: number | null
+          dispute_note?: string | null
+          checked_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          stock_lot_id?: string
+          site_id?: string
+          status?: string
+          counted_weight_kg?: number | null
+          dispute_note?: string | null
+          checked_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_confirmations_checked_by_fkey"
+            columns: ["checked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_confirmations_stock_lot_id_fkey"
+            columns: ["stock_lot_id"]
+            isOneToOne: true
+            referencedRelation: "stock_lots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_lots: {
         Row: {
           cost_price_per_kg: number | null
@@ -2250,6 +2301,7 @@ export type Database = {
       manager_skip_to_pricing: { Args: { p_visit_id: string }; Returns: undefined }
       approve_pricing: { Args: { p_visit_id: string }; Returns: undefined }
       reject_pricing: { Args: { p_visit_id: string }; Returns: undefined }
+      record_stock_check: { Args: { p_lot_id: string; p_status: string; p_counted_weight?: number; p_note?: string }; Returns: undefined }
       unsettle_line: { Args: { p_line_id: string; p_reason?: string }; Returns: undefined }
       resettle_line: { Args: { p_line_id: string }; Returns: undefined }
       remove_line: { Args: { p_line_id: string }; Returns: undefined }
@@ -2311,6 +2363,7 @@ export type Database = {
         | "accounting"
         | "inventory"
         | "security"
+        | "stock_keeper"
         | "owner"
     }
     CompositeTypes: {
@@ -2451,6 +2504,7 @@ export const Constants = {
         "accounting",
         "inventory",
         "security",
+        "stock_keeper",
         "owner",
       ],
     },

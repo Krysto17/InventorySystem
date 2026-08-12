@@ -21,6 +21,7 @@ const ROLE_LABEL: Record<Role, string> = {
   manager: "MANAGER",
   accounting: "ACCOUNTANT",
   inventory: "INVENTORY",
+  stock_keeper: "STORE KEEPER",
   gate: "GATE",
   owner: "DIRECTOR / OWNER",
 };

@@ -79,6 +79,9 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Lot sales", href: "/inventory/lot-sales", icon: "bulkSales" },
     { label: "Consumables", href: "/inventory/consumables", icon: "consumables" },
   ],
+  stock_keeper: [
+    { label: "Store check", href: "/stock-keeper", icon: "inventory" },
+  ],
   gate: [
     { label: "Gate", href: "/gate", icon: "gate" },
   ],
@@ -118,6 +121,8 @@ export function navForRole(role: Role, opts?: { isGeneralManager?: boolean }): N
   if (role === "manager") {
     return [items[0], SUPPLIERS_ITEM, ...items.slice(1), STOCKED_ITEM];
   }
+  // The store keeper only ever counts their own store.
+  if (role === "stock_keeper") return items;
   return [...items, SUPPLIERS_ITEM, STOCKED_ITEM];
 }
 

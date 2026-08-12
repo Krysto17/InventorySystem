@@ -72,7 +72,9 @@ describe("QC matching + analysis rules (integration)", () => {
     expect(x!.mismatch).toBe(true);
   });
 
-  it("a batch where NO line requires analysis skips QC straight to pricing", async () => {
+  // Exempt material still goes to QC to be weighed — QC's re-weigh is what
+  // catches a weight difference, so skipping QC skipped the check (0123).
+  it("a batch where NO line requires analysis still goes to QC", async () => {
     const v = await newVisit();
     await recv.client.from("visit_materials").insert({
       visit_id: v, material_type_id: zirconId, weight_kg: 40,
@@ -81,7 +83,7 @@ describe("QC matching + analysis rules (integration)", () => {
     const { error } = await advance(v);
     expect(error).toBeNull();
     const { data: st } = await adminClient().from("visits").select("state").eq("id", v).single();
-    expect(st!.state).toBe("pricing");
+    expect(st!.state).toBe("in_qc");
   });
 
   it("manager may BYPASS analysis from in_qc → pricing (price without XRF, #3)", async () => {
@@ -100,22 +102,28 @@ describe("QC matching + analysis rules (integration)", () => {
     expect(st!.state).toBe("pricing");
   });
 
-  it("a mixed batch advances once only the REQUIRED lines have submitted XRF", async () => {
+  it("a mixed batch waits for EVERY line, exempt ones included", async () => {
     const v = await newVisit();
     const { data: req } = await adminClient().from("visit_materials").insert({
       visit_id: v, material_type_id: monaziteId, weight_kg: 60, recorded_by: recv.userId,
     }).select("id").single();
-    await adminClient().from("visit_materials").insert({
+    const { data: exempt } = await adminClient().from("visit_materials").insert({
       visit_id: v, material_type_id: zirconId, weight_kg: 30,
       requires_analysis: false, recorded_by: recv.userId,
-    });
+    }).select("id").single();
     await advance(v);
     let { data: st } = await adminClient().from("visits").select("state").eq("id", v).single();
     expect(st!.state).toBe("in_qc");
 
-    // Submitting the single required line advances the visit (exempt line ignored)
+    // The analysed line alone is not enough — the exempt line is still unweighed.
     await qc.client.from("xrf_records").insert({
-      visit_material_id: req!.id, result: "Sn 55%", submitted: true, recorded_by: qc.userId,
+      visit_material_id: req!.id, result: "Sn 55%", weight_kg: 60, submitted: true, recorded_by: qc.userId,
+    });
+    ({ data: st } = await adminClient().from("visits").select("state").eq("id", v).single());
+    expect(st!.state).toBe("in_qc");
+
+    await qc.client.from("xrf_records").insert({
+      visit_material_id: exempt!.id, result: null, weight_kg: 30, submitted: true, recorded_by: qc.userId,
     });
     ({ data: st } = await adminClient().from("visits").select("state").eq("id", v).single());
     expect(st!.state).toBe("pricing");
