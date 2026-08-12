@@ -13,7 +13,7 @@ const ROLE_HOME: Record<string, string> = {
   manager: "/manager",
   accounting: "/accounting",
   inventory: "/inventory",
-  stock_keeper: "/stock-keeper",
+  stock_keeper: "/stocked-materials",
   gate: "/gate",
   owner: "/owner",
 };
@@ -32,7 +32,7 @@ const EXTRA_ROLE_PREFIXES: Record<string, string[]> = {
   // employees). Those config pages gate themselves to the GM (requireConfigManager)
   // and RLS restricts the writes, so exposing the path to all managers is safe.
   manager: [
-    "/inventory", "/receiving", "/stock-keeper",
+    "/inventory", "/receiving",
     "/owner/material-types", "/owner/machines", "/owner/employees",
   ],
 };

@@ -51,7 +51,6 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Payments", href: "/manager/payments", icon: "accounting" },
     { label: "Advances", href: "/manager/advances", icon: "accounting" },
     { label: "Expenses", href: "/inventory/consumables", icon: "consumables" },
-    { label: "Store check", href: "/stock-keeper", icon: "inventory" },
     // General (New-Site) manager only — site managers can't see these (#13).
     { label: "Gate passes", href: "/manager/gate-passes", icon: "gate", generalOnly: true },
     { label: "Reports", href: "/manager/reports", icon: "reports", generalOnly: true },
@@ -81,7 +80,7 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Consumables", href: "/inventory/consumables", icon: "consumables" },
   ],
   stock_keeper: [
-    { label: "Store check", href: "/stock-keeper", icon: "inventory" },
+    { label: "Store check", href: "/stocked-materials", icon: "inventory" },
   ],
   gate: [
     { label: "Gate", href: "/gate", icon: "gate" },
@@ -96,7 +95,6 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Finance breakdown", href: "/owner/finance", icon: "reports" },
     { label: "Mixing batches", href: "/owner/cost-batches", icon: "bulkSales" },
     { label: "Stock", href: "/inventory", icon: "inventory" },
-    { label: "Store check", href: "/stock-keeper", icon: "inventory" },
     { label: "Gate oversight", href: "/owner/gate", icon: "gate" },
     { label: "All visits", href: "/owner/visits", icon: "visits" },
     { label: "Search", href: "/owner/search", icon: "search" },

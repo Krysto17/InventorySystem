@@ -25,7 +25,7 @@ describe("roles", () => {
       manager: "/manager",
       accounting: "/accounting",
       inventory: "/inventory",
-      stock_keeper: "/stock-keeper",
+      stock_keeper: "/stocked-materials",
       gate: "/gate",
       owner: "/owner",
     });

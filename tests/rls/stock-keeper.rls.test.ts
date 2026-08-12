@@ -147,6 +147,57 @@ describe("store keeper confirms and disputes stock", () => {
     expect(await check(id)).toBeNull();
   });
 
+  // A lot is created when its batch is paid, but a settlement can be reversed
+  // afterwards — counting that into the store would confirm material the
+  // company no longer owns.
+  it("refuses to count material whose batch is not paid", async () => {
+    const { data: v } = await adminClient().from("visits").insert({
+      site_id: siteA, supplier_id: supplierId, declared_material_type_id: material,
+      entry_path: "processed", state: "in_accounting", created_by: recv.userId,
+    }).select("id").single();
+    const { data: vm } = await adminClient().from("visit_materials").insert({
+      visit_id: v!.id, material_type_id: material, weight_kg: 15, unit_price: 100,
+    }).select("id").single();
+    await adminClient().from("batch_settlements").insert({
+      visit_id: v!.id, site_id: siteA, materials_total: 1500, light_bill_total: 0,
+      other_deductions_total: 0, advance_deducted: 0, net_balance: 1500,
+      submitted_by: recv.userId, status: "approved",
+    });
+    const { data: l } = await adminClient().from("stock_lots").insert({
+      site_id: siteA, material_type_id: material, supplier_id: supplierId,
+      ref_visit_material_id: vm!.id, weight_kg: 15, cost_price_per_kg: 100, status: "available",
+    }).select("id").single();
+
+    const { error } = await keeper.client.rpc("record_stock_check", {
+      p_lot_id: l!.id, p_status: "confirmed", p_counted_weight: 15,
+    });
+    expect(error).not.toBeNull();
+    expect(await check(l!.id as string)).toBeNull();
+  });
+
+  it("a lot with no batch behind it is still countable", async () => {
+    const id = await lot(siteA, 9); // manual lot: no settlement to be paid
+    expect((await keeper.client.rpc("record_stock_check", {
+      p_lot_id: id, p_status: "confirmed", p_counted_weight: 9,
+    })).error).toBeNull();
+  });
+
+  it("the keeper reads the stocked-materials log for their own store", async () => {
+    const id = await lot(siteA, 33);
+    await keeper.client.rpc("record_stock_check", { p_lot_id: id, p_status: "confirmed", p_counted_weight: 33 });
+    const { data } = await keeper.client.from("stocked_materials")
+      .select("id, supplier_name, check_status, counted_weight_kg, site_id").eq("id", id);
+    expect(data).toHaveLength(1);
+    expect(data![0].check_status).toBe("confirmed");
+    expect(data![0].supplier_name).toBeTruthy(); // the name, never the bank details
+    expect(data![0].site_id).toBe(siteA);
+
+    // Another store's lots stay invisible.
+    const otherLot = await lot(siteB);
+    expect((await keeper.client.from("stocked_materials").select("id").eq("id", otherLot)).data ?? [])
+      .toHaveLength(0);
+  });
+
   it("keeps the keeper out of the rest of the business", async () => {
     // Stock is their world; supplier money and visits are not.
     const { data: v } = await adminClient().from("visits").insert({

@@ -4,21 +4,19 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 // Phase 10 (C): combined + per-site reporting for manager / accountant / owner.
 // Read-only — cross-site visibility is granted by RLS (has_cross_site_read).
 
-import { one as g1 } from "@/lib/db/relation";
 
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 export async function CrossSiteReports() {
   const supabase = await createClient();
 
-  const [{ data: sites }, { data: balances }, { data: lots }, { data: advances }, { data: payments }] =
-    await Promise.all([
-      supabase.from("sites").select("id, name").order("name"),
-      supabase.from("stock_balances").select("site_id, material_name, weight_kg"),
-      supabase.from("stock_lots").select("site_id, weight_kg, cost_price_per_kg, status"),
-      supabase.from("advances").select("site_id, amount_naira, approval_status"),
-      supabase.from("payments").select("direction, amount, visit:visits!inner(site_id)"),
-    ]);
+  // Both reads are aggregates: one row per site, one per stock bucket. Adding
+  // these up in the page meant pulling every lot, advance and payment row.
+  const [{ data: rollups }, { data: balances }] = await Promise.all([
+    supabase.from("site_rollups").select("*").order("site_name"),
+    supabase.from("stock_balances").select("site_id, material_name, weight_kg"),
+  ]);
+  const sites = (rollups ?? []).map((r) => ({ id: r.site_id as string, name: r.site_name as string }));
 
   const siteName = new Map((sites ?? []).map((s) => [s.id as string, s.name as string]));
 
@@ -30,31 +28,17 @@ export async function CrossSiteReports() {
     stock.set(key, (stock.get(key) ?? 0) + Number(b.weight_kg));
   }
 
-  // Per-site rollups.
+  // Per-site rollups, already totalled by the database.
   type SiteAgg = { availableLotKg: number; lotValue: number; pendingAdvances: number; paidOut: number; feeIn: number };
-  const bySite = new Map<string, SiteAgg>();
-  const agg = (siteId: string): SiteAgg => {
-    if (!bySite.has(siteId)) {
-      bySite.set(siteId, { availableLotKg: 0, lotValue: 0, pendingAdvances: 0, paidOut: 0, feeIn: 0 });
-    }
-    return bySite.get(siteId)!;
-  };
-  for (const l of lots ?? []) {
-    if (l.status === "available") {
-      const a = agg(l.site_id as string);
-      a.availableLotKg += Number(l.weight_kg);
-      a.lotValue += Number(l.weight_kg) * Number(l.cost_price_per_kg ?? 0);
-    }
-  }
-  for (const a of advances ?? []) {
-    if (a.approval_status === "pending") agg(a.site_id as string).pendingAdvances += Number(a.amount_naira);
-  }
-  for (const p of payments ?? []) {
-    const siteId = g1<{ site_id: string }>((p as { visit: unknown }).visit)?.site_id;
-    if (!siteId) continue;
-    if (p.direction === "purchase_amount_out") agg(siteId).paidOut += Number(p.amount);
-    else agg(siteId).feeIn += Number(p.amount);
-  }
+  const bySite = new Map<string, SiteAgg>(
+    (rollups ?? []).map((r) => [r.site_id as string, {
+      availableLotKg: Number(r.available_lot_kg ?? 0),
+      lotValue: Number(r.lot_value ?? 0),
+      pendingAdvances: Number(r.pending_advances ?? 0),
+      feeIn: Number(r.fee_in ?? 0),
+      paidOut: Number(r.paid_out ?? 0),
+    }]),
+  );
 
   const stockRows = [...stock.entries()]
     .map(([key, kg]) => {

@@ -13,7 +13,7 @@ export const ROLE_HOME: Record<Role, string> = {
   manager: "/manager",
   accounting: "/accounting",
   inventory: "/inventory",
-  stock_keeper: "/stock-keeper",
+  stock_keeper: "/stocked-materials",
   gate: "/gate",
   owner: "/owner",
 };

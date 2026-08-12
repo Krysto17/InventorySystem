@@ -2287,6 +2287,40 @@ export type Database = {
         }
         Relationships: []
       }
+      stocked_materials: {
+        Row: {
+          id: string
+          site_id: string
+          site_name: string
+          material_type_id: string
+          material_name: string
+          supplier_name: string | null
+          supplier_code: string | null
+          weight_kg: number
+          cost_price_per_kg: number | null
+          status: string
+          created_at: string
+          is_paid: boolean | null
+          check_status: string | null
+          counted_weight_kg: number | null
+          dispute_note: string | null
+          checked_at: string | null
+          checked_by_name: string | null
+        }
+        Relationships: []
+      }
+      site_rollups: {
+        Row: {
+          site_id: string
+          site_name: string
+          available_lot_kg: number
+          lot_value: number
+          pending_advances: number
+          fee_in: number
+          paid_out: number
+        }
+        Relationships: []
+      }
       material_cost_basis: {
         Row: {
           material_type_id: string

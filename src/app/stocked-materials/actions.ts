@@ -8,9 +8,9 @@ import { fail, ok, type ActionResult } from "@/lib/actions/result";
 // A store without its own keeper is walked by the site manager.
 const CAN_CHECK = ["stock_keeper", "manager", "owner"];
 
-// The keeper ticks a lot as present, or disputes it. The RPC re-checks the
-// role and takes the site from the lot, so this cannot file against another
-// store's stock.
+// The check itself goes through record_stock_check, which re-reads the site
+// from the lot and refuses anything that is not in stock — so a keeper cannot
+// file against another store, and only material still held can be counted.
 export async function confirmLot(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me || !CAN_CHECK.includes(me.role)) return;
@@ -25,7 +25,7 @@ export async function confirmLot(formData: FormData): Promise<void> {
     p_counted_weight: counted === "" ? undefined : Number(counted),
     p_note: undefined,
   });
-  revalidatePath("/stock-keeper");
+  revalidatePath("/stocked-materials");
   revalidatePath("/inventory");
 }
 
@@ -46,12 +46,12 @@ export async function disputeLot(_prev: ActionResult, formData: FormData): Promi
     p_note: note,
   });
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
-  revalidatePath("/stock-keeper");
+  revalidatePath("/stocked-materials");
+  revalidatePath("/inventory");
   return ok();
 }
 
-// Undo a check that was recorded by mistake, putting the lot back on the
-// unchecked list.
+// Undo a check recorded by mistake, putting the lot back on the uncounted list.
 export async function clearCheck(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me || !CAN_CHECK.includes(me.role)) return;
@@ -59,6 +59,6 @@ export async function clearCheck(formData: FormData): Promise<void> {
   if (!lotId) return;
   const supabase = await createClient();
   await supabase.from("stock_confirmations").delete().eq("stock_lot_id", lotId);
-  revalidatePath("/stock-keeper");
+  revalidatePath("/stocked-materials");
   revalidatePath("/inventory");
 }
