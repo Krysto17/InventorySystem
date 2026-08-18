@@ -300,6 +300,36 @@ export type Database = {
           },
         ]
       }
+      bank_accounts: {
+        Row: {
+          id: string
+          account_name: string
+          account_number: string
+          bank_name: string
+          times_used: number
+          first_seen_at: string
+          last_used_at: string
+        }
+        Insert: {
+          id?: string
+          account_name: string
+          account_number: string
+          bank_name: string
+          times_used?: number
+          first_seen_at?: string
+          last_used_at?: string
+        }
+        Update: {
+          id?: string
+          account_name?: string
+          account_number?: string
+          bank_name?: string
+          times_used?: number
+          first_seen_at?: string
+          last_used_at?: string
+        }
+        Relationships: []
+      }
       batch_comments: {
         Row: {
           id: string
