@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
 
 // The dashboards used to sum the raw ledger in JavaScript, which PostgREST
@@ -18,6 +18,13 @@ describe("stock balances aggregate in the database", () => {
     material = mt!.id as string;
     owner = await makeUser({ username: "sb-owner", role: "owner", siteId: null });
     invA = await makeUser({ username: "sb-inv", role: "inventory", siteId: siteA });
+  });
+
+  // The cap test below writes 1,200 movements. Left behind, they make every
+  // other suite's unfiltered read of the ledger slow enough to hit the
+  // statement timeout, so this clears them once the proof is made.
+  afterAll(async () => {
+    await adminClient().from("stock_movements").delete().eq("material_type_id", material);
   });
 
   it("stays correct past PostgREST's 1000-row cap", async () => {

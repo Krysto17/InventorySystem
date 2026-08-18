@@ -2359,6 +2359,24 @@ export type Database = {
         }
         Relationships: []
       }
+      advance_list: {
+        Row: {
+          id: string
+          site_id: string
+          supplier_id: string | null
+          supplier_name: string | null
+          supplier_code: string | null
+          purpose: string
+          amount_naira: number
+          approval_status: string
+          comment: string | null
+          account_name: string | null
+          account_number: string | null
+          bank_name: string | null
+          created_at: string
+        }
+        Relationships: []
+      }
       material_cost_basis: {
         Row: {
           material_type_id: string

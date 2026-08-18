@@ -7,6 +7,7 @@ import { ConsumableForm } from "@/components/consumables/ConsumableForm";
 import { ConsumableEditForm } from "@/components/consumables/ConsumableEditForm";
 import { fetchKnownAccounts } from "@/lib/accounts/known-accounts";
 import { formatTimestamp } from "@/lib/visits/format";
+import { ListControls } from "@/components/ui/ListControls";
 
 const STATUS_BADGE: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
@@ -14,7 +15,21 @@ const STATUS_BADGE: Record<string, string> = {
   rejected: "bg-red-100 text-red-800",
 };
 
-export default async function ConsumablesPage() {
+const STATUS_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "pending", label: "Pending" },
+  { value: "approved", label: "Approved" },
+  { value: "paid", label: "Paid" },
+  { value: "on_hold", label: "On hold" },
+  { value: "rejected", label: "Rejected" },
+];
+
+export default async function ConsumablesPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const q = String(params.q ?? "").trim();
+  const status = String(params.status ?? "");
   const me = await getProfile();
   const isOwner = me?.role === "owner";
   const isInventory = me?.role === "inventory";
@@ -27,7 +42,9 @@ export default async function ConsumablesPage() {
   const siteOptions = (sites ?? []).map((s) => ({ id: s.id as string, name: s.name as string }));
   const siteName = new Map(siteOptions.map((s) => [s.id, s.name]));
 
-  const { data: consumables } = await supabase
+  // Searched and filtered in Postgres so the whole expense log stays reachable,
+  // not just the newest page of it.
+  let expenseQuery = supabase
     .from("consumables")
     .select(`
       id, name, category, entry_date, comment, created_at, amount_naira, approval_status, site_id,
@@ -35,7 +52,16 @@ export default async function ConsumablesPage() {
       recorded_by_profile:profiles!consumables_recorded_by_fkey(full_name)
     `)
     .order("entry_date", { ascending: false })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (status) expenseQuery = expenseQuery.eq("approval_status", status);
+  if (q) {
+    const safe = q.replace(/[,()*%]/g, "");
+    expenseQuery = expenseQuery.or(
+      `name.ilike.%${safe}%,comment.ilike.%${safe}%,category.ilike.%${safe}%,account_name.ilike.%${safe}%`,
+    );
+  }
+  const { data: consumables } = await expenseQuery;
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -59,10 +85,20 @@ export default async function ConsumablesPage() {
         <h2 className="font-semibold mb-2">
           Logged consumables ({consumables?.length ?? 0})
         </h2>
+        <div className="border rounded">
+          <ListControls
+            basePath="/inventory/consumables"
+            query={q}
+            status={status}
+            options={STATUS_OPTIONS}
+            placeholder="Search name, category, note…"
+          />
         {!consumables || consumables.length === 0 ? (
-          <p className="text-sm text-gray-600">No consumables logged yet.</p>
+          <p className="px-4 py-3 text-sm text-gray-600">
+            {q || status ? "No expenses match that search." : "No consumables logged yet."}
+          </p>
         ) : (
-          <div className="overflow-x-auto border rounded">
+          <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs text-gray-500">
                 <tr>
@@ -151,6 +187,7 @@ export default async function ConsumablesPage() {
             </table>
           </div>
         )}
+        </div>
       </section>
     </main>
   );

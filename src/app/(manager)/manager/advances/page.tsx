@@ -10,6 +10,7 @@ import { AdvanceForm } from "@/components/advances/AdvanceForm";
 import { AdvanceEditForm } from "@/components/advances/AdvanceEditForm";
 import { AdvanceShares } from "@/components/advances/AdvanceShares";
 import { fetchKnownAccounts } from "@/lib/accounts/known-accounts";
+import { ListControls } from "@/components/ui/ListControls";
 
 import { one as g1 } from "@/lib/db/relation";
 
@@ -18,7 +19,21 @@ import { one as g1 } from "@/lib/db/relation";
 export const dynamic = "force-dynamic";
 const ngn = (n: number) => `₦${n.toLocaleString()}`;
 
-export default async function ManagerAdvancesPage() {
+const STATUS_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "pending", label: "Pending" },
+  { value: "approved", label: "Approved" },
+  { value: "paid", label: "Paid" },
+  { value: "on_hold", label: "On hold" },
+  { value: "rejected", label: "Rejected" },
+];
+
+export default async function ManagerAdvancesPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const q = String(params.q ?? "").trim();
+  const status = String(params.status ?? "");
   const me = await getProfile();
   const isOwner = me?.role === "owner";
   const canManage = me?.role === "manager" || isOwner;
@@ -28,15 +43,38 @@ export default async function ManagerAdvancesPage() {
     .from("suppliers").select("id, name, supplier_code").order("name").limit(300);
   const accounts = await fetchKnownAccounts();
 
-  const { data: advances } = await supabase
-    .from("advances")
+  // Searched and filtered in Postgres (0138) — the list is capped at a page, so
+  // filtering in the browser would only ever search the newest advances.
+  let listQuery = supabase
+    .from("advance_list")
     .select(`
-      id, purpose, amount_naira, approval_status, created_at, comment, account_number, account_name, bank_name,
-      supplier:suppliers(name, supplier_code),
-      shares:advance_shares(id, amount, note, supplier:suppliers(name))
+      id, purpose, amount_naira, approval_status, created_at, comment,
+      account_number, account_name, bank_name, supplier_name, supplier_code
     `)
     .order("created_at", { ascending: false })
     .limit(40);
+  if (status) listQuery = listQuery.eq("approval_status", status);
+  if (q) {
+    const safe = q.replace(/[,()*%]/g, "");
+    listQuery = listQuery.or(
+      `supplier_name.ilike.%${safe}%,supplier_code.ilike.%${safe}%,purpose.ilike.%${safe}%,account_name.ilike.%${safe}%,account_number.ilike.%${safe}%`,
+    );
+  }
+  const { data: advances } = await listQuery;
+
+  // Apportioned shares for just the advances on screen.
+  const advanceIds = (advances ?? []).map((a) => a.id as string);
+  const { data: shareRows } = advanceIds.length
+    ? await supabase.from("advance_shares")
+        .select("id, advance_id, amount, note, supplier:suppliers(name)")
+        .in("advance_id", advanceIds)
+    : { data: [] as unknown[] };
+  const sharesByAdvance = new Map<string, unknown[]>();
+  for (const r of (shareRows ?? []) as { advance_id: string }[]) {
+    const list = sharesByAdvance.get(r.advance_id) ?? [];
+    list.push(r);
+    sharesByAdvance.set(r.advance_id, list);
+  }
 
   return (
     <main className="p-6 max-w-3xl mx-auto space-y-6">
@@ -55,12 +93,21 @@ export default async function ManagerAdvancesPage() {
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">Advances ({advances?.length ?? 0})</h2></CardHeader>
         <CardContent className="p-0">
+          <ListControls
+            basePath="/manager/advances"
+            query={q}
+            status={status}
+            options={STATUS_OPTIONS}
+            placeholder="Search supplier, purpose, account…"
+          />
           {(advances?.length ?? 0) === 0 ? (
-            <p className="px-4 py-3 text-sm text-gray-500">No advances recorded.</p>
+            <p className="px-4 py-3 text-sm text-gray-500">
+              {q || status ? "No advances match that search." : "No advances recorded."}
+            </p>
           ) : (
             <ul className="divide-y divide-line">
               {(advances ?? []).map((a) => {
-                const sup = g1<{ name: string; supplier_code: string | null }>((a as { supplier: unknown }).supplier);
+                const sup = { name: a.supplier_name as string | null, supplier_code: a.supplier_code as string | null };
                 const st = a.approval_status as string;
                 return (
                   <li key={a.id as string} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
@@ -113,7 +160,7 @@ export default async function ManagerAdvancesPage() {
                         suppliers={(suppliers ?? [])
                           .filter((x) => (x.name as string) !== (sup?.name ?? ""))
                           .map((x) => ({ id: x.id as string, name: x.name as string, code: (x.supplier_code as string | null) ?? null }))}
-                        shares={(((a as { shares: unknown }).shares ?? []) as Record<string, unknown>[]).map((sh) => ({
+                        shares={((sharesByAdvance.get(a.id as string) ?? []) as Record<string, unknown>[]).map((sh) => ({
                           id: sh.id as string,
                           amount: Number(sh.amount),
                           note: (sh.note as string | null) ?? null,
