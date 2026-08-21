@@ -75,22 +75,21 @@ export async function listQcCompletedVisits(
   limit = 25,
 ): Promise<VisitQueueRow[]> {
   const supabase = await createClient();
-  const { data: xrf, error: xErr } = await supabase
-    .from("xrf_records")
-    .select("visit_material:visit_materials!inner(visit_id)")
-    .eq("recorded_by", analystId);
-  if (xErr) throw xErr;
-  const visitIds = Array.from(
-    new Set(
-      (xrf ?? [])
-        .map((r) => {
-          const vm = (r as { visit_material: unknown }).visit_material;
-          const one = Array.isArray(vm) ? vm[0] : vm;
-          return (one as { visit_id?: string } | null)?.visit_id;
-        })
-        .filter((v): v is string => !!v),
-    ),
-  );
+  // The analyst → visit relationship is resolved in Postgres (0140). This used
+  // to read every xrf_record the analyst had ever written and ask for the
+  // visits with `id=in.(…)`: at 629 visits that is a ~24 KB query string, which
+  // the gateway rejects — so the page broke once an analyst had done enough
+  // work. Now only the newest `limit` ids ever reach the URL.
+  const { data: recent, error: rErr } = await supabase
+    .from("qc_analyst_visits")
+    .select("visit_id")
+    .eq("analyst_id", analystId)
+    .neq("visit_state", "in_qc")
+    .order("last_analysed_at", { ascending: false })
+    .limit(limit);
+  if (rErr) throw rErr;
+
+  const visitIds = (recent ?? []).map((r) => r.visit_id as string);
   if (visitIds.length === 0) return [];
 
   const { data, error } = await supabase
@@ -102,9 +101,7 @@ export async function listQcCompletedVisits(
       visit_materials(weight_kg)
     `)
     .in("id", visitIds)
-    .neq("state", "in_qc")
-    .order("created_at", { ascending: false })
-    .limit(limit);
+    .order("created_at", { ascending: false });
   if (error) throw error;
   return withWeight((data ?? []) as never[]) as unknown as VisitQueueRow[];
 }

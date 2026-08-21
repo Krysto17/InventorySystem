@@ -2407,6 +2407,15 @@ export type Database = {
         }
         Relationships: []
       }
+      qc_analyst_visits: {
+        Row: {
+          analyst_id: string
+          visit_id: string
+          visit_state: string
+          last_analysed_at: string
+        }
+        Relationships: []
+      }
       material_cost_basis: {
         Row: {
           material_type_id: string
