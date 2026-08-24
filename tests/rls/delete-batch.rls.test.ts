@@ -56,10 +56,22 @@ describe("delete_batch RPC (#4/#5)", () => {
     expect(await exists(v)).toBe(true);
   });
 
-  it("a plain SITE manager cannot delete a batch", async () => {
+  // Since 0142 every site manager may remove a mistaken batch on their OWN site
+  // until the owner approves it — but only their own.
+  it("a site manager deletes on their own site, and nowhere else", async () => {
+    const mine = await newVisit(otherSiteId);
+    expect((await siteMgr.client.rpc("delete_batch", { p_visit_id: mine })).error).toBeNull();
+    expect(await exists(mine)).toBe(false);
+
+    const elsewhere = await newVisit(gmSiteId);
+    expect((await siteMgr.client.rpc("delete_batch", { p_visit_id: elsewhere })).error).not.toBeNull();
+    expect(await exists(elsewhere)).toBe(true);
+  });
+
+  it("a site manager cannot delete one the owner has approved", async () => {
     const v = await newVisit(otherSiteId);
-    const { error } = await siteMgr.client.rpc("delete_batch", { p_visit_id: v });
-    expect(error).not.toBeNull();
+    await settle(v, otherSiteId, "approved");
+    expect((await siteMgr.client.rpc("delete_batch", { p_visit_id: v })).error).not.toBeNull();
     expect(await exists(v)).toBe(true);
   });
 

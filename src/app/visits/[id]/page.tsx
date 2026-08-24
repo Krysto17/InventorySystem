@@ -139,7 +139,9 @@ export default async function VisitDetailPage({
   const visitState = visit.state as string;
   const canDeleteBatch =
     (me.role === "owner" && settlementStatus !== "paid") ||
-    (!!me.is_general_manager &&
+    // Any manager may remove a batch on their own site until the owner approves
+    // it; the RPC re-checks both. (RLS scopes which visits they can see at all.)
+    (me.role === "manager" &&
       settlementStatus !== "approved" &&
       settlementStatus !== "paid") ||
     // Processing / receiving may remove a mistaken entry still in their stage.

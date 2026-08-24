@@ -11,7 +11,7 @@ import { getProfile } from "@/lib/auth/get-profile";
 export async function deleteBatch(formData: FormData): Promise<void> {
   const me = await getProfile();
   if (!me) return;
-  if (me.role !== "owner" && !me.is_general_manager) return;
+  if (me.role !== "owner" && me.role !== "manager") return;
   const visitId = String(formData.get("visit_id") ?? "");
   if (!visitId) return;
   const supabase = await createClient();
@@ -126,9 +126,16 @@ export async function skipToPricing(formData: FormData): Promise<void> {
 
 // A line that fails spec/pricing — manager (own site) or owner. Three outcomes:
 // unsettle (keep + gate pass + exclude from total), re-settle (reverse), remove.
+//
+// Receiving handles the material and spots a failure first, so they may unsettle
+// on their own site; the RPC raises their gate pass as PENDING for a manager to
+// authorise. Putting a line back, or deleting one outright, changes what the
+// batch is worth and stays with the manager.
 async function lineAction(formData: FormData, rpc: "unsettle_line" | "resettle_line" | "remove_line") {
   const me = await getProfile();
-  if (!me || (me.role !== "manager" && me.role !== "owner")) return;
+  const allowed = me?.role === "manager" || me?.role === "owner"
+    || (me?.role === "receiving" && rpc === "unsettle_line");
+  if (!me || !allowed) return;
   const visitId = String(formData.get("visit_id") ?? "");
   const lineId = String(formData.get("visit_material_id") ?? "");
   if (!lineId) return;

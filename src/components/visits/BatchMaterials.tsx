@@ -96,6 +96,11 @@ export async function BatchMaterials({
   // pricing — remove it or gate-pass it out when it fails spec/pricing.
   const canUnsettle = (viewerRole === "manager" || viewerRole === "owner")
     && ["in_qc", "pricing", "in_accounting", "awaiting_stock_intake"].includes(visitState);
+  // Receiving pulls a failing material out too — their gate pass is raised
+  // pending for a manager to authorise. Re-settling a line and removing one
+  // change the batch total, so those stay with the manager.
+  const canReceivingUnsettle = viewerRole === "receiving"
+    && ["in_receiving", "in_qc", "pricing"].includes(visitState);
   // Manager/owner may correct a batch line (e.g. a kg fix) coming from receiving,
   // while the visit is still open. RLS enforces the manager's own site.
   const canEditLines = (viewerRole === "manager" || viewerRole === "owner")
@@ -354,15 +359,21 @@ export async function BatchMaterials({
 
                 {/* Unsettle a line that fails spec/pricing (#): remove it, or
                     gate-pass it out (excluded from the batch total). Reversible. */}
-                {canUnsettle && (
+                {(canUnsettle || canReceivingUnsettle) && (
                   <div className="mt-3 border-t border-line/60 pt-2">
                     {l.settlement_status === "unsettled" ? (
+                      !canUnsettle ? (
+                        <span className="text-xs text-reject">
+                          Excluded from settlement · gate pass raised for the manager to authorise.
+                        </span>
+                      ) : (
                       <form action={resettleLine} className="flex flex-wrap items-center gap-2">
                         <input type="hidden" name="visit_id" value={visitId} />
                         <input type="hidden" name="visit_material_id" value={l.id} />
                         <span className="text-xs text-reject">Excluded from settlement · gate pass issued.</span>
                         <SubmitButton pendingText="…" className="rounded border px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50">Re-settle</SubmitButton>
                       </form>
+                      )
                     ) : (
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[11px] text-ink-2">Fails spec/pricing?</span>
@@ -372,11 +383,13 @@ export async function BatchMaterials({
                           <input type="text" name="reason" placeholder="reason (optional)" className="w-36 rounded border px-2 py-1 text-xs" />
                           <SubmitButton pendingText="…" className="rounded border border-reject px-2 py-1 text-xs text-reject hover:bg-reject-soft disabled:opacity-50">Unsettle → gate pass</SubmitButton>
                         </form>
-                        <form action={removeLineAsManager} data-confirm="Remove this material line? This cannot be undone.">
-                          <input type="hidden" name="visit_id" value={visitId} />
-                          <input type="hidden" name="visit_material_id" value={l.id} />
-                          <SubmitButton pendingText="Removing…" className="rounded border border-reject px-2 py-1 text-xs text-reject hover:bg-reject-soft disabled:opacity-50">Remove line</SubmitButton>
-                        </form>
+                        {canUnsettle && (
+                          <form action={removeLineAsManager} data-confirm="Remove this material line? This cannot be undone.">
+                            <input type="hidden" name="visit_id" value={visitId} />
+                            <input type="hidden" name="visit_material_id" value={l.id} />
+                            <SubmitButton pendingText="Removing…" className="rounded border border-reject px-2 py-1 text-xs text-reject hover:bg-reject-soft disabled:opacity-50">Remove line</SubmitButton>
+                          </form>
+                        )}
                       </div>
                     )}
                   </div>
