@@ -61,7 +61,16 @@ export default async function ConsumablesPage({ searchParams }: {
       `name.ilike.%${safe}%,comment.ilike.%${safe}%,category.ilike.%${safe}%,account_name.ilike.%${safe}%`,
     );
   }
-  const { data: consumables } = await expenseQuery;
+  const [{ data: consumables }, { data: totalsRows }] = await Promise.all([
+    expenseQuery,
+    // Totals cover every matching expense, not just the page of them below.
+    supabase.rpc("expense_totals", { p_status: status || undefined, p_q: q || undefined }),
+  ]);
+  const totals = (totalsRows ?? [])[0] as {
+    entries: number; total_naira: number; pending_naira: number;
+    approved_naira: number; paid_naira: number;
+  } | undefined;
+  const ngn = (n: number) => `₦${Number(n ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -85,6 +94,23 @@ export default async function ConsumablesPage({ searchParams }: {
         <h2 className="font-semibold mb-2">
           Logged consumables ({consumables?.length ?? 0})
         </h2>
+        {totals && (
+          <div className="mb-3 grid grid-cols-2 gap-px overflow-hidden rounded border bg-gray-200 sm:grid-cols-4 dark:bg-zinc-800">
+            {[
+              ["Total recorded", ngn(totals.total_naira), `${totals.entries} ${Number(totals.entries) === 1 ? "entry" : "entries"}`],
+              ["Awaiting approval", ngn(totals.pending_naira), ""],
+              ["Approved, unpaid", ngn(totals.approved_naira), ""],
+              ["Paid", ngn(totals.paid_naira), ""],
+            ].map(([label, value, sub]) => (
+              <div key={label} className="bg-white px-3 py-2 dark:bg-zinc-900">
+                <div className="text-[10px] uppercase tracking-wide text-gray-500">{label}</div>
+                <div className="mono text-base font-semibold">{value}</div>
+                {sub && <div className="text-[10px] text-gray-500">{sub}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="border rounded">
           <ListControls
             basePath="/inventory/consumables"
@@ -108,6 +134,7 @@ export default async function ConsumablesPage({ searchParams }: {
                   <th className="px-3 py-2">Category</th>
                   <th className="px-3 py-2">Amount</th>
                   <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Paid to</th>
                   <th className="px-3 py-2">Comment</th>
                   <th className="px-3 py-2">Logged by</th>
                 </tr>
@@ -150,6 +177,18 @@ export default async function ConsumablesPage({ searchParams }: {
                               <button type="submit" className="rounded border px-1.5 py-0.5 text-[10px]">✗</button>
                             </form>
                           </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-gray-600">
+                        {c.account_number ? (
+                          <>
+                            <span className="block">{(c.account_name as string | null) ?? "—"}</span>
+                            <span className="mono block text-xs text-gray-500">
+                              {c.account_number as string} · {(c.bank_name as string | null) ?? "—"}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-gray-400">—</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-gray-600">{(c.comment as string | null) ?? "—"}</td>

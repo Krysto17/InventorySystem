@@ -1775,6 +1775,7 @@ export type Database = {
       stock_lots: {
         Row: {
           cost_price_per_kg: number | null
+          batch_paid: boolean | null
           created_at: string
           id: string
           material_type_id: string
@@ -1787,6 +1788,7 @@ export type Database = {
         }
         Insert: {
           cost_price_per_kg?: number | null
+          batch_paid?: boolean | null
           created_at?: string
           id?: string
           material_type_id: string
@@ -1799,6 +1801,7 @@ export type Database = {
         }
         Update: {
           cost_price_per_kg?: number | null
+          batch_paid?: boolean | null
           created_at?: string
           id?: string
           material_type_id?: string
@@ -2430,6 +2433,10 @@ export type Database = {
       manager_skip_to_pricing: { Args: { p_visit_id: string }; Returns: undefined }
       approve_pricing: { Args: { p_visit_id: string }; Returns: undefined }
       reject_pricing: { Args: { p_visit_id: string }; Returns: undefined }
+      expense_totals: {
+        Args: { p_status?: string; p_q?: string }
+        Returns: { entries: number; total_naira: number; pending_naira: number; approved_naira: number; paid_naira: number }[]
+      }
       machine_utilization: {
         Args: { p_from: string; p_to: string; p_site?: string }
         Returns: { machine_name: string; charge_basis: string; total_measurement: number; total_fee: number }[]

@@ -189,8 +189,11 @@ describe("store keeper confirms and disputes stock", () => {
       .select("id, supplier_name, check_status, counted_weight_kg, site_id").eq("id", id);
     expect(data).toHaveLength(1);
     expect(data![0].check_status).toBe("confirmed");
-    expect(data![0].supplier_name).toBeTruthy(); // the name, never the bank details
     expect(data![0].site_id).toBe(siteA);
+    // The log runs as the caller now (0141), so the supplier — whose row also
+    // carries bank details — is filtered out for the keeper rather than being
+    // handed over by a view running with its owner's rights.
+    expect(data![0].supplier_name).toBeNull();
 
     // Another store's lots stay invisible.
     const otherLot = await lot(siteB);
