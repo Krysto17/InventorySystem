@@ -97,6 +97,7 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Stock", href: "/inventory", icon: "inventory" },
     { label: "Gate oversight", href: "/owner/gate", icon: "gate" },
     { label: "All visits", href: "/owner/visits", icon: "visits" },
+    { label: "Audit trail", href: "/owner/audit", icon: "visits" },
     { label: "Search", href: "/owner/search", icon: "search" },
     { label: "Employees", href: "/owner/employees", icon: "employees" },
     { label: "Material types", href: "/owner/material-types", icon: "materials" },

@@ -1994,7 +1994,10 @@ export type Database = {
           event_type: string
           id: string
           payload: Json
-          visit_id: string
+          site_id: string | null
+          entity: string | null
+          entity_id: string | null
+          visit_id: string | null
         }
         Insert: {
           actor_id?: string | null
@@ -2002,7 +2005,10 @@ export type Database = {
           event_type: string
           id?: string
           payload?: Json
-          visit_id: string
+          site_id?: string | null
+          entity?: string | null
+          entity_id?: string | null
+          visit_id?: string | null
         }
         Update: {
           actor_id?: string | null
@@ -2010,7 +2016,10 @@ export type Database = {
           event_type?: string
           id?: string
           payload?: Json
-          visit_id?: string
+          site_id?: string | null
+          entity?: string | null
+          entity_id?: string | null
+          visit_id?: string | null
         }
         Relationships: [
           {
@@ -2419,6 +2428,24 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_trail: {
+        Row: {
+          id: string
+          created_at: string
+          event_type: string
+          entity: string
+          entity_id: string | null
+          visit_id: string | null
+          site_id: string | null
+          site_name: string | null
+          actor_id: string | null
+          actor_username: string | null
+          actor_name: string | null
+          actor_role: string | null
+          payload: Json
+        }
+        Relationships: []
+      }
       material_cost_basis: {
         Row: {
           material_type_id: string
@@ -2433,6 +2460,10 @@ export type Database = {
       manager_skip_to_pricing: { Args: { p_visit_id: string }; Returns: undefined }
       approve_pricing: { Args: { p_visit_id: string }; Returns: undefined }
       reject_pricing: { Args: { p_visit_id: string }; Returns: undefined }
+      audit_counts_by_actor: {
+        Args: Record<string, never>
+        Returns: { actor_id: string; events: number; last_seen: string | null }[]
+      }
       expense_totals: {
         Args: { p_status?: string; p_q?: string }
         Returns: { entries: number; total_naira: number; pending_naira: number; approved_naira: number; paid_naira: number }[]
