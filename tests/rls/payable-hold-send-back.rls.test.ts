@@ -64,7 +64,7 @@ describe("payable hold / release / send-back", () => {
     expect(st.status).toBe("on_hold");
     expect(st.held_by).toBe(mgr.userId);
     expect((await mgr.client.rpc("release_settlement", { p_id: id })).error).toBeNull();
-    st = (await adminClient().from("batch_settlements").select("status").eq("id", id).single()).data!;
+    st = (await adminClient().from("batch_settlements").select("status, held_by").eq("id", id).single()).data!;
     expect(st.status).toBe("approved");
   });
 
