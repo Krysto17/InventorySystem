@@ -6,6 +6,14 @@ export const ROLES = [
 
 export type Role = (typeof ROLES)[number];
 
+// Roles with any path at all to deleting a batch. The CONDITIONS — which site,
+// which state, whether a settlement exists — belong to the delete_batch RPC
+// (0142) and are deliberately not restated here; this list only keeps out the
+// roles that have no delete path whatsoever. Keep in step with that migration.
+export const DELETE_BATCH_ROLES: readonly Role[] = [
+  "owner", "manager", "processing", "receiving",
+];
+
 export const ROLE_HOME: Record<Role, string> = {
   processing: "/processing",
   receiving: "/receiving",

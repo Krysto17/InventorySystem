@@ -4,22 +4,34 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
+import { fail, type ActionResult } from "@/lib/actions/result";
+import { DELETE_BATCH_ROLES, ROLE_HOME } from "@/lib/auth/roles";
 
-// Delete an entire batch supply (#4/#5). The general manager may remove any
-// site's batch while it isn't owner-approved; the owner may remove any batch
-// until it's paid. The delete_batch RPC re-checks the role + settlement gate.
-export async function deleteBatch(formData: FormData): Promise<void> {
+// Delete an entire batch supply (#4/#5). Four roles have a path to this and the
+// delete_batch RPC (0142) decides which of them may remove THIS batch right now:
+// the owner until it is paid, any manager on their own site until the owner has
+// approved it, processing while the visit is still in processing, receiving
+// until a settlement exists. This gate only turns away the roles with no path at
+// all — duplicating the RPC's conditions here is how they drift apart.
+export async function deleteBatch(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me) return;
-  if (me.role !== "owner" && me.role !== "manager") return;
+  if (!me) return fail("Not signed in.");
+  if (!DELETE_BATCH_ROLES.includes(me.role)) return fail("Not allowed to delete batches.");
   const visitId = String(formData.get("visit_id") ?? "");
-  if (!visitId) return;
+  if (!visitId) return fail("Missing batch.");
   const supabase = await createClient();
   const { error } = await supabase.rpc("delete_batch", { p_visit_id: visitId });
-  if (error) return; // gate failed (e.g. already approved/paid) — nothing removed
+  // The RPC raises when the gate refuses (already approved, already paid, wrong
+  // site). Redirecting to the dashboard on that path told the user the batch was
+  // gone when it was still there.
+  if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidatePath("/manager");
   revalidatePath("/owner");
-  redirect(me.role === "owner" ? "/owner" : "/manager");
+  // Send them to their OWN dashboard. Processing and receiving may delete too,
+  // and the proxy would bounce them straight back off /manager.
+  const home = ROLE_HOME[me.role];
+  revalidatePath(home);
+  redirect(home);
 }
 
 // Receiving adds a material line to an in_receiving batch. The general (New-Site)
