@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { storageAvailable } from "../setup/app-server";
+
+// Probed at collection time. Without Storage running, an upload fails on the
+// network and the "cannot upload" cases would pass whether or not the RLS they
+// exist to prove is still in place — so the file is skipped rather than
+// half-run. Start it with: npx supabase start (without -x storage-api).
+const storageUp = await storageAvailable();
+const itStorage = storageUp ? it : it.skip;
 
 // Phase 11 (D): private 'receipts' bucket. Upload: accounting/owner. Read:
 // accounting/manager/owner. Everyone else is locked out by Storage RLS.
@@ -18,27 +26,27 @@ describe("receipts bucket Storage RLS", () => {
     owner = await makeUser({ username: "rcpt-owner", role: "owner",     siteId: null });
   });
 
-  it("the private receipts bucket exists", async () => {
+  itStorage("the private receipts bucket exists", async () => {
     const { data, error } = await adminClient().storage.getBucket("receipts");
     expect(error).toBeNull();
     expect(data!.public).toBe(false);
   });
 
-  it("accountant can upload a receipt", async () => {
+  itStorage("accountant can upload a receipt", async () => {
     const { error } = await acct.client.storage
       .from("receipts")
       .upload(`test/acct-${Date.now()}.txt`, fileBody());
     expect(error).toBeNull();
   });
 
-  it("receiving cannot upload a receipt", async () => {
+  itStorage("receiving cannot upload a receipt", async () => {
     const { error } = await recv.client.storage
       .from("receipts")
       .upload(`test/recv-${Date.now()}.txt`, fileBody());
     expect(error).not.toBeNull();
   });
 
-  it("manager and owner can download; receiving cannot", async () => {
+  itStorage("manager and owner can download; receiving cannot", async () => {
     const path = `test/dl-${Date.now()}.txt`;
     const up = await acct.client.storage.from("receipts").upload(path, fileBody());
     expect(up.error).toBeNull();

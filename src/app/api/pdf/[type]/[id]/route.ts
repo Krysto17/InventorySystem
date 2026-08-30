@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import React from "react";
 import { createClient } from "@/lib/supabase/server";
-import { getProfile } from "@/lib/auth/get-profile";
+import { requireActiveUser } from "@/lib/auth/require-active-user";
 import { fetchVisitPdfData, fetchBulkSalePdfData, fetchLotSalePdfData, fetchUtilityInvoiceData, fetchSupplyInvoiceData, fetchPriceSlipData, fetchCostPriceRunData, fetchGatePassData } from "@/lib/pdf/fetch-data";
 import { PriceSlipPdf } from "@/lib/pdf/templates/price-slip";
 import { CostPriceRunPdf } from "@/lib/pdf/templates/cost-price-run";
@@ -56,8 +56,23 @@ export async function GET(
   { params }: { params: Promise<{ type: string; id: string }> },
 ) {
   const { type, id } = await params;
-  const me = await getProfile();
-  if (!me) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+  // The proxy does not run on /api, so this route owes the session checks
+  // itself — including the forced password change, which a route trusting the
+  // proxy would otherwise skip entirely.
+  const gate = await requireActiveUser();
+  if (!gate.ok) {
+    if (gate.reason === "unauthenticated") {
+      return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+    }
+    if (gate.reason === "disabled") {
+      return NextResponse.json({ error: "This account has been disabled" }, { status: 403 });
+    }
+    return NextResponse.json(
+      { error: "Set your password before using the app" },
+      { status: 403 },
+    );
+  }
+  const me = gate.profile;
 
   // ── Bulk sale receipt ────────────────────────────────────────────────────
   if (type === "bulk-sale") {

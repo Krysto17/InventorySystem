@@ -119,5 +119,10 @@ export async function proxy(req: NextRequest) {
 export const config = {
   // Exclude /api — route handlers (e.g. /api/pdf) authenticate themselves and
   // must return JSON 401/403, not an HTML redirect to /login.
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)).*)"],
+  //
+  // Also exclude the two PWA files. The browser fetches them from the LOGIN
+  // screen, before a session exists, so redirecting them to /login returned
+  // HTML where a script and a manifest were expected and the app could not be
+  // installed. Neither file contains anything private.
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)).*)"],
 };

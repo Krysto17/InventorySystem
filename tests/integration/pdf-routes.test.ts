@@ -1,31 +1,25 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { APP_BASE, requireAppServer } from "../setup/app-server";
 
 /**
- * Tests PDF route access control.
- * These tests hit the running Next.js dev server (or production build) at localhost:3000.
- * PRE: `npm run dev` (or `npm run build && npm start`) must be running alongside the tests.
+ * PDF route access control, over real HTTP.
  *
- * If the dev server is not running, these tests are skipped gracefully.
+ * PRE: this application must be running at NEXT_PUBLIC_SITE_URL (default
+ * http://localhost:3000) — `npm run build && npx next start`.
+ *
+ * The probe verifies it is talking to THIS app, not merely to something. An
+ * unrelated service on the port aborts the suite rather than producing
+ * plausible-looking failures; see tests/setup/app-server.ts.
  */
 
-const BASE = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-
-async function serverRunning(): Promise<boolean> {
-  try {
-    const r = await fetch(`${BASE}/api/pdf/processing/00000000-0000-0000-0000-000000000000`, {
-      signal: AbortSignal.timeout(2000),
-    });
-    return r.status !== 0; // any response (including 401/404) means server is up
-  } catch {
-    return false;
-  }
-}
+const BASE = APP_BASE;
 
 describe("PDF route access control", () => {
   let siteId: string;
   let visitId: string;
   let ownerCookies: string;
+  let signInHelper: (u: string, p?: string) => Promise<string>;
   let recvCookies: string;
   let materialTypeId: string;
   let supplierId: string;
@@ -35,7 +29,7 @@ describe("PDF route access control", () => {
   let serverUp = false;
 
   beforeAll(async () => {
-    serverUp = await serverRunning();
+    serverUp = await requireAppServer();
     if (!serverUp) return;
 
     const { data: sites } = await adminClient().from("sites").select("id").limit(1);
@@ -82,10 +76,30 @@ describe("PDF route access control", () => {
       return `sb-127-auth-token=${value}`;
     }
 
+    signInHelper = signIn;
     [ownerCookies, recvCookies] = await Promise.all([
       signIn("pdf-owner"),
       signIn("pdf-recv"),
     ]);
+  });
+
+  // M-05: the proxy does not run on /api, so the route must enforce the forced
+  // password change itself. Without this a temp password handed over WhatsApp
+  // was enough to pull business documents.
+  it("a user who must change their password cannot use the PDF API", async () => {
+    if (!serverUp) return;
+    const { data: sites } = await adminClient().from("sites").select("id").limit(1).single();
+    const username = `pdf-newuser-${Date.now()}`;
+    await makeUser({ username, role: "owner", siteId: null });
+    await adminClient().from("profiles").update({ must_change_password: true })
+      .eq("username", username);
+
+    const cookies = await signInHelper(username);
+    const r = await fetch(`${BASE}/api/pdf/analysis/${visitId}`, { headers: { cookie: cookies } });
+    expect(r.status).toBe(403);
+    const body = await r.json();
+    expect(String(body.error)).toMatch(/password/i);
+    expect(sites).toBeTruthy();
   });
 
   it("unauthenticated request to PDF route returns 401", async () => {

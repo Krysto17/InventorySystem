@@ -26,6 +26,15 @@ export function adminClient(): SupabaseClient {
 }
 
 // Create a confirmed auth user + profile and return a client signed in as them.
+// An unauthenticated client, for asserting what anon can reach.
+export function anonClient(): SupabaseClient {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  );
+}
+
 export type TestUser = { client: SupabaseClient; id: string; userId: string };
 
 // Look an auth user up by email, paging through listUsers (the admin API has no

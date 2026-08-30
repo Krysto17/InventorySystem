@@ -300,6 +300,30 @@ export type Database = {
           },
         ]
       }
+      auth_throttle: {
+        Row: {
+          bucket: string
+          failures: number
+          first_failure: string
+          last_failure: string
+          retry_after: string | null
+        }
+        Insert: {
+          bucket: string
+          failures?: number
+          first_failure?: string
+          last_failure?: string
+          retry_after?: string | null
+        }
+        Update: {
+          bucket?: string
+          failures?: number
+          first_failure?: string
+          last_failure?: string
+          retry_after?: string | null
+        }
+        Relationships: []
+      }
       bank_accounts: {
         Row: {
           id: string
@@ -2460,6 +2484,10 @@ export type Database = {
       manager_skip_to_pricing: { Args: { p_visit_id: string }; Returns: undefined }
       approve_pricing: { Args: { p_visit_id: string }; Returns: undefined }
       reject_pricing: { Args: { p_visit_id: string }; Returns: undefined }
+      auth_throttle_check: { Args: { p_buckets: string[] }; Returns: number }
+      auth_throttle_fail: { Args: { p_buckets: string[] }; Returns: undefined }
+      auth_throttle_clear: { Args: { p_buckets: string[] }; Returns: undefined }
+      prune_auth_throttle: { Args: Record<string, never>; Returns: number }
       audit_counts_by_actor: {
         Args: Record<string, never>
         Returns: { actor_id: string; events: number; last_seen: string | null }[]
