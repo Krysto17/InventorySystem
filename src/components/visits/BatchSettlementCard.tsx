@@ -13,6 +13,7 @@ import { formatTimestamp } from "@/lib/visits/format";
 import type { Role } from "@/lib/auth/roles";
 
 import { one as g1 } from "@/lib/db/relation";
+import { ActionForm } from "@/components/ui/ActionForm";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 const STATUS_VARIANT: Record<string, "default" | "green" | "yellow" | "red" | "blue" | "paid"> = {
@@ -163,11 +164,11 @@ export async function BatchSettlementCard({
               <span className="flex items-center gap-2">
                 − {ngn(Number(c.amount))}
                 {canEditDeductions && (
-                  <form action={removeUtilityCharge}>
+                  <ActionForm action={removeUtilityCharge}>
                     <input type="hidden" name="visit_id" value={visitId} />
                     <input type="hidden" name="charge_id" value={c.id as string} />
                     <button type="submit" title="Remove this deduction" className="rounded border border-reject px-1.5 text-[11px] leading-4 text-reject hover:bg-reject-soft">✕</button>
-                  </form>
+                  </ActionForm>
                 )}
               </span>
             </div>
@@ -181,11 +182,11 @@ export async function BatchSettlementCard({
                 <span className="flex items-center gap-2">
                   − {ngn(Number(d.amount))}
                   {canEditDeductions && (
-                    <form action={removeDeduction}>
+                    <ActionForm action={removeDeduction}>
                       <input type="hidden" name="visit_id" value={visitId} />
                       <input type="hidden" name="deduction_id" value={d.id as string} />
                       <button type="submit" title="Remove this deduction" className="rounded border border-reject px-1.5 text-[11px] leading-4 text-reject hover:bg-reject-soft">✕</button>
-                    </form>
+                    </ActionForm>
                   )}
                 </span>
               </div>
@@ -202,7 +203,7 @@ export async function BatchSettlementCard({
 
         {/* Manager: deduct an advance against this batch (partial or full) */}
         {isManager && !locked && outstandingDebt > 0 && (
-          <form action={recordDeduction} className="flex flex-wrap items-end gap-2 border-t border-line pt-3">
+          <ActionForm action={recordDeduction} className="flex flex-wrap items-end gap-2 border-t border-line pt-3">
             <input type="hidden" name="visit_id" value={visitId} />
             <input type="hidden" name="supplier_id" value={supplierId} />
             <label className="text-xs font-medium">
@@ -215,13 +216,13 @@ export async function BatchSettlementCard({
               <input type="text" name="notes" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
             </label>
             <button type="submit" className="rounded border px-3 py-1 text-sm hover:bg-paper">Deduct</button>
-          </form>
+          </ActionForm>
         )}
 
         {/* Manager: submit / resubmit for owner approval */}
         {/* Manager: supplier account details (captured before submitting) */}
         {(isManager || isOwner) && !locked && (
-          <form action={updateSupplierAccount} className="space-y-2 border-t border-line pt-3">
+          <ActionForm action={updateSupplierAccount} className="space-y-2 border-t border-line pt-3">
             <input type="hidden" name="visit_id" value={visitId} />
             <input type="hidden" name="supplier_id" value={supplierId} />
             <AccountFields
@@ -232,7 +233,7 @@ export async function BatchSettlementCard({
               label="Supplier account details"
             />
             <button type="submit" className="rounded border px-3 py-1 text-xs hover:bg-paper">Save account details</button>
-          </form>
+          </ActionForm>
         )}
 
         {/* Accountant (and everyone once the batch is locked) sees the supplier's

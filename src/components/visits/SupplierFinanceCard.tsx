@@ -3,6 +3,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { recordDeduction } from "@/app/visits/[id]/finance-actions";
 import type { Role } from "@/lib/auth/roles";
+import { ActionForm } from "@/components/ui/ActionForm";
 
 const ngn = (n: number) => `₦${n.toLocaleString()}`;
 
@@ -75,7 +76,7 @@ export async function SupplierFinanceCard({
         )}
 
         {canDeduct && (debt > 0 || processingDebt > 0) && (
-          <form action={recordDeduction} className="flex flex-wrap items-end gap-2">
+          <ActionForm action={recordDeduction} className="flex flex-wrap items-end gap-2">
             <input type="hidden" name="visit_id" value={visitId} />
             <input type="hidden" name="supplier_id" value={supplierId} />
             <label className="text-xs font-medium">
@@ -94,7 +95,7 @@ export async function SupplierFinanceCard({
               <input type="text" name="notes" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
             </label>
             <button type="submit" className="rounded border px-3 py-1 text-sm hover:bg-zinc-50">Record deduction</button>
-          </form>
+          </ActionForm>
         )}
       </CardContent>
     </Card>

@@ -3,6 +3,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { reopenProcessingFee } from "@/app/visits/[id]/finance-actions";
 import { ProcessingFeeReopenCard } from "@/components/visits/ProcessingFeeReopenCard";
 import type { Role } from "@/lib/auth/roles";
+import { ActionForm } from "@/components/ui/ActionForm";
 
 type Machine = { id: string; name: string; charge_basis: string; rate: number };
 
@@ -67,13 +68,13 @@ export async function ProcessingFeeReopen({
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">Processing fee</h2></CardHeader>
         <CardContent>
-          <form action={reopenProcessingFee}>
+          <ActionForm action={reopenProcessingFee}>
             <input type="hidden" name="visit_id" value={visitId} />
             <button type="submit" className="rounded border border-line px-3 py-1.5 text-sm font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-800">
               Send fee back to processing
             </button>
             <p className="mt-1 text-xs text-ink-2">Ask the processing employee to correct the machine usage / fee.</p>
-          </form>
+          </ActionForm>
         </CardContent>
       </Card>
     );

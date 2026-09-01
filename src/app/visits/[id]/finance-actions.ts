@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
-import { fail, ok, type ActionResult } from "@/lib/actions/result";
+import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 import { accountTrioFromForm } from "@/lib/validation/account";
 import { revalidateSupplierFinance } from "@/lib/finance/revalidate";
 
@@ -192,16 +192,20 @@ export async function addPayoutSplit(_prev: ActionResult, formData: FormData): P
   return ok("Split added.");
 }
 
-export async function removePayoutSplit(formData: FormData): Promise<void> {
+export async function removePayoutSplit(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || !["manager", "owner"].includes(me.role)) return;
+  if (!me || !["manager", "owner"].includes(me.role)) return fail("Not allowed to change the payout plan.");
   const visitId = String(formData.get("visit_id") ?? "");
   const id = String(formData.get("split_id") ?? "");
-  if (!id) return;
+  if (!id) return fail("Missing split.");
   const supabase = await createClient();
-  await supabase.from("settlement_payout_splits").delete().eq("id", id);
+  // .select() so a row RLS refused comes back as zero rows rather than silence.
+  const res = await supabase.from("settlement_payout_splits").delete().eq("id", id).select("id");
+  const result = fromWrite(res, "That split was not removed — you may not have permission for it.");
+  if (!result.ok) return result;
   if (visitId) revalidatePath(`/visits/${visitId}`);
   revalidatePath("/accounting/payouts");
+  return ok("Split removed.");
 }
 
 // ─── Receiving reopens a submitted batch to add / correct a line ─────────────
@@ -221,60 +225,73 @@ export async function reopenReceiving(_prev: ActionResult, formData: FormData): 
 
 // ─── Utility charges (Phase 11 B) ────────────────────────────────────────────
 
-export async function addUtilityCharge(formData: FormData): Promise<void> {
+export async function addUtilityCharge(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || !["processing", "manager", "owner"].includes(me.role)) return;
+  if (!me || !["processing", "manager", "owner"].includes(me.role)) return fail("Not allowed to add a charge.");
 
   const visitId = String(formData.get("visit_id") ?? "");
   const kind = String(formData.get("kind") ?? "");
   const amount = Number(formData.get("amount"));
   const description = String(formData.get("description") ?? "").trim() || null;
-  if (!visitId || !["light_bill", "other"].includes(kind) || !(amount > 0)) return;
+  if (!visitId) return fail("Missing visit.");
+  if (!["light_bill", "other"].includes(kind)) return fail("Pick a charge type.");
+  if (!(amount > 0)) return fail("Amount must be greater than zero.");
   // For an "other" deduction the description is its type — require it.
-  if (kind === "other" && !description) return;
+  if (kind === "other" && !description) return fail("Describe what the deduction is for.");
 
   const supabase = await createClient();
-  await supabase.from("utility_charges").insert({
+  const res = await supabase.from("utility_charges").insert({
     visit_id: visitId, kind, description, amount, recorded_by: me.id,
-  });
+  }).select("id");
+  const result = fromWrite(res, "The charge was not added — the batch may be closed to you.");
+  if (!result.ok) return result;
   revalidatePath(`/visits/${visitId}`);
+  return ok("Charge added.");
 }
 
 // Manager (or owner) discounts/adjusts a supplier's processing fee on an open
 // visit by setting a new (lower) amount. The DB policy enforces role + site +
 // open; all downstream totals already sum this amount.
-export async function adjustUtilityCharge(formData: FormData): Promise<void> {
+export async function adjustUtilityCharge(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || !["manager", "owner"].includes(me.role)) return;
+  if (!me || !["manager", "owner"].includes(me.role)) return fail("Not allowed to adjust a charge.");
 
   const visitId = String(formData.get("visit_id") ?? "");
   const chargeId = String(formData.get("charge_id") ?? "");
   const amount = Number(formData.get("amount"));
-  if (!chargeId || !(amount > 0)) return;
+  if (!chargeId) return fail("Missing charge.");
+  if (!(amount > 0)) return fail("Amount must be greater than zero.");
 
   const supabase = await createClient();
-  await supabase.from("utility_charges").update({ amount }).eq("id", chargeId);
+  const res = await supabase.from("utility_charges").update({ amount }).eq("id", chargeId).select("id");
+  const result = fromWrite(res, "The charge was not adjusted — the batch may no longer be open to you.");
+  if (!result.ok) return result;
   if (visitId) revalidatePath(`/visits/${visitId}`);
+  return ok("Charge adjusted.");
 }
 
 // Manager/owner sends the processing fee back to the processing employee for
 // correction (reopen in place — the visit stays where it is).
-export async function reopenProcessingFee(formData: FormData): Promise<void> {
+export async function reopenProcessingFee(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || !["manager", "owner"].includes(me.role)) return;
+  if (!me || !["manager", "owner"].includes(me.role)) return fail("Not allowed to reopen the processing fee.");
   const visitId = String(formData.get("visit_id") ?? "");
-  if (!visitId) return;
+  if (!visitId) return fail("Missing visit.");
   const supabase = await createClient();
-  await supabase.rpc("reopen_processing_fee", { p_visit_id: visitId });
+  // An RPC reports refusal by raising, so the error is the whole story here —
+  // fromWrite is for table writes that answer with rows.
+  const { error } = await supabase.rpc("reopen_processing_fee", { p_visit_id: visitId });
+  if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidatePath(`/visits/${visitId}`);
   revalidatePath("/processing");
+  return ok("Sent back to processing for correction.");
 }
 
 // ─── Advance deductions (Phase 11 A) ─────────────────────────────────────────
 
-export async function recordDeduction(formData: FormData): Promise<void> {
+export async function recordDeduction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || !["manager", "accounting", "owner"].includes(me.role)) return;
+  if (!me || !["manager", "accounting", "owner"].includes(me.role)) return fail("Not allowed to record a deduction.");
 
   const visitId = String(formData.get("visit_id") ?? "") || null;
   const supplierId = String(formData.get("supplier_id") ?? "");
@@ -282,14 +299,15 @@ export async function recordDeduction(formData: FormData): Promise<void> {
   const notes = String(formData.get("notes") ?? "").trim() || null;
   // Which balance this recovery settles: advance debt or processing (light bill).
   const kind = String(formData.get("kind") ?? "advance");
-  if (!supplierId || !(amount > 0)) return;
-  if (!["advance", "processing"].includes(kind)) return;
+  if (!supplierId) return fail("Missing supplier.");
+  if (!(amount > 0)) return fail("Amount must be greater than zero.");
+  if (!["advance", "processing"].includes(kind)) return fail("Unknown deduction type.");
 
   const supabase = await createClient();
   const { data: profile } = await supabase
     .from("profiles").select("site_id").eq("id", me.id).single();
   const siteId = profile?.site_id as string | null;
-  if (!siteId && me.role !== "owner") return;
+  if (!siteId && me.role !== "owner") return fail("Your account has no site.");
 
   // Owner has no site of their own — attach to the visit's site when present.
   let effectiveSite = siteId;
@@ -297,9 +315,9 @@ export async function recordDeduction(formData: FormData): Promise<void> {
     const { data: v } = await supabase.from("visits").select("site_id").eq("id", visitId).single();
     effectiveSite = (v?.site_id as string | null) ?? null;
   }
-  if (!effectiveSite) return;
+  if (!effectiveSite) return fail("Could not tell which site this deduction belongs to.");
 
-  await supabase.from("advance_deductions").insert({
+  const res = await supabase.from("advance_deductions").insert({
     supplier_id: supplierId,
     site_id: effectiveSite,
     ref_visit_id: visitId,
@@ -307,39 +325,48 @@ export async function recordDeduction(formData: FormData): Promise<void> {
     notes,
     kind,
     recorded_by: me.id,
-  });
+  }).select("id");
+  const result = fromWrite(res, "The deduction was not recorded — you may not have permission for this supplier.");
+  if (!result.ok) return result;
   revalidateSupplierFinance();
+  return ok("Deduction recorded.");
 }
 
 // Manager/accounting/owner removes an advance deduction applied by mistake. The
 // supplier's outstanding debt is recomputed automatically. Blocked once the
 // batch is paid (locked).
-export async function removeDeduction(formData: FormData): Promise<void> {
+export async function removeDeduction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || !["manager", "accounting", "owner"].includes(me.role)) return;
+  if (!me || !["manager", "accounting", "owner"].includes(me.role)) return fail("Not allowed to remove a deduction.");
   const visitId = String(formData.get("visit_id") ?? "") || null;
   const deductionId = String(formData.get("deduction_id") ?? "");
-  if (!deductionId) return;
+  if (!deductionId) return fail("Missing deduction.");
 
   const supabase = await createClient();
   if (visitId) {
     const { data: st } = await supabase.from("batch_settlements").select("status").eq("visit_id", visitId).maybeSingle();
-    if (st?.status === "paid") return; // already disbursed — locked
+    if (st?.status === "paid") return fail("This batch has been paid — the deduction is locked.");
   }
-  await supabase.from("advance_deductions").delete().eq("id", deductionId);
+  const res = await supabase.from("advance_deductions").delete().eq("id", deductionId).select("id");
+  const result = fromWrite(res, "The deduction was not removed — you may not have permission for it.");
+  if (!result.ok) return result;
   revalidateSupplierFinance();
+  return ok("Deduction removed.");
 }
 
 // Manager/owner removes a utility deduction (processing fee / other charge)
 // applied by mistake, while the visit is still open.
-export async function removeUtilityCharge(formData: FormData): Promise<void> {
+export async function removeUtilityCharge(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || !["manager", "owner"].includes(me.role)) return;
+  if (!me || !["manager", "owner"].includes(me.role)) return fail("Not allowed to remove a charge.");
   const visitId = String(formData.get("visit_id") ?? "") || null;
   const chargeId = String(formData.get("charge_id") ?? "");
-  if (!chargeId) return;
+  if (!chargeId) return fail("Missing charge.");
 
   const supabase = await createClient();
-  await supabase.from("utility_charges").delete().eq("id", chargeId);
+  const res = await supabase.from("utility_charges").delete().eq("id", chargeId).select("id");
+  const result = fromWrite(res, "The charge was not removed — the batch may no longer be open to you.");
+  if (!result.ok) return result;
   if (visitId) revalidatePath(`/visits/${visitId}`);
+  return ok("Charge removed.");
 }

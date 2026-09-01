@@ -5,6 +5,7 @@ import { SubmitButton } from "@/components/ui/SubmitButton";
 import { fetchKnownAccounts } from "@/lib/accounts/known-accounts";
 import { one as g1 } from "@/lib/db/relation";
 import type { Role } from "@/lib/auth/roles";
+import { ActionForm } from "@/components/ui/ActionForm";
 
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
@@ -61,11 +62,11 @@ export async function PayoutSplitPlan({
               <span className="flex items-center gap-2">
                 <span className="font-semibold">{ngn(Number(r.amount))}</span>
                 {canPlan && (
-                  <form action={removePayoutSplit} data-confirm="Remove this split from the plan?">
+                  <ActionForm action={removePayoutSplit} data-confirm="Remove this split from the plan?">
                     <input type="hidden" name="visit_id" value={visitId} />
                     <input type="hidden" name="split_id" value={r.id as string} />
                     <SubmitButton pendingText="…" className="rounded border border-reject px-1.5 text-[11px] leading-5 text-reject hover:bg-reject-soft disabled:opacity-50">✕</SubmitButton>
-                  </form>
+                  </ActionForm>
                 )}
               </span>
             </li>

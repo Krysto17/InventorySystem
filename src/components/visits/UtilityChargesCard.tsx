@@ -5,6 +5,7 @@ import { addUtilityCharge, adjustUtilityCharge } from "@/app/visits/[id]/finance
 import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
 import { isVisitOpen } from "@/lib/visits/state-machine";
+import { ActionForm } from "@/components/ui/ActionForm";
 
 const ngn = (n: number) => `₦${n.toLocaleString()}`;
 
@@ -60,14 +61,14 @@ export async function UtilityChargesCard({
                 <span className="flex items-center gap-2">
                   <span className="font-medium">{ngn(Number(c.amount))}</span>
                   {canDiscount && (
-                    <form action={adjustUtilityCharge} className="flex items-end gap-1">
+                    <ActionForm action={adjustUtilityCharge} className="flex items-end gap-1">
                       <input type="hidden" name="visit_id" value={visitId} />
                       <input type="hidden" name="charge_id" value={c.id as string} />
                       <input type="number" name="amount" min="0.01" step="0.01" defaultValue={Number(c.amount)}
                         title="Discount / adjust fee"
                         className="w-24 rounded border px-1.5 py-0.5 text-xs" />
                       <button type="submit" className="rounded border px-2 py-0.5 text-[11px] hover:bg-zinc-50">Apply</button>
-                    </form>
+                    </ActionForm>
                   )}
                 </span>
               </li>
@@ -87,7 +88,7 @@ export async function UtilityChargesCard({
         )}
 
         {canAdd && (
-          <form action={addUtilityCharge} className="flex flex-wrap items-end gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+          <ActionForm action={addUtilityCharge} className="flex flex-wrap items-end gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
             <input type="hidden" name="visit_id" value={visitId} />
             <label className="text-xs font-medium">
               Kind
@@ -105,7 +106,7 @@ export async function UtilityChargesCard({
               <input type="text" name="description" placeholder="e.g. Transport, Loading" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
             </label>
             <button type="submit" className="rounded border px-3 py-1 text-sm hover:bg-zinc-50">Add</button>
-          </form>
+          </ActionForm>
         )}
       </CardContent>
     </Card>
