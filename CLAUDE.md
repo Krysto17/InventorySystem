@@ -58,6 +58,19 @@ as a branded PDF.
 - **Hybrid edit locking (Phase 10):** the recording role edits its record only until the
   next stage acts (receiving lines lock when QC starts; XRF locks when pricing acts);
   after that manager/owner only. All edits audited.
+- **Inventory runs the cost-price module** (0149) as well as the general manager: the
+  mixing-batch / weighted-cost screen is at `/inventory/cost-price` (same component as
+  `/manager/cost-price`). Inventory's reach is **site-scoped** — form, edit and delete
+  runs on their own site — where the GM's cost-price read is role-wide. Owner approval is
+  still the only thing that turns a batch into a sale, and an approved batch stays locked.
+  Pinned by `tests/rls/cost-batch.rls.test.ts` + `cost-price-edit.rls.test.ts`.
+- **Inventory issues the cash** (0150). Cash part payments to a supplier are counted out
+  of the safe by the inventory employee, so `record_settlement_payment` accepts them —
+  **own site, `cash` method only** (a transfer stays accounting's). The approval chain is
+  unchanged and comes first: manager prices + submits, **owner approves**, and only an
+  `approved`/`partially_paid` settlement takes a payment. Recording cash approves nothing.
+  Desk lives at `/inventory/cash-payouts`; pinned by
+  `tests/rls/inventory-cash-payout.rls.test.ts`.
 - **Suppliers** carry a business code (`SUP-MJZ-0001`) and a rename history
   (`former_names`, rendered "Ahmed Musa (Formerly Musa Ahmed)").
 

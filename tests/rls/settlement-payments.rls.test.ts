@@ -77,10 +77,15 @@ describe("settlement payments (part / full, manager cash)", () => {
     expect(error).not.toBeNull();
   });
 
-  it("inventory cannot record a payment", async () => {
+  // 0150: inventory keeps the cash box and issues cash part payments, but a
+  // transfer is still accounting's to record. Full coverage of the cash desk
+  // lives in tests/rls/inventory-cash-payout.rls.test.ts.
+  it("inventory records cash but not a transfer", async () => {
     const { settlementId } = await approvedSettlement();
-    const { error } = await inv.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100, p_method: "cash" });
-    expect(error).not.toBeNull();
+    expect((await inv.client.rpc("record_settlement_payment",
+      { p_settlement_id: settlementId, p_amount: 100, p_method: "cash" })).error).toBeNull();
+    expect((await inv.client.rpc("record_settlement_payment",
+      { p_settlement_id: settlementId, p_amount: 100, p_method: "transfer" })).error).not.toBeNull();
   });
 
   it("a held settlement takes no payment", async () => {

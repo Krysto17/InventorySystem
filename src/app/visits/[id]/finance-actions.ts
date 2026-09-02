@@ -60,12 +60,12 @@ export async function sendBackToOwner(_prev: ActionResult, formData: FormData): 
 }
 
 // Record a payment (part or full) against an approved settlement. Cash is
-// typically paid by the manager; the accountant records transfers. The RPC
-// enforces role + site + open status + no over-payment, and derives the
-// settlement status (partially_paid / paid).
+// handed over by the manager or the INVENTORY employee (who keeps the cash);
+// the accountant records transfers. The RPC enforces role + site + open status
+// + no over-payment, and derives the settlement status (partially_paid / paid).
 export async function recordSettlementPayment(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || !["owner", "accounting", "manager"].includes(me.role)) {
+  if (!me || !["owner", "accounting", "manager", "inventory"].includes(me.role)) {
     return fail("Not allowed to record a payment.");
   }
   const visitId = String(formData.get("visit_id") ?? "");
@@ -76,6 +76,11 @@ export async function recordSettlementPayment(_prev: ActionResult, formData: For
   if (!settlementId) return fail("Missing settlement.");
   if (!["cash", "transfer", "other"].includes(method)) return fail("Pick a payment method.");
   if (!(amount > 0)) return fail("Amount must be greater than zero.");
+  // Inventory hands over physical cash; transfers stay with accounting (0150
+  // says the same thing in the DB — this only gives a clearer message).
+  if (me.role === "inventory" && method !== "cash") {
+    return fail("Inventory can only issue cash — a transfer is recorded by accounting.");
+  }
   // Which account this portion was paid into (a payout may be split across
   // several accounts — one payment row each). Optional, but complete if given.
   const acct = accountTrioFromForm(formData);
@@ -93,6 +98,7 @@ export async function recordSettlementPayment(_prev: ActionResult, formData: For
   revalidatePath("/accounting/payouts");
   revalidatePath("/owner/payments");
   revalidatePath("/manager/payments");
+  revalidatePath("/inventory/cash-payouts");
   return ok();
 }
 

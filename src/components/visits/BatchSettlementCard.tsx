@@ -89,6 +89,9 @@ export async function BatchSettlementCard({
   const isManager = viewerRole === "manager";
   const isOwner = viewerRole === "owner";
   const isAccounting = viewerRole === "accounting";
+  // Inventory keeps the cash box: they issue CASH part payments (0150) but
+  // never a transfer, and they take no other action on a settlement.
+  const isInventory = viewerRole === "inventory";
   const status = (settlement?.status as string | undefined) ?? null;
   // Deductions/edits lock once the batch is out of the manager's hands.
   const locked = status != null && status !== "pending" && status !== "rejected";
@@ -97,7 +100,7 @@ export async function BatchSettlementCard({
   // A payment can be recorded while the settlement is open (approved or part-paid
   // and not on hold) — cash usually by the manager, transfers by the accountant.
   const settlementOpen = status === "approved" || status === "partially_paid";
-  const canRecordPayment = (isManager || isAccounting || isOwner) && settlementOpen && remaining > 0.005;
+  const canRecordPayment = (isManager || isAccounting || isOwner || isInventory) && settlementOpen && remaining > 0.005;
   // Fully-covered (₦0 left) — close it directly instead of recording a payment.
   const canCloseZero = (isManager || isAccounting || isOwner) && settlementOpen && remaining <= 0.005;
   // Manager/owner may remove an applied deduction (mistake) before the batch is
@@ -269,7 +272,7 @@ export async function BatchSettlementCard({
         )}
 
         {/* Payments ledger — part or full; cash usually by the manager. */}
-        {(isManager || isAccounting || isOwner) && status && ["approved", "on_hold", "partially_paid", "paid"].includes(status) && (
+        {(isManager || isAccounting || isOwner || isInventory) && status && ["approved", "on_hold", "partially_paid", "paid"].includes(status) && (
           <div className="border-t border-line pt-3 text-sm">
             <div className="mb-1 flex items-center justify-between text-xs font-medium text-ink-2">
               <span>Payments</span>
@@ -298,6 +301,7 @@ export async function BatchSettlementCard({
         {canRecordPayment && (
           <RecordPaymentForm
             visitId={visitId} settlementId={settlementId!} remaining={remaining}
+            cashOnly={isInventory}
             accounts={knownAccounts}
             supplierAccount={{
               name: (supplier?.account_name as string | null) ?? null,
