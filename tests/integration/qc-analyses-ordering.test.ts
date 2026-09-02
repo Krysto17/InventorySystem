@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
+import { readFileSync } from "node:fs";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
 
 /**
@@ -16,6 +17,7 @@ describe("qc analyses ordering contract", () => {
   let qc: TestUser, other: TestUser;
   let visitId: string;
   const PAGE = 20;
+  const SEEDED = 60; // rows created in beforeAll
 
   beforeAll(async () => {
     const { data: sites } = await adminClient().from("sites").select("id, name");
@@ -81,7 +83,7 @@ describe("qc analyses ordering contract", () => {
     expect(new Set(stamps).size).toBeLessThan(stamps.length);
   });
 
-  it("the count matches what the page reports", async () => {
+  it("a full fetch returns every record the analyst owns", async () => {
     const { count } = await qc.client
       .from("xrf_records").select("id", { count: "exact", head: true }).eq("recorded_by", qc.userId);
     const all = (await page(1000)).data!;
@@ -92,5 +94,83 @@ describe("qc analyses ordering contract", () => {
     const { data } = await other.client
       .from("xrf_records").select("id").eq("recorded_by", other.userId);
     expect(data ?? []).toHaveLength(0);
+  });
+
+  // ── The +1 probe that replaced the exact count (3C-2) ─────────────────────
+  //
+  // The page no longer asks how many records exist; it asks for one row more
+  // than it shows and treats the arrival of that row as "there is another page".
+  // These exercise the boundary at a small page size rather than seeding 201
+  // rows — the arithmetic is the same at any limit, and the page's own PAGE_SIZE
+  // is a module constant the test cannot inject.
+  const pageOf = async (limit: number) => {
+    const { data, error } = await qc.client
+      .from("xrf_records")
+      .select("id")
+      .eq("recorded_by", qc.userId)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(limit + 1);
+    expect(error).toBeNull();
+    const raw = data ?? [];
+    return { rows: raw.slice(0, limit), hasMore: raw.length > limit };
+  };
+
+  it("fewer records than the page holds: everything shown, no more to load", async () => {
+    const { rows, hasMore } = await pageOf(SEEDED + 40);
+    expect(rows).toHaveLength(SEEDED);
+    expect(hasMore).toBe(false);
+  });
+
+  it("exactly a full page: all shown, and it does NOT claim there is more", async () => {
+    const { rows, hasMore } = await pageOf(SEEDED);
+    expect(rows).toHaveLength(SEEDED);
+    expect(hasMore).toBe(false);
+  });
+
+  it("one more than the page: the extra row is consumed, not displayed", async () => {
+    const limit = SEEDED - 1;
+    const { rows, hasMore } = await pageOf(limit);
+    expect(rows).toHaveLength(limit);   // the +1 never reaches the sheet
+    expect(hasMore).toBe(true);
+  });
+
+  it("a wider page is a strict prefix-superset — nothing skipped or repeated", async () => {
+    const small = (await pageOf(20)).rows.map((r) => r.id);
+    const wide = (await pageOf(40)).rows.map((r) => r.id);
+    expect(wide.slice(0, 20)).toEqual(small);
+    expect(new Set(wide).size).toBe(wide.length);
+  });
+
+  it("the +1 row is selected in the database, not filtered in the page", async () => {
+    // Every row the probe returns carries the analyst's own recorded_by, because
+    // the predicate is part of the query rather than applied after the fact.
+    //
+    // NB this is an APPLICATION scope, not an RLS one: the xrf_records SELECT
+    // policy admits any `qc` role to every analysis, so a second analyst reading
+    // the table directly does see these rows. The page is what narrows them to
+    // one analyst. Pre-existing behaviour, unchanged by the +1 probe — recorded
+    // as a finding rather than altered here.
+    const { data } = await qc.client
+      .from("xrf_records").select("id, recorded_by")
+      .eq("recorded_by", qc.userId)
+      .order("created_at", { ascending: false }).order("id", { ascending: false })
+      .limit(21);
+    const rows = data ?? [];
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.recorded_by === qc.userId)).toBe(true);
+  });
+
+  // Source-level, because proving "no second query" through the running page
+  // would need mocking the Supabase client — brittle for what one grep settles.
+  it("the page performs no exact-count query", () => {
+    const src = readFileSync(
+      new URL("../../src/app/(qc)/qc/analyses/page.tsx", import.meta.url), "utf8");
+    expect(src).not.toMatch(/count:\s*["']exact["']/);
+    expect(src).not.toMatch(/head:\s*true/);
+    expect(src).toContain("limit + 1");
+    // The cap still has to be reported even though the probe cannot see past it.
+    expect(src).toContain("atCap");
+    expect(src).toMatch(/rows\.length >= MAX_ROWS/);
   });
 });
