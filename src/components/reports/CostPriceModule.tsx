@@ -7,6 +7,7 @@ import { formatTimestamp } from "@/lib/visits/format";
 import { MixingBatchTool, type Lot } from "@/components/reports/MixingBatchTool";
 import { deleteCostPriceRun } from "@/app/(manager)/manager/cost-price/actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { ActionForm } from "@/components/ui/ActionForm";
 import { CostRunEditor, type RunLot, type RunExtra } from "@/components/reports/CostRunEditor";
 
 import { one as g1 } from "@/lib/db/relation";
@@ -137,10 +138,10 @@ export async function CostPriceModule({
                             <a href={`/api/pdf/cost-price/${r.id}`} target="_blank" rel="noreferrer"
                               className="rounded border border-line px-2 py-0.5 text-[11px] hover:bg-paper">🖨 Print</a>
                             {st !== "approved" && (
-                              <form action={deleteCostPriceRun} data-confirm="Delete this cost-price computation?">
+                              <ActionForm action={deleteCostPriceRun} data-confirm="Delete this cost-price computation?">
                                 <input type="hidden" name="run_id" value={r.id as string} />
                                 <SubmitButton pendingText="Deleting…" className="rounded border border-red-300 px-2 py-0.5 text-[11px] text-red-700 hover:bg-red-50 disabled:opacity-50">Delete</SubmitButton>
-                              </form>
+                              </ActionForm>
                             )}
                           </div>
                           {st !== "approved" && (

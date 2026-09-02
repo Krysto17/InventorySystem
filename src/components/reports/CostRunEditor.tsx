@@ -5,6 +5,7 @@ import {
   renameCostPriceRun, removeRunLot, addRunExtra, updateRunExtra, removeRunExtra,
 } from "@/app/(manager)/manager/cost-price/actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { ActionForm } from "@/components/ui/ActionForm";
 import type { ActionResult } from "@/lib/actions/result";
 
 const init: ActionResult = { ok: false };
@@ -54,11 +55,11 @@ export function CostRunEditor({
                     <span className="font-medium">{l.material}</span>
                     <span className="text-ink-2"> · {l.supplier ?? "—"} · {kg(l.weight)} @ {l.cost != null ? `${ngn(l.cost)}/kg` : "—"}</span>
                   </span>
-                  <form action={removeRunLot} data-confirm="Remove this lot from the batch? It stays in stock.">
+                  <ActionForm action={removeRunLot} data-confirm="Remove this lot from the batch? It stays in stock.">
                     <input type="hidden" name="run_id" value={runId} />
                     <input type="hidden" name="stock_lot_id" value={l.stockLotId} />
                     <SubmitButton pendingText="…" className="rounded border border-red-300 px-1.5 py-0.5 text-[10px] text-red-700 hover:bg-red-50 disabled:opacity-50">Remove</SubmitButton>
-                  </form>
+                  </ActionForm>
                 </li>
               ))}
             </ul>
@@ -69,15 +70,21 @@ export function CostRunEditor({
         <div>
           <div className="mb-1 text-xs font-medium text-ink-2">External materials ({extras.length})</div>
           {extras.map((e) => (
-            <form key={e.id} action={editAction} data-confirm="skip" className="mb-1 flex flex-wrap items-end gap-1">
-              <input type="hidden" name="extra_id" value={e.id} />
-              <input type="text" name="material_name" defaultValue={e.name} required className={`w-40 ${field}`} />
-              <input type="number" name="weight_kg" step="0.001" min="0.001" defaultValue={e.weight} required className={`w-24 ${field}`} />
-              <input type="number" name="cost_price_per_kg" step="0.01" min="0" defaultValue={e.cost} required className={`w-24 ${field}`} />
-              <SubmitButton pendingText="…" className="rounded border border-line px-2 py-1 text-[10px] hover:bg-paper disabled:opacity-50">Save</SubmitButton>
-              <button type="submit" formAction={removeRunExtra} formNoValidate
-                className="rounded border border-red-300 px-1.5 py-1 text-[10px] text-red-700 hover:bg-red-50">Remove</button>
-            </form>
+            <div key={e.id} className="mb-1 flex flex-wrap items-end gap-1">
+              <form action={editAction} data-confirm="skip" className="flex flex-wrap items-end gap-1">
+                <input type="hidden" name="extra_id" value={e.id} />
+                <input type="text" name="material_name" defaultValue={e.name} required className={`w-40 ${field}`} />
+                <input type="number" name="weight_kg" step="0.001" min="0.001" defaultValue={e.weight} required className={`w-24 ${field}`} />
+                <input type="number" name="cost_price_per_kg" step="0.01" min="0" defaultValue={e.cost} required className={`w-24 ${field}`} />
+                <SubmitButton pendingText="…" className="rounded border border-line px-2 py-1 text-[10px] hover:bg-paper disabled:opacity-50">Save</SubmitButton>
+              </form>
+              {/* Its own form: as a formAction button inside the edit form, React
+                  threw the removal's result away, so a refused delete looked done. */}
+              <ActionForm action={removeRunExtra} data-confirm="Remove this external material?">
+                <input type="hidden" name="extra_id" value={e.id} />
+                <SubmitButton pendingText="…" className="rounded border border-red-300 px-1.5 py-1 text-[10px] text-red-700 hover:bg-red-50 disabled:opacity-50">Remove</SubmitButton>
+              </ActionForm>
+            </div>
           ))}
           {editState.error && <p className="text-xs text-red-600">{editState.error}</p>}
 

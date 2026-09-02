@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
-import { fail, ok, type ActionResult } from "@/lib/actions/result";
+import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 import { canUseCostPrice } from "@/lib/auth/require-cost-price";
 
 // A plain saved computation (sells nothing) when `sell` is falsy; a mixing batch
@@ -104,15 +104,21 @@ export async function renameCostPriceRun(_prev: ActionResult, formData: FormData
 }
 
 // Drop a stocked lot out of the mix (it stays in stock).
-export async function removeRunLot(formData: FormData): Promise<void> {
+export async function removeRunLot(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!canEditRuns(me)) return;
+  if (!canEditRuns(me)) return fail("Not authorized.");
   const runId = String(formData.get("run_id") ?? "");
   const lotId = String(formData.get("stock_lot_id") ?? "");
-  if (!runId || !lotId) return;
+  if (!runId || !lotId) return fail("Missing lot.");
   const supabase = await createClient();
-  await supabase.from("cost_price_run_lots").delete().eq("run_id", runId).eq("stock_lot_id", lotId);
+  // .select() so a delete RLS refused comes back as zero rows rather than
+  // silence — an approved batch is locked, and the operator must be told.
+  const res = await supabase.from("cost_price_run_lots").delete()
+    .eq("run_id", runId).eq("stock_lot_id", lotId).select("run_id");
+  const result = fromWrite(res, "That lot was not removed — the batch may already be approved.");
+  if (!result.ok) return result;
   revalidateCostPages();
+  return ok("Lot removed from the batch.");
 }
 
 // Add an external (non-stock) material to an existing computation.
@@ -156,24 +162,30 @@ export async function updateRunExtra(_prev: ActionResult, formData: FormData): P
   return ok("Material updated.");
 }
 
-export async function removeRunExtra(formData: FormData): Promise<void> {
+export async function removeRunExtra(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!canEditRuns(me)) return;
+  if (!canEditRuns(me)) return fail("Not authorized.");
   const id = String(formData.get("extra_id") ?? "");
-  if (!id) return;
+  if (!id) return fail("Missing material.");
   const supabase = await createClient();
-  await supabase.from("cost_price_run_extras").delete().eq("id", id);
+  const res = await supabase.from("cost_price_run_extras").delete().eq("id", id).select("id");
+  const result = fromWrite(res, "That material was not removed — the batch may already be approved.");
+  if (!result.ok) return result;
   revalidateCostPages();
+  return ok("Material removed.");
 }
 
 // Delete a cost-price computation (or a pending/rejected batch). RLS blocks
 // deleting an APPROVED (sold) batch. Owner / general manager / inventory only.
-export async function deleteCostPriceRun(formData: FormData): Promise<void> {
+export async function deleteCostPriceRun(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!canEditRuns(me)) return;
+  if (!canEditRuns(me)) return fail("Not authorized.");
   const id = String(formData.get("run_id") ?? "");
-  if (!id) return;
+  if (!id) return fail("Missing batch.");
   const supabase = await createClient();
-  await supabase.from("cost_price_runs").delete().eq("id", id);
+  const res = await supabase.from("cost_price_runs").delete().eq("id", id).select("id");
+  const result = fromWrite(res, "That batch was not deleted — an approved (sold) batch is locked.");
+  if (!result.ok) return result;
   revalidateCostPages();
+  return ok("Computation deleted.");
 }
