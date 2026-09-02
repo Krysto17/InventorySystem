@@ -40,9 +40,21 @@ as a branded PDF.
   site-scoped.
 - **Receiving** records weight + **magnetic** analysis per material line (magnetic is
   **Monazite-only**, DB-enforced); **QC** records the **XRF** analysis + its own weight as
-  a separate, access-restricted record (readable only by owner + manager + the QC
-  analyst). A >2% weight difference auto-flags a **mismatch** for the manager. Lines can
-  be marked `requires_analysis = false`; exempt-only batches skip QC. *(Phases 9–10.)*
+  a separate, access-restricted record (readable by owner + general manager + a
+  same-site manager + **the `qc` role**). A >2% weight difference auto-flags a
+  **mismatch** for the manager. Lines can be marked `requires_analysis = false`;
+  exempt-only batches skip QC. *(Phases 9–10.)*
+- **QC authorization is role-wide, not per-analyst ownership** (0076). `qc` is a bare
+  disjunct in the `xrf_records` SELECT and UPDATE policies — there is no `recorded_by`
+  predicate — so any QC account reads every XRF record across analysts *and* sites, and
+  may **edit another QC user's record** while the visit is in the `in_qc` → `pricing` →
+  `awaiting_price_approval` window. Nobody may DELETE one: there is no delete policy.
+  This is deliberate: 0076 was written because "the only QC analyst is at New-Site, so
+  all materials that need XRF, from any site, are analysed by QC there". The
+  `.eq("recorded_by", me.id)` filter on `/qc/analyses` gives an analyst *their* sheet —
+  it is a workflow convenience, **not** the security boundary. Revisit both policies if
+  the business ever runs multiple independent QC analysts who must not see or edit each
+  other's results. Pinned by `tests/rls/xrf-records.rls.test.ts`.
 - **Hybrid edit locking (Phase 10):** the recording role edits its record only until the
   next stage acts (receiving lines lock when QC starts; XRF locks when pricing acts);
   after that manager/owner only. All edits audited.

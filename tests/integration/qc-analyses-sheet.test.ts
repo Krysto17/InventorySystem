@@ -20,7 +20,7 @@ describe("QC analyses sheet (#9)", () => {
     monaziteId = mz!.id as string;
   });
 
-  it("returns the analyst's own analyses with material + supplier, scoped per analyst", async () => {
+  it("the sheet returns the analyst's own analyses with material + supplier", async () => {
     const { data: v } = await recv.client.from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: monaziteId,
       entry_path: "processed", state: "in_receiving", created_by: recv.userId,
@@ -52,8 +52,11 @@ describe("QC analyses sheet (#9)", () => {
     expect(vm.material_type.name).toBe("Monazite");
     expect(vm.visit.supplier.name).toBe("QAS Supplier");
 
-    // The sheet filters by recorded_by, so a second analyst's own sheet is
-    // empty (they've recorded nothing) — that's the per-analyst guarantee #9 needs.
+    // The sheet filters by recorded_by, so an analyst who has recorded nothing
+    // gets an empty sheet of their own. That is a WORKFLOW filter, not an
+    // authorization boundary — qc2 could read qc's records by querying the table
+    // without that filter, which is the documented role-wide model and is pinned
+    // in tests/rls/xrf-records.rls.test.ts.
     const other = await qc2.client.from("xrf_records").select("id").eq("recorded_by", qc2.userId);
     expect(other.data ?? []).toHaveLength(0);
   });

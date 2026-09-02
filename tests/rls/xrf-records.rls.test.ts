@@ -93,4 +93,91 @@ describe("xrf_records RLS (confidential QC results)", () => {
     const { data } = await qcB.client.from("xrf_records").select("result").eq("visit_material_id", lineId);
     expect(data ?? []).toHaveLength(1); // cross-site QC reads every site's XRF
   });
+
+  // ── QC is a ROLE, not an ownership boundary ───────────────────────────────
+  //
+  // The SELECT and UPDATE policies name `current_role() = 'qc'` with no
+  // recorded_by predicate, so authorization follows the role rather than who
+  // typed the result. 0076_cross_site_qc.sql says why: one analyst, at
+  // New-Site, analyses every site's material, and may "record/edit the XRF for
+  // any site's visit while it is in the analysis→pricing window".
+  //
+  // /qc/analyses filters `.eq("recorded_by", me.id)` so an analyst sees their
+  // own sheet, but that is a workflow convenience. These tests go straight at
+  // the table so the difference between the two is written down: the filter is
+  // NOT the security boundary, and nobody should later mistake it for one.
+  describe("QC authorization is role-wide, not per-analyst", () => {
+    it("a QC user can read an XRF record another QC user created", async () => {
+      const { lineId } = await newVisitWithLine(siteAId);
+      await adminClient().from("xrf_records").insert({
+        visit_material_id: lineId, result: "recorded by A", submitted: true, recorded_by: qcA.userId,
+      });
+      // qcB did not record this and is not even on the same site.
+      const { data, error } = await qcB.client
+        .from("xrf_records").select("result, recorded_by").eq("visit_material_id", lineId);
+      expect(error).toBeNull();
+      expect(data ?? []).toHaveLength(1);
+      expect(data![0].recorded_by).toBe(qcA.userId);
+    });
+
+    it("a QC user can edit another QC user's record while the visit is still open", async () => {
+      // The UPDATE policy gates on visit state, not on authorship: in_qc,
+      // pricing and awaiting_price_approval are the editable window.
+      const { lineId } = await newVisitWithLine(siteAId, "in_qc");
+      const { data: rec } = await adminClient().from("xrf_records").insert({
+        visit_material_id: lineId, result: "A's original", weight_kg: 100, recorded_by: qcA.userId,
+      }).select("id").single();
+
+      const { error } = await qcB.client
+        .from("xrf_records").update({ result: "edited by B" }).eq("id", rec!.id);
+      expect(error).toBeNull();
+
+      // Prove the row actually changed — a refused write returns no error and
+      // no rows, so the absence of an error proves nothing on its own.
+      const { data: after } = await adminClient()
+        .from("xrf_records").select("result, recorded_by").eq("id", rec!.id).single();
+      expect(after!.result).toBe("edited by B");
+      // Editing does not reassign authorship; recorded_by still names A.
+      expect(after!.recorded_by).toBe(qcA.userId);
+    });
+
+    it("but not once the visit has left the editable window", async () => {
+      const { visitId, lineId } = await newVisitWithLine(siteAId, "in_qc");
+      // `submitted` matters: the state machine refuses to enter pricing without a
+      // submitted XRF result or an analysis_records row.
+      const { data: rec } = await adminClient().from("xrf_records").insert({
+        visit_material_id: lineId, result: "locked", weight_kg: 100,
+        submitted: true, recorded_by: qcA.userId,
+      }).select("id").single();
+
+      // Walk the legal path — in_qc -> pricing -> in_accounting (0114). A direct
+      // jump raises, and a discarded error here would leave the visit in_qc and
+      // make this test silently assert nothing.
+      for (const state of ["pricing", "in_accounting"]) {
+        const { error } = await adminClient().from("visits").update({ state }).eq("id", visitId);
+        expect(error, `could not move the visit to ${state}: ${error?.message}`).toBeNull();
+      }
+      const { data: v } = await adminClient().from("visits").select("state").eq("id", visitId).single();
+      expect(v!.state).toBe("in_accounting"); // the gate is only meaningful if we got here
+
+      await qcB.client.from("xrf_records").update({ result: "too late" }).eq("id", rec!.id);
+      const { data: after } = await adminClient()
+        .from("xrf_records").select("result").eq("id", rec!.id).single();
+      expect(after!.result).toBe("locked");
+    });
+
+    it("no QC user may delete an XRF record — there is no delete policy at all", async () => {
+      const { lineId } = await newVisitWithLine(siteAId, "in_qc");
+      const { data: rec } = await adminClient().from("xrf_records").insert({
+        visit_material_id: lineId, result: "permanent", weight_kg: 100, recorded_by: qcA.userId,
+      }).select("id").single();
+
+      // Their own record, in the editable window — still refused.
+      await qcA.client.from("xrf_records").delete().eq("id", rec!.id);
+      await qcB.client.from("xrf_records").delete().eq("id", rec!.id);
+      const { count } = await adminClient()
+        .from("xrf_records").select("id", { count: "exact", head: true }).eq("id", rec!.id);
+      expect(count).toBe(1);
+    });
+  });
 });
