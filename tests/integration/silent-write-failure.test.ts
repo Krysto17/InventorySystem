@@ -6,9 +6,11 @@ import { fromWrite } from "../../src/lib/actions/result";
 /**
  * S-1: a write the database refused must not be reported as success.
  *
- * Nine money-touching server actions returned Promise<void> and dropped the
- * write result. That matters here specifically because an RLS-denied write is
- * NOT an error — PostgREST answers `error: null, data: []` — so the action
+ * Twelve server actions that move money or stock returned Promise<void> and
+ * dropped the write result — nine on the visit screens (3B-2), then three more
+ * on cost-price once 0149 gave inventory a delete path (1a2e47d). That matters
+ * here specifically because an RLS-denied write is NOT an error — PostgREST
+ * answers `error: null, data: []` — so the action
  * revalidated the page and the unchanged figures re-rendered as though the
  * money had moved. A deduction that never existed looked recorded.
  *
@@ -18,10 +20,15 @@ import { fromWrite } from "../../src/lib/actions/result";
  *
  *   1. the database really does answer a denied write with zero rows;
  *   2. fromWrite() calls that a failure;
- *   3. all nine actions actually route through it.
+ *   3. all twelve actions actually route through it.
  */
 
-const ACTIONS: { file: string; fn: string; kind: "table" | "rpc" }[] = [
+// `dir` defaults to the visit actions, where this started. The cost-price
+// actions live elsewhere and were fixed later (1a2e47d) for the same reason:
+// 0149 gave inventory a delete path, and a delete RLS refuses on an approved
+// batch returns no error and no rows.
+const VISIT_ACTIONS = "visits/[id]";
+const ACTIONS: { file: string; fn: string; kind: "table" | "rpc"; dir?: string }[] = [
   { file: "finance-actions.ts", fn: "removePayoutSplit", kind: "table" },
   { file: "finance-actions.ts", fn: "addUtilityCharge", kind: "table" },
   { file: "finance-actions.ts", fn: "adjustUtilityCharge", kind: "table" },
@@ -31,16 +38,19 @@ const ACTIONS: { file: string; fn: string; kind: "table" | "rpc" }[] = [
   { file: "finance-actions.ts", fn: "removeUtilityCharge", kind: "table" },
   { file: "settlement-actions.ts", fn: "updateSupplierAccount", kind: "table" },
   { file: "settlement-actions.ts", fn: "setSettlementStatus", kind: "table" },
+  { file: "actions.ts", fn: "removeRunLot", kind: "table", dir: "(manager)/manager/cost-price" },
+  { file: "actions.ts", fn: "removeRunExtra", kind: "table", dir: "(manager)/manager/cost-price" },
+  { file: "actions.ts", fn: "deleteCostPriceRun", kind: "table", dir: "(manager)/manager/cost-price" },
 ];
 
-const source = (file: string) =>
-  readFileSync(new URL(`../../src/app/visits/[id]/${file}`, import.meta.url), "utf8");
+const source = (file: string, dir = VISIT_ACTIONS) =>
+  readFileSync(new URL(`../../src/app/${dir}/${file}`, import.meta.url), "utf8");
 
 /** The body of one exported action, up to the next top-level export. */
-function bodyOf(file: string, fn: string): string {
-  const s = source(file);
+function bodyOf(file: string, fn: string, dir?: string): string {
+  const s = source(file, dir);
   const start = s.indexOf(`export async function ${fn}(`);
-  if (start === -1) throw new Error(`${fn} not found in ${file}`);
+  if (start === -1) throw new Error(`${fn} not found in ${dir ?? VISIT_ACTIONS}/${file}`);
   const next = s.indexOf("\nexport async function ", start + 1);
   return s.slice(start, next === -1 ? undefined : next);
 }
@@ -122,11 +132,11 @@ describe("silent write failure", () => {
     });
   });
 
-  // ── 3. Every one of the nine routes through it ───────────────────────────
-  describe("all nine actions consume the safe pattern", () => {
-    for (const { file, fn, kind } of ACTIONS) {
+  // ── 3. Every one of them routes through it ───────────────────────────────
+  describe("every money- or stock-touching action consumes the safe pattern", () => {
+    for (const { file, fn, kind, dir } of ACTIONS) {
       it(`${fn} returns ActionResult and cannot silently succeed`, () => {
-        const body = bodyOf(file, fn);
+        const body = bodyOf(file, fn, dir);
         expect(body, `${fn} must return ActionResult`).toContain("Promise<ActionResult>");
         expect(body, `${fn} must take the useActionState prev arg`).toContain("_prev: ActionResult");
         if (kind === "table") {
@@ -142,10 +152,10 @@ describe("silent write failure", () => {
     }
 
     // C. revalidate must not run as though a failed write had landed.
-    for (const { file, fn } of ACTIONS) {
+    for (const { file, fn, dir } of ACTIONS) {
       it(`${fn} does not revalidate before the write is known to have landed`, () => {
-        const body = bodyOf(file, fn);
-        const revalidate = body.search(/revalidate(Path|SupplierFinance)\(/);
+        const body = bodyOf(file, fn, dir);
+        const revalidate = body.search(/revalidate(Path|SupplierFinance|CostPages)\(/);
         if (revalidate === -1) return; // nothing to order
         const guard = body.search(/if \(!result\.ok\) return result;|if \(error\) return fail/);
         expect(guard, `${fn} must decide the write landed before revalidating`).toBeGreaterThan(-1);
