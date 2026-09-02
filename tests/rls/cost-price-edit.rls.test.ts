@@ -6,13 +6,15 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 // recomputes. An approved (sold) batch is locked.
 describe("edit a computed cost price", () => {
   let newSite: string, monazite: string, supplierId: string;
-  let gm: TestUser, siteMgr: TestUser, recv: TestUser;
+  let gm: TestUser, siteMgr: TestUser, recv: TestUser, inv: TestUser, otherInv: TestUser;
 
   beforeAll(async () => {
     const { data: sites } = await adminClient().from("sites").select("id, name");
     newSite = sites!.find((s) => s.name === "New-Site")!.id as string;
     gm = await makeUser({ username: "cpx-gm", role: "manager", siteId: newSite });
     siteMgr = await makeUser({ username: "cpx-sm", role: "manager", siteId: sites!.find((s) => s.name !== "New-Site")!.id as string });
+    inv = await makeUser({ username: "cpx-inv", role: "inventory", siteId: newSite });
+    otherInv = await makeUser({ username: "cpx-inv2", role: "inventory", siteId: sites!.find((s) => s.name !== "New-Site")!.id as string });
     recv = await makeUser({ username: "cpx-recv", role: "receiving", siteId: newSite });
     const { data: s } = await adminClient().from("suppliers").insert({ name: `CPX ${Date.now()}` }).select("id").single();
     supplierId = s!.id as string;
@@ -90,5 +92,47 @@ describe("edit a computed cost price", () => {
     const rid = await run();
     await siteMgr.client.from("cost_price_runs").update({ label: "hijack" }).eq("id", rid);
     expect((await adminClient().from("cost_price_runs").select("label").eq("id", rid).single()).data!.label).not.toBe("hijack");
+  });
+
+  // 0149: the inventory employee runs the module on their own site.
+  it("inventory edits and deletes an unapproved computation on its own site", async () => {
+    const rid = await run();
+    const a = await lot(100, 10);
+    const b = await lot(100, 30);
+    await adminClient().from("cost_price_run_lots").insert([
+      { run_id: rid, stock_lot_id: a }, { run_id: rid, stock_lot_id: b },
+    ]);
+
+    expect((await inv.client.from("cost_price_runs").update({ label: "Inventory mix" }).eq("id", rid)).error).toBeNull();
+    expect((await adminClient().from("cost_price_runs").select("label").eq("id", rid).single()).data!.label).toBe("Inventory mix");
+
+    expect((await inv.client.from("cost_price_run_lots").delete().eq("run_id", rid).eq("stock_lot_id", b)).error).toBeNull();
+    expect(await avg(rid)).toBe(10);
+
+    const { data: ex } = await inv.client.from("cost_price_run_extras")
+      .insert({ run_id: rid, material_name: "Bought tin", weight_kg: 100, cost_price_per_kg: 30 }).select("id").single();
+    expect(await avg(rid)).toBe(20);
+    await inv.client.from("cost_price_run_extras").delete().eq("id", ex!.id);
+    expect(await avg(rid)).toBe(10);
+
+    await inv.client.from("cost_price_runs").delete().eq("id", rid);
+    expect((await adminClient().from("cost_price_runs").select("id").eq("id", rid).maybeSingle()).data).toBeNull();
+  });
+
+  it("an inventory user at another site sees nothing and cannot edit", async () => {
+    const rid = await run();
+    expect((await otherInv.client.from("cost_price_runs").select("id").eq("id", rid)).data ?? []).toHaveLength(0);
+    await otherInv.client.from("cost_price_runs").update({ label: "hijack" }).eq("id", rid);
+    expect((await adminClient().from("cost_price_runs").select("label").eq("id", rid).single()).data!.label).not.toBe("hijack");
+    await otherInv.client.from("cost_price_runs").delete().eq("id", rid);
+    expect((await adminClient().from("cost_price_runs").select("id").eq("id", rid).maybeSingle()).data).not.toBeNull();
+  });
+
+  it("inventory cannot touch an APPROVED (sold) batch", async () => {
+    const rid = await run("approved");
+    await inv.client.from("cost_price_runs").update({ label: "nope" }).eq("id", rid);
+    expect((await adminClient().from("cost_price_runs").select("label").eq("id", rid).single()).data!.label).not.toBe("nope");
+    await inv.client.from("cost_price_runs").delete().eq("id", rid);
+    expect((await adminClient().from("cost_price_runs").select("id").eq("id", rid).maybeSingle()).data).not.toBeNull();
   });
 });

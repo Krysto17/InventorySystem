@@ -109,7 +109,7 @@ export async function GET(
 
   // ── Cost-price computation / mixing batch ─────────────────────────────────
   if (type === "cost-price") {
-    if (!["manager", "owner"].includes(me.role)) return forbidden();
+    if (!["manager", "owner", "inventory"].includes(me.role)) return forbidden();
     const data = await fetchCostPriceRunData(id); // RLS-scoped; null if not visible
     if (!data) return notFound("Cost-price run not found");
     const docId = docHash(type, id);

@@ -4,13 +4,14 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, ok, type ActionResult } from "@/lib/actions/result";
+import { canUseCostPrice } from "@/lib/auth/require-cost-price";
 
 // A plain saved computation (sells nothing) when `sell` is falsy; a mixing batch
 // submitted for OWNER APPROVAL when `sell` is "1" — the lots stay in stock until
 // the owner approves (the approval trigger then removes them).
 export async function createCostPriceRun(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || !["manager", "owner"].includes(me.role)) return fail("Not authorized.");
+  if (!me || !["manager", "owner", "inventory"].includes(me.role)) return fail("Not authorized.");
 
   const label = String(formData.get("label") ?? "").trim();
   const sell = String(formData.get("sell") ?? "") === "1";
@@ -70,8 +71,7 @@ export async function createCostPriceRun(_prev: ActionResult, formData: FormData
     }
   }
 
-  revalidatePath("/manager/cost-price");
-  revalidatePath("/owner/cost-batches");
+  revalidateCostPages();
   return ok(sell ? "Batch formed — sent for owner approval." : "Computation saved.");
 }
 
@@ -79,11 +79,11 @@ export async function createCostPriceRun(_prev: ActionResult, formData: FormData
 // RLS blocks every one of these on an APPROVED (sold) batch; the weighted cost
 // price recomputes automatically via the DB triggers.
 
-function canEditRuns(me: { role: string; is_general_manager?: boolean } | null) {
-  return !!me && (me.role === "owner" || !!me.is_general_manager);
-}
+const canEditRuns = canUseCostPrice;
+
 function revalidateCostPages() {
   revalidatePath("/manager/cost-price");
+  revalidatePath("/inventory/cost-price");
   revalidatePath("/owner/cost-batches");
 }
 
@@ -167,14 +167,13 @@ export async function removeRunExtra(formData: FormData): Promise<void> {
 }
 
 // Delete a cost-price computation (or a pending/rejected batch). RLS blocks
-// deleting an APPROVED (sold) batch. Owner / general manager only.
+// deleting an APPROVED (sold) batch. Owner / general manager / inventory only.
 export async function deleteCostPriceRun(formData: FormData): Promise<void> {
   const me = await getProfile();
-  if (!me || !(me.role === "owner" || me.is_general_manager)) return;
+  if (!canEditRuns(me)) return;
   const id = String(formData.get("run_id") ?? "");
   if (!id) return;
   const supabase = await createClient();
   await supabase.from("cost_price_runs").delete().eq("id", id);
-  revalidatePath("/manager/cost-price");
-  revalidatePath("/owner/cost-batches");
+  revalidateCostPages();
 }

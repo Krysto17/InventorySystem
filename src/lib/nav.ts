@@ -77,6 +77,8 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Stock", href: "/inventory", icon: "inventory" },
     { label: "Bulk sales", href: "/inventory/bulk-sales", icon: "bulkSales" },
     { label: "Lot sales", href: "/inventory/lot-sales", icon: "bulkSales" },
+    { label: "Cost price", href: "/inventory/cost-price", icon: "pricing" },
+    { label: "Cash payouts", href: "/inventory/cash-payouts", icon: "accounting" },
     { label: "Consumables", href: "/inventory/consumables", icon: "consumables" },
   ],
   stock_keeper: [

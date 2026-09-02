@@ -28,10 +28,13 @@ describe("role-aware navigation", () => {
     expect(navForRole("receiving").some((n) => n.href === "/processing/intake")).toBe(false);
   });
 
-  it("inventory sees stock, bulk sales, and consumables", () => {
+  it("inventory sees stock, bulk sales, cost price, cash payouts, and consumables", () => {
     const hrefs = navForRole("inventory").map((n) => n.href);
     expect(hrefs).toEqual(
-      expect.arrayContaining(["/inventory", "/inventory/bulk-sales", "/inventory/consumables"]),
+      expect.arrayContaining([
+        "/inventory", "/inventory/bulk-sales", "/inventory/cost-price",
+        "/inventory/cash-payouts", "/inventory/consumables",
+      ]),
     );
   });
 

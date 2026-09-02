@@ -108,9 +108,50 @@ describe("cost-price mixing batch sells stock on owner approval", () => {
     expect(l!.status).toBe("available");
   });
 
-  it("inventory cannot create a cost-price run", async () => {
+  // Stock is the inventory employee's lane, so they run the cost-price module
+  // too — on their own site, and still without the power to approve (0149).
+  it("inventory forms a mixing batch on its own site; the owner still approves it", async () => {
+    const lot1 = await makeLot(100, 20);
+    const lot2 = await makeLot(100, 40);
+    const { data: run, error } = await inv.client.from("cost_price_runs").insert({
+      site_id: siteAId, label: "Inventory mix", material_type_id: materialId,
+      approval_status: "pending", created_by: inv.userId,
+    }).select("id").single();
+    expect(error).toBeNull();
+    for (const lotId of [lot1, lot2]) {
+      const { error: linkErr } = await inv.client.from("cost_price_run_lots")
+        .insert({ run_id: run!.id, stock_lot_id: lotId });
+      expect(linkErr).toBeNull();
+    }
+
+    // Weighted average recorded; the lots stay in stock until the owner acts.
+    const { data: row } = await adminClient()
+      .from("cost_price_runs").select("avg_cost_price_per_kg").eq("id", run!.id).single();
+    expect(Number(row!.avg_cost_price_per_kg)).toBe(30); // (100*20 + 100*40)/200
+    const { data: lots } = await adminClient().from("stock_lots").select("status").in("id", [lot1, lot2]);
+    expect((lots ?? []).every((l) => l.status === "available")).toBe(true);
+
+    // Inventory cannot approve (and so cannot sell) its own batch.
+    await inv.client.from("cost_price_runs")
+      .update({ approval_status: "approved", sold: true }).eq("id", run!.id);
+    const { data: still } = await adminClient()
+      .from("cost_price_runs").select("approval_status").eq("id", run!.id).single();
+    expect(still!.approval_status).toBe("pending");
+
+    // The owner can — and that removes the lots from stock.
+    const { error: apprErr } = await owner.client.from("cost_price_runs")
+      .update({ approval_status: "approved", approved_by: owner.userId, sold: true, sold_at: new Date().toISOString() })
+      .eq("id", run!.id);
+    expect(apprErr).toBeNull();
+    const { data: after } = await adminClient().from("stock_lots").select("status").in("id", [lot1, lot2]);
+    expect((after ?? []).every((l) => l.status === "sold")).toBe(true);
+  });
+
+  it("inventory cannot create a run on another site", async () => {
+    const { data: sites } = await adminClient().from("sites").select("id, name");
+    const otherSite = sites!.find((s) => (s.id as string) !== siteAId)!.id as string;
     const { error } = await inv.client.from("cost_price_runs").insert({
-      site_id: siteAId, label: "nope", approval_status: "pending", created_by: inv.userId,
+      site_id: otherSite, label: "wrong site", created_by: inv.userId,
     });
     expect(error).not.toBeNull();
   });
