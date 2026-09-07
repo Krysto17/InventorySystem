@@ -13,17 +13,27 @@ import { CostRunEditor, type RunLot, type RunExtra } from "@/components/reports/
 import { one as g1 } from "@/lib/db/relation";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
+// How many lots the picker shows before asking to be expanded.
+const PAGE_SIZE = 300;
+// PostgREST refuses to return more than 1,000 rows per request, so asking for
+// more silently returns 1,000 and the screen would lie about what it is showing.
+const MAX_ROWS = 1000;
+
 // The cost-price / mixing-batch screen, shared by the general manager
 // (/manager/cost-price) and the inventory employee (/inventory/cost-price).
 // Both see the same tool; RLS decides which lots and runs come back.
 export async function CostPriceModule({
-  backHref, backLabel,
+  backHref, backLabel, searchParams,
 }: {
   backHref: string; backLabel: string;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const supabase = await createClient();
 
-  const [{ data: lotsRaw }, { data: runs }] = await Promise.all([
+  const requested = Number(String((await searchParams)?.lots ?? "")) || PAGE_SIZE;
+  const limit = Math.min(Math.max(requested, PAGE_SIZE), MAX_ROWS);
+
+  const [{ data: lotsRaw, error: lotsError }, { data: runs, error: runsError }] = await Promise.all([
     supabase
       .from("stock_lots")
       .select(`
@@ -32,8 +42,17 @@ export async function CostPriceModule({
         line:visit_materials!stock_lots_ref_visit_material_id_fkey(magnetic_analysis)
       `)
       .eq("status", "available")
-      .order("created_at", { ascending: true })
-      .limit(300),
+      // NEWEST first. A lot exists only because its settlement was paid, so the
+      // newest lot is the most recently paid material — the one the operator
+      // came here to mix. Ordering oldest-first and capping the list silently
+      // dropped exactly those: measured in production at 483 available lots,
+      // 183 of them unreachable. `id` breaks the tie, because a paid batch
+      // writes all of its lots in one transaction and they share created_at.
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      // One row more than we show. Whether it comes back is how we know there
+      // are more, without a second count query over every lot.
+      .limit(limit + 1),
     supabase
       .from("cost_price_runs")
       .select(`
@@ -49,7 +68,14 @@ export async function CostPriceModule({
       .limit(20),
   ]);
 
-  const lots: Lot[] = (lotsRaw ?? []).map((l) => ({
+  const rawLots = lotsRaw ?? [];
+  // The extra row is a signal, never a displayed row.
+  const hasMore = rawLots.length > limit;
+  // A request can never return more than MAX_ROWS, so past that point there is
+  // nothing further to ask for and "load more" would do nothing.
+  const canLoadMore = hasMore && limit < MAX_ROWS;
+
+  const lots: Lot[] = rawLots.slice(0, limit).map((l) => ({
     id: l.id as string,
     material_type_id: l.material_type_id as string,
     material_name: g1<{ name: string }>((l as { material: unknown }).material)?.name ?? "—",
@@ -77,8 +103,30 @@ export async function CostPriceModule({
           </p>
         </CardHeader>
         <CardContent>
-          {lots.length === 0 && (
+          {/* A failed read used to render as "no stock lots available", which
+              reads as a fact about the stock rather than a broken page. */}
+          {lotsError ? (
+            <p className="mb-3 text-sm text-red-600">
+              Couldn&apos;t load the stock lots — this is not the same as having none. Reload the
+              page, and tell the owner if it keeps happening.
+            </p>
+          ) : lots.length === 0 ? (
             <p className="mb-3 text-sm text-zinc-500">No stock lots available — you can still add external materials below.</p>
+          ) : null}
+          {hasMore && (
+            <p className="mb-3 text-sm text-amber-700">
+              Showing the {lots.length} most recently paid lots.{" "}
+              {canLoadMore ? (
+                <Link
+                  href={`?lots=${Math.min(limit + PAGE_SIZE, MAX_ROWS)}`}
+                  className="font-medium underline"
+                >
+                  Load more
+                </Link>
+              ) : (
+                <>That is the most this screen can list at once — mix these first, or narrow the search.</>
+              )}
+            </p>
           )}
           <MixingBatchTool lots={lots} />
         </CardContent>
@@ -87,7 +135,11 @@ export async function CostPriceModule({
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">Recent batches ({runs?.length ?? 0})</h2></CardHeader>
         <CardContent className="p-0">
-          {(runs?.length ?? 0) === 0 ? (
+          {runsError ? (
+            <p className="px-4 py-3 text-sm text-red-600">
+              Couldn&apos;t load the batches — reload the page rather than re-forming a batch.
+            </p>
+          ) : (runs?.length ?? 0) === 0 ? (
             <p className="px-4 py-3 text-sm text-zinc-500">No batches yet.</p>
           ) : (
             <div className="overflow-x-auto">
