@@ -11,8 +11,9 @@ type Counts = Record<string, number>;
 const FOR_ROLE: Record<Role, { key: string; label: string; href: string }[]> = {
   owner: [
     { key: "prices_to_approve", label: "Prices to approve",         href: "/owner/approvals" },
-    { key: "bulk_sales",        label: "Bulk sales to approve",     href: "/owner/approvals" },
-    { key: "lot_sales",         label: "Lot sales to approve",      href: "/owner/approvals" },
+    // Bulk sales and lot sales were retired; a mixing batch is now the only
+    // thing the owner approves before stock leaves. my_pending_counts still
+    // returns their keys — both tables are empty and nothing writes to them.
     { key: "advances_pending",  label: "Advances to approve",       href: "/owner/approvals" },
     { key: "expenses_pending",  label: "Expenses to approve",       href: "/owner/approvals" },
     { key: "cost_runs",         label: "Mixing batches to approve", href: "/owner/cost-batches" },

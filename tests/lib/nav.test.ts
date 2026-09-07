@@ -28,11 +28,11 @@ describe("role-aware navigation", () => {
     expect(navForRole("receiving").some((n) => n.href === "/processing/intake")).toBe(false);
   });
 
-  it("inventory sees stock, bulk sales, cost price, cash payouts, and consumables", () => {
+  it("inventory sees stock, cost price, cash payouts, and consumables", () => {
     const hrefs = navForRole("inventory").map((n) => n.href);
     expect(hrefs).toEqual(
       expect.arrayContaining([
-        "/inventory", "/inventory/bulk-sales", "/inventory/cost-price",
+        "/inventory", "/inventory/cost-price",
         "/inventory/cash-payouts", "/inventory/consumables",
       ]),
     );
@@ -86,14 +86,14 @@ describe("role-aware navigation", () => {
       expect(isActivePath("/owner", "/owner")).toBe(true);
     });
     it("matches sub-routes", () => {
-      expect(isActivePath("/inventory", "/inventory/bulk-sales")).toBe(true);
+      expect(isActivePath("/inventory", "/inventory/cost-price")).toBe(true);
     });
     it("does not match unrelated sibling prefixes", () => {
       // "/inventory" must NOT be active when on "/inventory-x" (no slash boundary)
       expect(isActivePath("/inventory", "/inventory-x")).toBe(false);
     });
-    it("bulk-sales link stays active on its own route, parent also active", () => {
-      expect(isActivePath("/inventory/bulk-sales", "/inventory/bulk-sales")).toBe(true);
+    it("cost-price link stays active on its own route, parent also active", () => {
+      expect(isActivePath("/inventory/cost-price", "/inventory/cost-price")).toBe(true);
     });
   });
 });

@@ -3,18 +3,16 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import React from "react";
 import { createClient } from "@/lib/supabase/server";
 import { requireActiveUser } from "@/lib/auth/require-active-user";
-import { fetchVisitPdfData, fetchBulkSalePdfData, fetchLotSalePdfData, fetchUtilityInvoiceData, fetchSupplyInvoiceData, fetchPriceSlipData, fetchCostPriceRunData, fetchGatePassData } from "@/lib/pdf/fetch-data";
+import { fetchVisitPdfData, fetchUtilityInvoiceData, fetchSupplyInvoiceData, fetchPriceSlipData, fetchCostPriceRunData, fetchGatePassData } from "@/lib/pdf/fetch-data";
 import { PriceSlipPdf } from "@/lib/pdf/templates/price-slip";
 import { CostPriceRunPdf } from "@/lib/pdf/templates/cost-price-run";
 import { GatePassPdf } from "@/lib/pdf/templates/gate-pass";
-import { LotSaleBreakdownPdf } from "@/lib/pdf/templates/lot-sale-breakdown";
 import { UtilityInvoicePdf } from "@/lib/pdf/templates/utility-invoice";
 import { SupplyInvoicePdf } from "@/lib/pdf/templates/supply-invoice";
 import { ProcessingReportPdf } from "@/lib/pdf/templates/processing-report";
 import { AnalysisReportPdf }   from "@/lib/pdf/templates/analysis-report";
 import { PricingSheetPdf }     from "@/lib/pdf/templates/pricing-sheet";
 import { PaymentStatementPdf } from "@/lib/pdf/templates/payment-statement";
-import { BulkSaleReceiptPdf }  from "@/lib/pdf/templates/bulk-sale-receipt";
 import { FullDossierPdf }      from "@/lib/pdf/templates/full-dossier";
 import { createHash } from "crypto";
 import type { DocumentProps } from "@react-pdf/renderer";
@@ -31,9 +29,7 @@ function pdf<P extends object>(
 }
 
 const VISIT_TYPES = ["processing", "analysis", "pricing", "payments", "dossier"] as const;
-const BULK_TYPES  = ["bulk-sale"] as const;
 type VisitPdfType = (typeof VISIT_TYPES)[number];
-type BulkPdfType  = (typeof BULK_TYPES)[number];
 
 function docHash(type: string, id: string): string {
   return createHash("sha256")
@@ -74,17 +70,6 @@ export async function GET(
   }
   const me = gate.profile;
 
-  // ── Bulk sale receipt ────────────────────────────────────────────────────
-  if (type === "bulk-sale") {
-    if (me.role !== "inventory" && me.role !== "owner") return forbidden();
-
-    const data = await fetchBulkSalePdfData(id);
-    if (!data) return notFound("Bulk sale not found");
-
-    const docId = docHash(type, id);
-    const buffer = await renderToBuffer(pdf(BulkSaleReceiptPdf, { data, docId }));
-    return pdfResponse(buffer, `bulk-sale-${id.slice(0, 8)}.pdf`);
-  }
 
   // ── Material price slip (printed when a price is set) ─────────────────────
   if (type === "price-slip") {
@@ -141,17 +126,6 @@ export async function GET(
     return pdfResponse(buffer, `utility-invoice-${id.slice(0, 8)}.pdf`);
   }
 
-  // ── Lot-tracked bulk sale breakdown (Phase 9) ─────────────────────────────
-  if (type === "lot-sale") {
-    if (me.role !== "inventory" && me.role !== "owner") return forbidden();
-
-    const data = await fetchLotSalePdfData(id);
-    if (!data) return notFound("Lot sale not found");
-
-    const docId = docHash(type, id);
-    const buffer = await renderToBuffer(pdf(LotSaleBreakdownPdf, { data, docId }));
-    return pdfResponse(buffer, `lot-sale-${id.slice(0, 8)}.pdf`);
-  }
 
   // ── Visit-based PDFs ─────────────────────────────────────────────────────
   if (!VISIT_TYPES.includes(type as VisitPdfType)) {

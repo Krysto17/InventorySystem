@@ -64,7 +64,7 @@ export default async function InventoryPage() {
           <p className="text-sm text-gray-500">{intakeQueue?.length ?? 0} visit{(intakeQueue?.length ?? 0) !== 1 ? "s" : ""} awaiting intake</p>
         </div>
         <nav className="flex gap-2 text-sm">
-          <Link href="/inventory/bulk-sales" className="px-3 py-1.5 border rounded hover:bg-gray-100">Bulk sales</Link>
+          <Link href="/inventory/cost-price" className="px-3 py-1.5 border rounded hover:bg-gray-100">Cost price</Link>
           <Link href="/inventory/consumables" className="px-3 py-1.5 border rounded hover:bg-gray-100">Consumables</Link>
         </nav>
       </header>

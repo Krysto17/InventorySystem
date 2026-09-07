@@ -75,8 +75,8 @@ const NAV: Record<Role, NavItem[]> = {
   ],
   inventory: [
     { label: "Stock", href: "/inventory", icon: "inventory" },
-    { label: "Bulk sales", href: "/inventory/bulk-sales", icon: "bulkSales" },
-    { label: "Lot sales", href: "/inventory/lot-sales", icon: "bulkSales" },
+    // Bulk sales and Lot sales were retired — Cost price is the one workflow
+    // for selling stock. Both old routes redirect here.
     { label: "Cost price", href: "/inventory/cost-price", icon: "pricing" },
     { label: "Cash payouts", href: "/inventory/cash-payouts", icon: "accounting" },
     { label: "Consumables", href: "/inventory/consumables", icon: "consumables" },
@@ -133,6 +133,6 @@ export function navForRole(role: Role, opts?: { isGeneralManager?: boolean }): N
 export function isActivePath(href: string, pathname: string): boolean {
   if (href === pathname) return true;
   // Treat sub-routes as active for the deepest matching prefix, but never let
-  // a parent like "/inventory" swallow "/inventory/bulk-sales".
+  // a parent like "/inventory" swallow "/inventory/cost-price".
   return pathname.startsWith(href + "/");
 }

@@ -18,7 +18,7 @@ const BARE_PREFIXES = ["/login", "/set-password"];
 // room cares about doesn't wake every open tab. Deletes never raise a count, so
 // insert/update is enough.
 const NOTIFY_TABLES: Record<Role, string[]> = {
-  owner:      ["visits", "bulk_sales", "lot_sales", "advances", "consumables", "cost_price_runs", "payments"],
+  owner:      ["visits", "advances", "consumables", "cost_price_runs", "payments"],
   manager:    ["visits"],
   accounting: ["batch_settlements", "advances", "consumables"],
   gate:       ["gate_passes", "visits"],

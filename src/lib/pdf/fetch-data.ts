@@ -56,23 +56,6 @@ export type PdfVisitData = {
   }[];
 };
 
-export type PdfBulkSaleData = {
-  id: string;
-  site_name: string | null;
-  buyer_name: string;
-  buyer_phone: string | null;
-  material_type_name: string | null;
-  grade: string | null;
-  weight: number;
-  unit_price: number;
-  total: number;
-  sold_at: string;
-  approval_status: string;
-  approved_at: string | null;
-  approved_by_name: string | null;
-  recorded_by_name: string | null;
-};
-
 // ─── Flatten Supabase array-relations ────────────────────────────────────────
 
 function g1<T>(v: unknown): T | null {
@@ -224,41 +207,6 @@ export async function fetchVisitPdfData(visitId: string): Promise<PdfVisitData |
 
 // ─── Bulk sale data ───────────────────────────────────────────────────────────
 
-export async function fetchBulkSalePdfData(saleId: string): Promise<PdfBulkSaleData | null> {
-  const supabase = await createClient();
-  const { data: s } = await supabase
-    .from("bulk_sales")
-    .select(`
-      id, buyer_name, buyer_phone, grade, weight, unit_price, total, sold_at,
-      approval_status, approved_at,
-      site:sites(name),
-      material_type:material_types(name),
-      recorded_by_profile:profiles!bulk_sales_recorded_by_fkey(full_name),
-      approved_by_profile:profiles!bulk_sales_approved_by_fkey(full_name)
-    `)
-    .eq("id", saleId)
-    .single();
-
-  if (!s) return null;
-
-  return {
-    id: s.id as string,
-    site_name: g1<{ name: string }>(s.site)?.name ?? null,
-    buyer_name: s.buyer_name as string,
-    buyer_phone: str(s.buyer_phone),
-    material_type_name: g1<{ name: string }>(s.material_type)?.name ?? null,
-    grade: str(s.grade),
-    weight: num(s.weight),
-    unit_price: num(s.unit_price),
-    total: num(s.total),
-    sold_at: s.sold_at as string,
-    approval_status: s.approval_status as string,
-    approved_at: str(s.approved_at),
-    approved_by_name: g1<{ full_name: string }>((s as { approved_by_profile: unknown }).approved_by_profile)?.full_name ?? null,
-    recorded_by_name: g1<{ full_name: string }>((s as { recorded_by_profile: unknown }).recorded_by_profile)?.full_name ?? null,
-  };
-}
-
 // ─── Lot-tracked bulk sale (Phase 9) ────────────────────────────────────────
 
 export type PdfLotSaleItem = {
@@ -267,77 +215,6 @@ export type PdfLotSaleItem = {
   cost_price_per_kg: number;
   total: number;
 };
-
-export type PdfLotSaleData = {
-  id: string;
-  site_name: string | null;
-  buyer_name: string;
-  buyer_phone: string | null;
-  material_type_name: string | null;
-  approval_status: string;
-  approved_at: string | null;
-  approved_by_name: string | null;
-  created_at: string;
-  total_weight_kg: number;
-  total_cost_price: number;
-  avg_cost_price_per_kg: number;
-  items: PdfLotSaleItem[];
-};
-
-export async function fetchLotSalePdfData(saleId: string): Promise<PdfLotSaleData | null> {
-  const supabase = await createClient();
-  const { data: s } = await supabase
-    .from("lot_sales")
-    .select(`
-      id, buyer_name, buyer_phone, approval_status, approved_at, created_at,
-      total_weight_kg, total_cost_price, avg_cost_price_per_kg,
-      site:sites(name),
-      material_type:material_types(name),
-      approved_by_profile:profiles!lot_sales_approved_by_fkey(full_name),
-      items:lot_sale_items(
-        stock_lot:stock_lots(weight_kg, cost_price_per_kg, supplier:suppliers(name))
-      )
-    `)
-    .eq("id", saleId)
-    .single();
-
-  if (!s) return null;
-
-  const items: PdfLotSaleItem[] = ((s.items as unknown[]) ?? []).map((it) => {
-    const lot = g1<{ weight_kg: unknown; cost_price_per_kg: unknown; supplier: unknown }>(
-      (it as { stock_lot: unknown }).stock_lot,
-    );
-    const w = num(lot?.weight_kg);
-    const c = num(lot?.cost_price_per_kg);
-    return {
-      supplier_name: g1<{ name: string }>(lot?.supplier)?.name ?? null,
-      weight_kg: w,
-      cost_price_per_kg: c,
-      total: w * c,
-    };
-  });
-
-  // Fall back to live computation when the sale is still pending (no snapshot).
-  const totW = num(s.total_weight_kg) || items.reduce((a, i) => a + i.weight_kg, 0);
-  const totC = num(s.total_cost_price) || items.reduce((a, i) => a + i.total, 0);
-  const avg = num(s.avg_cost_price_per_kg) || (totW > 0 ? totC / totW : 0);
-
-  return {
-    id: s.id as string,
-    site_name: g1<{ name: string }>(s.site)?.name ?? null,
-    buyer_name: s.buyer_name as string,
-    buyer_phone: str(s.buyer_phone),
-    material_type_name: g1<{ name: string }>(s.material_type)?.name ?? null,
-    approval_status: s.approval_status as string,
-    approved_at: str(s.approved_at),
-    approved_by_name: g1<{ full_name: string }>((s as { approved_by_profile: unknown }).approved_by_profile)?.full_name ?? null,
-    created_at: s.created_at as string,
-    total_weight_kg: totW,
-    total_cost_price: totC,
-    avg_cost_price_per_kg: avg,
-    items,
-  };
-}
 
 // ─── Cost-price computation / mixing batch ──────────────────────────────────
 export type PdfCostPriceItem = {

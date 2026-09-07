@@ -9,7 +9,6 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge, stateVariant } from "@/components/ui/badge";
 import { formatNaira, formatWeight, formatTimestamp } from "@/lib/visits/format";
 import { STATE_LABELS } from "@/lib/visits/state-machine";
-import { approveBulkSale, rejectBulkSale } from "@/app/(inventory)/inventory/bulk-sales/actions";
 
 function defaultFrom() {
   const d = new Date();
@@ -47,7 +46,6 @@ export default async function OwnerDashboard({
     { data: stockBalances },
     { data: machineRowsRaw },
     { data: consumables },
-    { data: pendingBulkSales },
     { data: costBasis },
     { data: recentMovements },
   ] = await Promise.all([
@@ -94,17 +92,6 @@ export default async function OwnerDashboard({
       if (siteFilter) q = q.eq("site_id", siteFilter);
       return q;
     })(),
-
-    supabase
-      .from("bulk_sales")
-      .select(`
-        id, buyer_name, buyer_phone, grade, weight, unit_price, total, sold_at,
-        site:sites(name),
-        material_type:material_types(name),
-        recorded_by_profile:profiles!bulk_sales_recorded_by_fkey(full_name)
-      `)
-      .eq("approval_status", "pending")
-      .order("created_at", { ascending: true }),
 
     // Stock is valued at what it COST to buy, from the lots still at hand.
     // Sold material is out of the yard and out of these figures entirely.
@@ -315,55 +302,6 @@ export default async function OwnerDashboard({
           </CardContent>
         </Card>
       </div>
-
-      {/* Pending bulk sales */}
-      <Card>
-        <CardHeader>
-          <h2 className="text-sm font-semibold">Pending bulk sales ({pendingBulkSales?.length ?? 0})</h2>
-        </CardHeader>
-        <CardContent>
-          {!pendingBulkSales || pendingBulkSales.length === 0 ? (
-            <p className="text-sm text-zinc-500">No pending bulk sales.</p>
-          ) : (
-            <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
-              {pendingBulkSales.map((s) => {
-                const mat = g1<{ name?: string }>(s.material_type);
-                const site = g1<{ name?: string }>(s.site);
-                const recName = g1<{ full_name?: string }>((s as { recorded_by_profile: unknown }).recorded_by_profile)?.full_name ?? "—";
-                return (
-                  <li key={s.id as string} className="py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="text-sm">
-                        <div className="font-medium">
-                          {s.buyer_name as string}
-                          {s.buyer_phone ? <span className="font-normal text-zinc-500"> · {s.buyer_phone as string}</span> : null}
-                        </div>
-                        <div className="text-xs text-zinc-500">
-                          {site?.name ?? "—"} · {mat?.name ?? "—"}
-                          {s.grade ? ` · ${s.grade}` : ""} · {formatWeight(Number(s.weight))} ×{" "}
-                          {formatNaira(Number(s.unit_price))} = <strong>{formatNaira(Number(s.total))}</strong>
-                        </div>
-                        <div className="mt-0.5 text-xs text-zinc-400">by {recName} · {formatTimestamp(s.sold_at as string)}</div>
-                      </div>
-                      <div className="flex shrink-0 gap-2">
-                        <form action={approveBulkSale}>
-                          <input type="hidden" name="id" value={s.id as string} />
-                          <button type="submit" className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700">Approve</button>
-                        </form>
-                        <form action={rejectBulkSale} className="flex gap-1">
-                          <input type="hidden" name="id" value={s.id as string} />
-                          <input type="text" name="rejection_note" placeholder="Reason" className="w-24 rounded-lg border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800" />
-                          <button type="submit" className="rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700">Reject</button>
-                        </form>
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }
