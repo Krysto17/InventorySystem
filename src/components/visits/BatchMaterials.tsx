@@ -4,6 +4,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { recordXrf, setLinePrice, finalizeLinePrice, skipToPricing, unsettleLine, resettleLine, removeLineAsManager, updateMaterialLine, addMaterialLine, approvePricing, rejectPricing } from "@/app/visits/[id]/batch-actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { ActionForm } from "@/components/ui/ActionForm";
 import { ReceivingLines, type RxLine } from "@/components/visits/ReceivingLines";
 import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
@@ -158,13 +159,13 @@ export async function BatchMaterials({
         ) : (
         <>
         {canSkipAnalysis && (
-          <form action={skipToPricing} className="flex items-center justify-between gap-2 rounded-lg border border-line bg-panel p-3">
+          <ActionForm action={skipToPricing} className="flex items-center justify-between gap-2 rounded-lg border border-line bg-panel p-3">
             <span className="text-xs text-ink-2">Price this batch without waiting for XRF analysis.</span>
             <input type="hidden" name="visit_id" value={visitId} />
             <SubmitButton pendingText="Skipping…" className="shrink-0 rounded border border-line px-3 py-1 text-xs font-semibold hover:bg-zinc-50 disabled:opacity-50">
               Skip analysis → pricing
             </SubmitButton>
-          </form>
+          </ActionForm>
         )}
         {lines.length === 0 ? (
           <p className="text-sm text-zinc-500">No material lines recorded yet.</p>
@@ -205,7 +206,7 @@ export async function BatchMaterials({
                 {canEditLines && l.settlement_status !== "unsettled" && (
                   <details className="mt-2">
                     <summary className="cursor-pointer text-[11px] font-medium text-ink-2 hover:underline">Correct line (kg / material)</summary>
-                    <form action={updateMaterialLine} className="mt-2 grid grid-cols-2 gap-2">
+                    <ActionForm action={updateMaterialLine} className="mt-2 grid grid-cols-2 gap-2">
                       <input type="hidden" name="visit_id" value={visitId} />
                       <input type="hidden" name="visit_material_id" value={l.id} />
                       <label className="col-span-2 text-[11px] font-medium">
@@ -229,7 +230,7 @@ export async function BatchMaterials({
                         <input type="text" name="receiving_comment" defaultValue={l.receiving_comment ?? ""} className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
                       </label>
                       <SubmitButton pendingText="Saving…" className="col-span-2 rounded border px-3 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50">Save correction</SubmitButton>
-                    </form>
+                    </ActionForm>
                   </details>
                 )}
 
@@ -248,7 +249,7 @@ export async function BatchMaterials({
                     (each material analysed separately), even ones the manager
                     marked exempt/skipped (#2/#4). */}
                 {canQc && (
-                  <form action={recordXrf} className="mt-2 space-y-2">
+                  <ActionForm action={recordXrf} className="mt-2 space-y-2">
                     <input type="hidden" name="visit_id" value={visitId} />
                     <input type="hidden" name="visit_material_id" value={l.id} />
                     {/* An exempt line still comes to QC to be weighed — it is
@@ -293,7 +294,7 @@ export async function BatchMaterials({
                         Submit
                       </SubmitButton>
                     </div>
-                  </form>
+                  </ActionForm>
                 )}
 
                 {/* Price line */}
@@ -326,7 +327,7 @@ export async function BatchMaterials({
                 {/* Price form — manager is locked out once the owner finalizes */}
                 {canPrice && (viewerRole === "owner" || !l.price_finalized) && (
                   <div className="mt-2 flex flex-wrap items-end gap-2">
-                    <form action={setLinePrice} className="flex items-end gap-2">
+                    <ActionForm action={setLinePrice} className="flex items-end gap-2">
                       <input type="hidden" name="visit_id" value={visitId} />
                       <input type="hidden" name="visit_material_id" value={l.id} />
                       <label className="text-xs">
@@ -341,15 +342,15 @@ export async function BatchMaterials({
                         />
                       </label>
                       <SubmitButton pendingText="Saving…" className="rounded border px-3 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50">Set price</SubmitButton>
-                    </form>
+                    </ActionForm>
                     {viewerRole === "owner" && l.unit_price != null && !l.price_finalized && (
-                      <form action={finalizeLinePrice}>
+                      <ActionForm action={finalizeLinePrice}>
                         <input type="hidden" name="visit_id" value={visitId} />
                         <input type="hidden" name="visit_material_id" value={l.id} />
                         <SubmitButton pendingText="Finalizing…" className="rounded bg-ore px-3 py-1 text-xs font-semibold text-white hover:bg-ore-strong disabled:opacity-50">
                           Finalize price
                         </SubmitButton>
-                      </form>
+                      </ActionForm>
                     )}
                   </div>
                 )}
@@ -367,28 +368,28 @@ export async function BatchMaterials({
                           Excluded from settlement · gate pass raised for the manager to authorise.
                         </span>
                       ) : (
-                      <form action={resettleLine} className="flex flex-wrap items-center gap-2">
+                      <ActionForm action={resettleLine} className="flex flex-wrap items-center gap-2">
                         <input type="hidden" name="visit_id" value={visitId} />
                         <input type="hidden" name="visit_material_id" value={l.id} />
                         <span className="text-xs text-reject">Excluded from settlement · gate pass issued.</span>
                         <SubmitButton pendingText="…" className="rounded border px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50">Re-settle</SubmitButton>
-                      </form>
+                      </ActionForm>
                       )
                     ) : (
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[11px] text-ink-2">Fails spec/pricing?</span>
-                        <form action={unsettleLine} className="flex items-center gap-1" data-confirm="Unsettle this line and issue a gate pass? It will be excluded from the batch total.">
+                        <ActionForm action={unsettleLine} className="flex items-center gap-1" data-confirm="Unsettle this line and issue a gate pass? It will be excluded from the batch total.">
                           <input type="hidden" name="visit_id" value={visitId} />
                           <input type="hidden" name="visit_material_id" value={l.id} />
                           <input type="text" name="reason" placeholder="reason (optional)" className="w-36 rounded border px-2 py-1 text-xs" />
                           <SubmitButton pendingText="…" className="rounded border border-reject px-2 py-1 text-xs text-reject hover:bg-reject-soft disabled:opacity-50">Unsettle → gate pass</SubmitButton>
-                        </form>
+                        </ActionForm>
                         {canUnsettle && (
-                          <form action={removeLineAsManager} data-confirm="Remove this material line? This cannot be undone.">
+                          <ActionForm action={removeLineAsManager} data-confirm="Remove this material line? This cannot be undone.">
                             <input type="hidden" name="visit_id" value={visitId} />
                             <input type="hidden" name="visit_material_id" value={l.id} />
                             <SubmitButton pendingText="Removing…" className="rounded border border-reject px-2 py-1 text-xs text-reject hover:bg-reject-soft disabled:opacity-50">Remove line</SubmitButton>
-                          </form>
+                          </ActionForm>
                         )}
                       </div>
                     )}
@@ -403,7 +404,7 @@ export async function BatchMaterials({
         {canPrice && (
           <details className="border-t border-line pt-3">
             <summary className="cursor-pointer text-xs font-semibold text-ink-2">+ Add a material line</summary>
-            <form action={addMaterialLine} className="mt-2 flex flex-wrap items-end gap-2">
+            <ActionForm action={addMaterialLine} className="mt-2 flex flex-wrap items-end gap-2">
               <input type="hidden" name="visit_id" value={visitId} />
               <label className="text-xs font-medium">
                 Material
@@ -419,7 +420,7 @@ export async function BatchMaterials({
                 <input type="number" name="weight_kg" min="0" step="0.001" required className="mt-1 block w-28 rounded border px-2 py-1 text-sm" />
               </label>
               <SubmitButton pendingText="Adding…" className="rounded border px-3 py-1 text-xs font-semibold hover:bg-zinc-50 disabled:opacity-50">Add line</SubmitButton>
-            </form>
+            </ActionForm>
           </details>
         )}
 
@@ -445,14 +446,14 @@ export async function BatchMaterials({
         {viewerRole === "owner" && visitState === "awaiting_price_approval" && (
           <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
             <span className="text-xs text-ink-2">Priced batch awaiting your approval:</span>
-            <form action={approvePricing}>
+            <ActionForm action={approvePricing}>
               <input type="hidden" name="visit_id" value={visitId} />
               <SubmitButton pendingText="Approving…" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white disabled:opacity-50">Approve &amp; finalize</SubmitButton>
-            </form>
-            <form action={rejectPricing}>
+            </ActionForm>
+            <ActionForm action={rejectPricing}>
               <input type="hidden" name="visit_id" value={visitId} />
               <SubmitButton pendingText="…" className="rounded border border-line px-3 py-1 text-xs font-semibold text-ink-2 hover:bg-zinc-50 disabled:opacity-50">Send back</SubmitButton>
-            </form>
+            </ActionForm>
           </div>
         )}
         {visitState === "awaiting_price_approval" && viewerRole === "manager" && (

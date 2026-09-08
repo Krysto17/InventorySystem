@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { setLinePrice, setPriceAgreed, unsettleLine } from "@/app/visits/[id]/batch-actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { ActionForm } from "@/components/ui/ActionForm";
 import { dayLabel, groupByDay } from "@/lib/analyses/group-by-day";
 
 export type AnalysisRow = {
@@ -41,7 +42,7 @@ function ReleaseMaterial({ row }: { row: AnalysisRow }) {
     );
   }
   return (
-    <form action={unsettleLine} className="flex items-center gap-1"
+    <ActionForm action={unsettleLine} className="flex items-center gap-1"
       data-confirm={`Release this ${row.material} back to ${row.supplier} and issue a gate pass? It leaves the batch.`}>
       <input type="hidden" name="visit_id" value={row.visitId} />
       <input type="hidden" name="visit_material_id" value={row.lineId} />
@@ -53,7 +54,7 @@ function ReleaseMaterial({ row }: { row: AnalysisRow }) {
       <button type="button" onClick={() => setOpen(false)} className="px-1 text-xs text-ink-2 hover:underline">
         Cancel
       </button>
-    </form>
+    </ActionForm>
   );
 }
 
@@ -160,23 +161,23 @@ function Table({ rows, mode, isOwner }: { rows: AnalysisRow[]; mode: "pricing" |
                   )
                 ) : r.canPrice ? (
                   <div className="flex flex-wrap items-center gap-1">
-                    <form action={setLinePrice} className="flex items-center gap-1">
+                    <ActionForm action={setLinePrice} className="flex items-center gap-1">
                       <input type="hidden" name="visit_id" value={r.visitId} />
                       <input type="hidden" name="visit_material_id" value={r.lineId} />
                       <input type="number" name="unit_price" step="0.01" min="0" defaultValue={r.unitPrice ?? ""} className="w-24 rounded border px-2 py-1 text-sm" />
                       <SubmitButton pendingText="…" className="rounded border px-2 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50">Set</SubmitButton>
-                    </form>
+                    </ActionForm>
                     {/* The owner's explicit "this price is agreed" signal — the
                         manager forwards for payment on it. Price stays editable. */}
                     {isOwner && r.unitPrice != null && (
-                      <form action={setPriceAgreed} data-confirm="skip">
+                      <ActionForm action={setPriceAgreed} data-confirm="skip">
                         <input type="hidden" name="visit_id" value={r.visitId} />
                         <input type="hidden" name="visit_material_id" value={r.lineId} />
                         <input type="hidden" name="agreed" value={r.priceAgreed ? "0" : "1"} />
                         <SubmitButton pendingText="…" className={`rounded px-2 py-1 text-xs disabled:opacity-50 ${r.priceAgreed ? "bg-approve-soft text-approve" : "border border-line hover:bg-zinc-50"}`}>
                           {r.priceAgreed ? "✓ Agreed" : "Agree price"}
                         </SubmitButton>
-                      </form>
+                      </ActionForm>
                     )}
                     {!isOwner && r.priceAgreed && (
                       <span className="rounded bg-approve-soft px-1.5 py-0.5 text-[10px] font-medium text-approve">✓ Price agreed</span>

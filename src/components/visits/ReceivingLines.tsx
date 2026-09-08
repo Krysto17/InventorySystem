@@ -1,6 +1,6 @@
 "use client";
 
-import { useOptimistic, useRef } from "react";
+import { useActionState, useOptimistic, useRef } from "react";
 import {
   addMaterialLine,
   updateMaterialLine,
@@ -8,6 +8,44 @@ import {
   submitToManager,
 } from "@/app/visits/[id]/batch-actions";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { ActionForm } from "@/components/ui/ActionForm";
+import { fail, type ActionResult } from "@/lib/actions/result";
+
+const INITIAL: ActionResult = { ok: false };
+
+// The delete button owns its own action state so a refusal shows on THAT row.
+// It lives here rather than in its own file because it needs the parent's
+// optimistic dispatch, and a hook cannot be called inside the row loop.
+function DeleteLineForm({
+  visitId, lineId, onOptimisticRemove,
+}: {
+  visitId: string; lineId: string; onOptimisticRemove: (id: string) => void;
+}) {
+  const [state, action] = useActionState(
+    async (prev: ActionResult, formData: FormData): Promise<ActionResult> => {
+      // Optimistic first, then the server. React discards the optimistic state
+      // when the action settles, so a refusal puts the row straight back.
+      onOptimisticRemove(lineId);
+      return deleteMaterialLine(prev, formData);
+    },
+    INITIAL,
+  );
+  return (
+    <form action={action} className="mt-1">
+      <input type="hidden" name="visit_id" value={visitId} />
+      <input type="hidden" name="visit_material_id" value={lineId} />
+      <SubmitButton
+        pendingText="Deleting…"
+        className="rounded border border-reject px-3 py-1 text-xs text-reject hover:bg-reject-soft disabled:opacity-50"
+      >
+        Delete line
+      </SubmitButton>
+      {state.error && (
+        <p role="alert" className="mt-1 text-xs text-red-600">{state.error}</p>
+      )}
+    </form>
+  );
+}
 
 export type RxLine = {
   id: string;
@@ -45,9 +83,12 @@ export function ReceivingLines({
   );
   const addFormRef = useRef<HTMLFormElement>(null);
 
-  async function add(formData: FormData) {
+  // Both wrappers now RETURN the action's result, so useActionState can show
+  // it. Previously they awaited a Promise<void> and dropped whatever happened.
+  const [addState, addAction] = useActionState(
+    async (prev: ActionResult, formData: FormData): Promise<ActionResult> => {
     const materialId = String(formData.get("material_type_id") ?? "");
-    if (!materialId) return; // let the required field surface the error
+    if (!materialId) return fail("Pick a material."); // the required field normally catches this
     applyOptimistic({
       type: "add",
       line: {
@@ -61,14 +102,14 @@ export function ReceivingLines({
         pending: true,
       },
     });
-    addFormRef.current?.reset();
-    await addMaterialLine(formData);
-  }
-
-  async function remove(formData: FormData) {
-    applyOptimistic({ type: "remove", id: String(formData.get("visit_material_id") ?? "") });
-    await deleteMaterialLine(formData);
-  }
+    const result = await addMaterialLine(prev, formData);
+    // Only clear the inputs once the line is really saved — a refused add used
+    // to wipe what the clerk had just typed.
+    if (result.ok) addFormRef.current?.reset();
+    return result;
+    },
+    INITIAL,
+  );
 
   return (
     <div className="space-y-4">
@@ -107,7 +148,7 @@ export function ReceivingLines({
               {/* Correcting / deleting only applies to real (saved) lines. */}
               {!l.pending && (
                 <>
-                  <form action={updateMaterialLine} className="mt-2 grid grid-cols-2 gap-2">
+                  <ActionForm action={updateMaterialLine} className="mt-2 grid grid-cols-2 gap-2">
                     <input type="hidden" name="visit_id" value={visitId} />
                     <input type="hidden" name="visit_material_id" value={l.id} />
                     <label className="col-span-2 text-[11px] font-medium">
@@ -159,17 +200,12 @@ export function ReceivingLines({
                     >
                       Save correction
                     </SubmitButton>
-                  </form>
-                  <form action={remove} className="mt-1">
-                    <input type="hidden" name="visit_id" value={visitId} />
-                    <input type="hidden" name="visit_material_id" value={l.id} />
-                    <SubmitButton
-                      pendingText="Deleting…"
-                      className="rounded border border-reject px-3 py-1 text-xs text-reject hover:bg-reject-soft disabled:opacity-50"
-                    >
-                      Delete line
-                    </SubmitButton>
-                  </form>
+                  </ActionForm>
+                  <DeleteLineForm
+                    visitId={visitId}
+                    lineId={l.id}
+                    onOptimisticRemove={(id) => applyOptimistic({ type: "remove", id })}
+                  />
                 </>
               )}
             </div>
@@ -178,7 +214,7 @@ export function ReceivingLines({
       )}
 
       <div className="space-y-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
-        <form ref={addFormRef} action={add} className="grid grid-cols-2 gap-2">
+        <form ref={addFormRef} action={addAction} className="grid grid-cols-2 gap-2">
           <input type="hidden" name="visit_id" value={visitId} />
           <label className="col-span-2 text-xs font-medium">
             Material
@@ -235,10 +271,13 @@ export function ReceivingLines({
           >
             + Add material line
           </SubmitButton>
+          {addState.error && (
+            <p role="alert" className="col-span-2 text-xs text-red-600">{addState.error}</p>
+          )}
         </form>
 
         {lines.length > 0 && (
-          <form action={submitToManager} className="space-y-2">
+          <ActionForm action={submitToManager} className="space-y-2">
             <input type="hidden" name="visit_id" value={visitId} />
             <p className="text-xs text-zinc-500">
               Material lines are saved as drafts — add or edit them above until you submit the
@@ -250,7 +289,7 @@ export function ReceivingLines({
             >
               Submit for analysis →
             </SubmitButton>
-          </form>
+          </ActionForm>
         )}
       </div>
     </div>

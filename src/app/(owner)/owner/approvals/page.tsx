@@ -6,6 +6,7 @@ import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
 import { setAdvanceApproval } from "@/app/(manager)/manager/advances/actions";
 import { reviewExpense } from "@/app/(inventory)/inventory/consumables/actions";
+import { ActionForm } from "@/components/ui/ActionForm";
 import { approvePricing, rejectPricing } from "@/app/visits/[id]/batch-actions";
 
 import { fetchFinanceFigures } from "@/lib/finance/figures";
@@ -179,14 +180,16 @@ export default async function OwnerApprovalsPage() {
                         {pr?.purchase_amount != null && <span className="font-medium">· Total {ngn(Number(pr.purchase_amount))}</span>}
                       </Link>
                       <div className="flex shrink-0 gap-2">
-                        <form action={approvePricing}>
+                        {/* ActionForm is the client wrapper; this page stays a
+                            server component and just hands it the action. */}
+                        <ActionForm action={approvePricing}>
                           <input type="hidden" name="visit_id" value={v.id as string} />
                           <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve &amp; finalize</button>
-                        </form>
-                        <form action={rejectPricing}>
+                        </ActionForm>
+                        <ActionForm action={rejectPricing}>
                           <input type="hidden" name="visit_id" value={v.id as string} />
                           <button type="submit" className="rounded border border-line px-3 py-1 text-xs font-semibold text-ink-2 hover:bg-zinc-50">Send back</button>
-                        </form>
+                        </ActionForm>
                       </div>
                     </div>
                     {/* Per-material breakdown: type · kg · unit price */}
