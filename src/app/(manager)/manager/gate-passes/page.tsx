@@ -22,7 +22,9 @@ export default async function ManagerGatePassesPage() {
     supabase.from("gate_passes")
       .select("id, pass_code, material_owner, reason, bags, weight_kg, status, issued_at, material:material_types(name), supplier:suppliers(name)")
       .order("issued_at", { ascending: false }).limit(30),
-    supabase.from("suppliers").select("id, name").order("name").limit(200),
+    // Seed suggestions only — SupplierPicker searches the database too, so this
+    // cap does not decide who can be picked (it hid 119 of 319 suppliers).
+    supabase.from("suppliers").select("id, name, supplier_code").order("name").limit(200),
     supabase.from("material_types").select("id, name").order("name"),
     supabase.from("stock_lots")
       .select("id, weight_kg, material:material_types(name), supplier:suppliers(name)")
@@ -57,7 +59,7 @@ export default async function ManagerGatePassesPage() {
             <SupplierPicker
               required={false}
               label="Supplier (or type owner below)"
-              suppliers={(suppliers ?? []).map((s) => ({ id: s.id as string, name: s.name as string, code: null }))}
+              suppliers={(suppliers ?? []).map((s) => ({ id: s.id as string, name: s.name as string, code: (s.supplier_code as string | null) ?? null }))}
             />
             <label className="text-xs font-medium">Material owner (free text)
               <input type="text" name="material_owner" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />

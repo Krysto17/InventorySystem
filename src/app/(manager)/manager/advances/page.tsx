@@ -39,6 +39,9 @@ export default async function ManagerAdvancesPage({ searchParams }: {
   const canManage = me?.role === "manager" || isOwner;
   const supabase = await createClient();
 
+  // Seed suggestions only — SupplierPicker also searches the database, so this
+  // cap no longer decides who can be picked. It used to: at 319 suppliers the
+  // last 19 alphabetically silently vanished from the advance form.
   const { data: suppliers } = await supabase
     .from("suppliers").select("id, name, supplier_code").order("name").limit(300);
   const accounts = await fetchKnownAccounts();
