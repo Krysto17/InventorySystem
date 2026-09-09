@@ -5,7 +5,8 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
-import { issueGatePass, cancelGatePass } from "./actions";
+import { issueGatePass, cancelGatePass, authorizeGatePass } from "./actions";
+import { ActionForm } from "@/components/ui/ActionForm";
 import { GateMovementsCard } from "@/components/gate/GateMovementsCard";
 import { requireGeneralManager } from "@/lib/auth/require-general-manager";
 
@@ -108,11 +109,24 @@ export default async function ManagerGatePassesPage() {
                       <Badge variant={STATUS_VARIANT[st] ?? "default"}>{st}</Badge>
                       <a href={`/api/pdf/gate-pass/${p.id}`} target="_blank" rel="noreferrer"
                         className="rounded border border-line px-2.5 py-0.5 text-xs hover:bg-paper">🖨 80mm</a>
-                      {st === "issued" && (
-                        <form action={cancelGatePass}>
+                      {/* Receiving unsettling a line raises the pass as PENDING
+                          for a manager to authorise (unsettle_line). Without a
+                          control here those requests simply stayed stuck — 14 of
+                          them, the oldest from August. Dropping one is equally
+                          allowed by the DB, so pending can be cancelled too. */}
+                      {st === "pending" && (
+                        <ActionForm action={authorizeGatePass}>
+                          <input type="hidden" name="pass_id" value={p.id as string} />
+                          <button type="submit" className="rounded bg-approve px-2.5 py-0.5 text-xs font-semibold text-white">
+                            Authorise
+                          </button>
+                        </ActionForm>
+                      )}
+                      {(st === "issued" || st === "pending") && (
+                        <ActionForm action={cancelGatePass}>
                           <input type="hidden" name="pass_id" value={p.id as string} />
                           <button type="submit" className="rounded border px-2.5 py-0.5 text-xs">Cancel</button>
-                        </form>
+                        </ActionForm>
                       )}
                     </div>
                   </li>
