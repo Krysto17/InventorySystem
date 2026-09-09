@@ -64,14 +64,23 @@ export async function editAdvance(_prev: ActionResult, formData: FormData): Prom
 
 // Manager (own site) deletes an advance before it is paid; owner may delete any.
 // RLS enforces the manager can only delete their own site's unpaid advances.
-export async function deleteAdvance(formData: FormData): Promise<void> {
+//
+// A refused delete is invisible without this: RLS filters the row out in the
+// USING clause, so PostgREST answers `error: null, data: []` — verified against
+// a paid advance, which stays exactly where it was. The screen then revalidates
+// and re-renders the advance as if nothing had been asked of it, leaving a
+// supplier debt the operator believes they withdrew.
+export async function deleteAdvance(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || (me.role !== "manager" && me.role !== "owner")) return;
+  if (!me || (me.role !== "manager" && me.role !== "owner")) return fail("Not authorized.");
   const id = String(formData.get("advance_id") ?? "");
-  if (!id) return;
+  if (!id) return fail("Missing advance.");
   const supabase = await createClient();
-  await supabase.from("advances").delete().eq("id", id);
+  const res = await supabase.from("advances").delete().eq("id", id).select("id");
+  const result = fromWrite(res, "That advance was not deleted — it may already be paid, or belong to another site.");
+  if (!result.ok) return result;
   revalidateSupplierFinance();
+  return ok("Advance deleted.");
 }
 
 // Owner approves / rejects an advance (so it counts toward — or is removed from
@@ -126,12 +135,19 @@ export async function addAdvanceShare(_prev: ActionResult, formData: FormData): 
   return ok("Share added — their debt balance now carries it.");
 }
 
-export async function removeAdvanceShare(formData: FormData): Promise<void> {
+// Removing a share moves that member's portion of the debt back onto the
+// collector, so a refusal that is never shown leaves two suppliers' balances
+// disagreeing with what the operator thinks they did. RLS scopes the delete to
+// the advance's own site, and refuses by matching no rows.
+export async function removeAdvanceShare(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || !["manager", "owner"].includes(me.role)) return;
+  if (!me || !["manager", "owner"].includes(me.role)) return fail("Not authorized.");
   const id = String(formData.get("share_id") ?? "");
-  if (!id) return;
+  if (!id) return fail("Missing share.");
   const supabase = await createClient();
-  await supabase.from("advance_shares").delete().eq("id", id);
+  const res = await supabase.from("advance_shares").delete().eq("id", id).select("id");
+  const result = fromWrite(res, "That share was not removed — the advance may belong to another site.");
+  if (!result.ok) return result;
   revalidatePath("/manager/advances");
+  return ok("Share removed — the debt returns to the collector.");
 }

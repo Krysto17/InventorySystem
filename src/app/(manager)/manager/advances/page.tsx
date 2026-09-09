@@ -151,10 +151,10 @@ export default async function ManagerAdvancesPage({ searchParams }: {
                       )}
                       {/* Manager/owner may delete an advance before it is paid. */}
                       {canManage && st !== "paid" && (
-                        <form action={deleteAdvance}>
+                        <ActionForm action={deleteAdvance}>
                           <input type="hidden" name="advance_id" value={a.id as string} />
                           <button type="submit" className="rounded border border-reject px-2.5 py-0.5 text-xs text-reject hover:bg-reject-soft">Delete</button>
-                        </form>
+                        </ActionForm>
                       )}
                     </div>
                     {/* One customer may have collected for a group — apportion the debt. */}

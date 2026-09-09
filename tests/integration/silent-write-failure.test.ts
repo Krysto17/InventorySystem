@@ -6,13 +6,13 @@ import { fromWrite } from "../../src/lib/actions/result";
 /**
  * S-1: a write the database refused must not be reported as success.
  *
- * Thirty-four server actions that move money or stock returned Promise<void>
+ * Thirty-nine server actions that move money or stock returned Promise<void>
  * and dropped the write result — nine on the visit screens (3B-2), three on
  * cost-price once 0149 gave inventory a delete path (1a2e47d), the fifteen
- * of the visit batch spine (3E-6), and the seven approval/release actions of
- * 3E-6D: the owner's two cost-batch rulings, the gate's acknowledgement, the
+ * of the visit batch spine (3E-6), the seven approval/release actions of
+ * 3E-6D (the owner's two cost-batch rulings, the gate's acknowledgement, the
  * advance and expense decisions, the store check, and the supplier account
- * switch. That matters
+ * switch), and the five money/stock deletes of 3E-6F. That matters
  * here specifically because an RLS-denied write is NOT an error — PostgREST
  * answers `error: null, data: []` — so the action
  * revalidated the page and the unchanged figures re-rendered as though the
@@ -24,7 +24,7 @@ import { fromWrite } from "../../src/lib/actions/result";
  *
  *   1. the database really does answer a denied write with zero rows;
  *   2. fromWrite() calls that a failure;
- *   3. all thirty-four actions actually route through it.
+ *   3. all thirty-nine actions actually route through it.
  *
  * The 3E-6D seven differ from the earlier tranches in what the operator saw:
  * their callers are server-rendered with no optimistic UI, so a refusal did not
@@ -85,6 +85,14 @@ const ACTIONS: { file: string; fn: string; kind: "table" | "rpc" | "delegate"; d
   { file: "actions.ts", fn: "reviewExpense", kind: "table", dir: "(inventory)/inventory/consumables" },
   { file: "actions.ts", fn: "confirmLot", kind: "rpc", dir: "stocked-materials" },
   { file: "actions.ts", fn: "switchSupplierAccount", kind: "table", dir: "suppliers" },
+  // 3E-6F tranche 1: the money/stock deletes and the sample price. All five
+  // fail the same way — RLS filters the row in the USING clause, so the write
+  // comes back `error: null, data: []` and the record stays exactly as it was.
+  { file: "actions.ts", fn: "deleteAdvance", kind: "table", dir: "(manager)/manager/advances" },
+  { file: "actions.ts", fn: "removeAdvanceShare", kind: "table", dir: "(manager)/manager/advances" },
+  { file: "actions.ts", fn: "deleteConsumable", kind: "table", dir: "(inventory)/inventory/consumables" },
+  { file: "actions.ts", fn: "setSamplePrice", kind: "table", dir: "(qc)/qc/samples" },
+  { file: "actions.ts", fn: "deleteSample", kind: "table", dir: "(qc)/qc/samples" },
 ];
 
 const source = (file: string, dir = VISIT_ACTIONS) =>
@@ -463,6 +471,167 @@ describe("silent write failure", () => {
         .select("account_number").eq("id", id).single();
       expect(after!.account_number, "payouts still go to the account on file").toBe("0123456789");
       await admin.from("suppliers").delete().eq("id", id);
+    });
+  });
+
+  // ── 2d. The 3E-6F money/stock tranche really is refused ──────────────────
+  describe("the money and stock deletes really do get refused", () => {
+    let owner: TestUser, mgrDong: TestUser, mgrOld: TestUser, qcA: TestUser, qcB: TestUser;
+    let dong: string, oldSite: string, supplierId: string, materialTypeId: string;
+    const stamp = Date.now();
+
+    beforeAll(async () => {
+      const admin = adminClient();
+      const { data: sites } = await admin.from("sites").select("id, name");
+      dong = sites!.find((s) => s.name === "Dong")!.id as string;
+      oldSite = sites!.find((s) => s.name === "Old-Site")!.id as string;
+      const { data: mt } = await admin.from("material_types").select("id").limit(1).single();
+      materialTypeId = mt!.id as string;
+      owner = await makeUser({ username: `t2-owner-${stamp}`, role: "owner", siteId: null });
+      mgrDong = await makeUser({ username: `t2-mgr-d-${stamp}`, role: "manager", siteId: dong });
+      mgrOld = await makeUser({ username: `t2-mgr-o-${stamp}`, role: "manager", siteId: oldSite });
+      qcA = await makeUser({ username: `t2-qc-a-${stamp}`, role: "qc", siteId: dong });
+      qcB = await makeUser({ username: `t2-qc-b-${stamp}`, role: "qc", siteId: dong });
+      const { data: sup } = await admin.from("suppliers")
+        .insert({ name: `Tranche1 ${stamp}` }).select("id").single();
+      supplierId = sup!.id as string;
+    });
+
+    const advance = async (status: string, site = dong) => {
+      const { data, error } = await adminClient().from("advances").insert({
+        supplier_id: supplierId, site_id: site, purpose: `t1 ${stamp}-${Math.random()}`,
+        amount_naira: 40000, recorded_by: mgrDong.userId, approval_status: status,
+      }).select("id").single();
+      expect(error, `advance fixture: ${error?.message}`).toBeNull();
+      return data!.id as string;
+    };
+
+    // ── deleteAdvance ─────────────────────────────────────────────────────
+    it("deleteAdvance: a paid advance is refused, and the debt survives", async () => {
+      const id = await advance("paid");
+      const res = await mgrDong.client.from("advances").delete().eq("id", id).select("id");
+      expect(res.error, "the shape that fooled the UI: no error").toBeNull();
+      expect(res.data ?? [], "and no rows").toHaveLength(0);
+      expect(fromWrite(res as never).ok, "fromWrite must call that a failure").toBe(false);
+      expect(fromWrite(res as never).error, "and must explain").toBeTruthy();
+      const { count } = await adminClient()
+        .from("advances").select("id", { count: "exact", head: true }).eq("id", id);
+      expect(count, "the advance is genuinely still there").toBe(1);
+    });
+
+    it("deleteAdvance: another site's advance is refused the same silent way", async () => {
+      const id = await advance("pending", dong);
+      const res = await mgrOld.client.from("advances").delete().eq("id", id).select("id");
+      expect(res.error).toBeNull();
+      expect(res.data ?? []).toHaveLength(0);
+      expect(fromWrite(res as never).ok).toBe(false);
+      const { count } = await adminClient()
+        .from("advances").select("id", { count: "exact", head: true }).eq("id", id);
+      expect(count).toBe(1);
+    });
+
+    // ── removeAdvanceShare ────────────────────────────────────────────────
+    it("removeAdvanceShare: a cross-site manager cannot remove the share, silently", async () => {
+      const advId = await advance("pending", dong);
+      const { data: member } = await adminClient().from("suppliers")
+        .insert({ name: `Tranche1 member ${stamp}` }).select("id").single();
+      const { data: share, error } = await adminClient().from("advance_shares").insert({
+        advance_id: advId, supplier_id: member!.id as string, amount: 1000, created_by: mgrDong.userId,
+      }).select("id").single();
+      expect(error, `share fixture: ${error?.message}`).toBeNull();
+
+      // Old-Site manager: the advance is Dong's, so RLS matches nothing.
+      const res = await mgrOld.client.from("advance_shares")
+        .delete().eq("id", share!.id as string).select("id");
+      expect(res.error, "no error — this is why it vanished").toBeNull();
+      expect(res.data ?? []).toHaveLength(0);
+      expect(fromWrite(res as never).ok).toBe(false);
+      const { data: after } = await adminClient().from("advance_shares")
+        .select("amount").eq("id", share!.id as string).single();
+      expect(Number(after!.amount), "the member still carries the debt").toBe(1000);
+    });
+
+    // ── deleteConsumable ──────────────────────────────────────────────────
+    it("deleteConsumable: a paid expense is refused, and it stays payable", async () => {
+      const { data: c, error } = await adminClient().from("consumables").insert({
+        site_id: dong, name: `t1 paid ${stamp}`, category: "fuel_lubricants",
+        amount_naira: 12000, recorded_by: mgrDong.userId, approval_status: "paid",
+      }).select("id").single();
+      expect(error, `expense fixture: ${error?.message}`).toBeNull();
+
+      const res = await mgrDong.client.from("consumables")
+        .delete().eq("id", c!.id as string).select("id");
+      expect(res.error).toBeNull();
+      expect(res.data ?? []).toHaveLength(0);
+      expect(fromWrite(res as never).ok).toBe(false);
+      const { count } = await adminClient()
+        .from("consumables").select("id", { count: "exact", head: true }).eq("id", c!.id as string);
+      expect(count, "the expense is genuinely still there").toBe(1);
+    });
+
+    // ── setSamplePrice / deleteSample ─────────────────────────────────────
+    const sample = async (recordedBy: string, price: number | null = null) => {
+      const { data, error } = await adminClient().from("sample_analyses").insert({
+        site_id: dong, supplier_name: `t1 ${stamp}-${Math.random()}`, result: "SN 4%",
+        recorded_by: recordedBy, price,
+      }).select("id").single();
+      expect(error, `sample fixture: ${error?.message}`).toBeNull();
+      return data!.id as string;
+    };
+
+    it("setSamplePrice: a site manager is refused, and the sample stays unpriced", async () => {
+      // Only the owner and the GENERAL manager may price. /manager/samples
+      // shows the box to every manager, so this is the reachable refusal.
+      const id = await sample(qcA.userId);
+      const res = await mgrDong.client.from("sample_analyses")
+        .update({ price: 5000, priced_by: mgrDong.userId }).eq("id", id).select("id");
+      expect(res.error, "no error — the typed price simply vanished").toBeNull();
+      expect(res.data ?? []).toHaveLength(0);
+      expect(fromWrite(res as never).ok).toBe(false);
+      const { data: after } = await adminClient()
+        .from("sample_analyses").select("price").eq("id", id).single();
+      expect(after!.price, "the sample is genuinely still unpriced").toBeNull();
+    });
+
+    it("setSamplePrice: the owner's pricing still lands — the success path is unchanged", async () => {
+      const id = await sample(qcA.userId);
+      const res = await owner.client.from("sample_analyses")
+        .update({ price: 7500, priced_by: owner.userId }).eq("id", id).select("id");
+      expect(res.error, `owner pricing: ${res.error?.message}`).toBeNull();
+      expect(res.data ?? [], "the owner must still be able to price").toHaveLength(1);
+      expect(fromWrite(res as never).ok).toBe(true);
+    });
+
+    it("deleteSample: an analyst cannot delete a colleague's sample, silently", async () => {
+      // The QC screen lists every analyst's samples and offers Delete on any
+      // unpriced row; RLS only allows an analyst to remove their own.
+      const id = await sample(qcA.userId);
+      const res = await qcB.client.from("sample_analyses").delete().eq("id", id).select("id");
+      expect(res.error, "no error — the row just stayed put").toBeNull();
+      expect(res.data ?? []).toHaveLength(0);
+      expect(fromWrite(res as never).ok).toBe(false);
+      const { count } = await adminClient()
+        .from("sample_analyses").select("id", { count: "exact", head: true }).eq("id", id);
+      expect(count, "the sample is genuinely still there").toBe(1);
+    });
+
+    it("deleteSample: even its own author is refused once it is priced", async () => {
+      const id = await sample(qcA.userId, 900);
+      const res = await qcA.client.from("sample_analyses").delete().eq("id", id).select("id");
+      expect(res.error).toBeNull();
+      expect(res.data ?? []).toHaveLength(0);
+      expect(fromWrite(res as never).ok).toBe(false);
+      const { count } = await adminClient()
+        .from("sample_analyses").select("id", { count: "exact", head: true }).eq("id", id);
+      expect(count).toBe(1);
+    });
+
+    it("deleteSample: an analyst's own unpriced sample still deletes — success unchanged", async () => {
+      const id = await sample(qcA.userId);
+      const res = await qcA.client.from("sample_analyses").delete().eq("id", id).select("id");
+      expect(res.error, `own delete: ${res.error?.message}`).toBeNull();
+      expect(res.data ?? [], "the allowed delete must still work").toHaveLength(1);
+      expect(fromWrite(res as never).ok).toBe(true);
     });
   });
 

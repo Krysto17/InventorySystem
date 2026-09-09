@@ -71,14 +71,23 @@ export async function editConsumable(_prev: ActionResult, formData: FormData): P
 // Manager (own site) / owner / general manager deletes an expense before it is
 // paid, and inventory withdraws a still-pending one. RLS re-checks the role +
 // site + status; a paid expense can't be removed.
-export async function deleteConsumable(formData: FormData): Promise<void> {
+//
+// The DELETE policy carries the business rule (`approval_status <> 'paid'`, plus
+// role and site), so a paid expense is filtered out in the USING clause rather
+// than raising: verified as `error: null, data: []` with the expense still
+// present. Discarding that left an expense the operator believed withdrawn
+// sitting in the payable queue.
+export async function deleteConsumable(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || !["manager", "owner", "inventory"].includes(me.role)) return;
+  if (!me || !["manager", "owner", "inventory"].includes(me.role)) return fail("Not authorized.");
   const id = String(formData.get("consumable_id") ?? "");
-  if (!id) return;
+  if (!id) return fail("Missing expense.");
   const supabase = await createClient();
-  await supabase.from("consumables").delete().eq("id", id);
+  const res = await supabase.from("consumables").delete().eq("id", id).select("id");
+  const result = fromWrite(res, "That expense was not deleted — it may already be paid, or belong to another site.");
+  if (!result.ok) return result;
   revalidatePath("/inventory/consumables");
+  return ok("Expense deleted.");
 }
 
 // Owner approves / rejects a submitted expense (DB trigger enforces owner-only).

@@ -212,13 +212,13 @@ export default async function ConsumablesPage({ searchParams }: {
                                 accountNumber={(c.account_number as string | null) ?? null}
                                 bankName={(c.bank_name as string | null) ?? null}
                               />
-                              <form action={deleteConsumable} className="inline">
+                              <ActionForm action={deleteConsumable} className="inline-block">
                                 <input type="hidden" name="consumable_id" value={c.id as string} />
                                 <button type="submit" title="Delete this expense (before payment)"
                                   className="rounded border border-red-300 px-1.5 py-0.5 text-[10px] text-red-700 hover:bg-red-50">
                                   Delete
                                 </button>
-                              </form>
+                              </ActionForm>
                             </>
                           )}
                         </span>
