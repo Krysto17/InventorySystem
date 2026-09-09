@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
-import { fail, ok, type ActionResult } from "@/lib/actions/result";
+import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 import { accountTrioFromForm } from "@/lib/validation/account";
 import { CONSUMABLE_CATEGORIES, type ConsumableCategory } from "./categories";
 
@@ -82,15 +82,25 @@ export async function deleteConsumable(formData: FormData): Promise<void> {
 }
 
 // Owner approves / rejects a submitted expense (DB trigger enforces owner-only).
-export async function reviewExpense(formData: FormData): Promise<void> {
+//
+// The same guard that enforces the role also refuses to touch an expense that
+// has already been paid, and rejects any status move other than pending →
+// approved/rejected. Approval is what makes an expense payable, so a refusal
+// the owner cannot see is an expense they believe they cleared.
+export async function reviewExpense(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || me.role !== "owner") return;
+  if (!me || me.role !== "owner") return fail("Not authorized.");
 
   const id = String(formData.get("consumable_id") ?? "");
   const decision = String(formData.get("decision") ?? "");
-  if (!id || !["approved", "rejected"].includes(decision)) return;
+  if (!id) return fail("Missing expense.");
+  if (!["approved", "rejected"].includes(decision)) return fail("Choose approve or reject.");
 
   const supabase = await createClient();
-  await supabase.from("consumables").update({ approval_status: decision }).eq("id", id);
+  const res = await supabase.from("consumables")
+    .update({ approval_status: decision }).eq("id", id).select("id");
+  const result = fromWrite(res, "That decision was not recorded — the expense may already have been ruled on.");
+  if (!result.ok) return result;
   revalidatePath("/inventory/consumables");
+  return ok(decision === "approved" ? "Expense approved." : "Expense rejected.");
 }

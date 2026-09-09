@@ -6,10 +6,13 @@ import { fromWrite } from "../../src/lib/actions/result";
 /**
  * S-1: a write the database refused must not be reported as success.
  *
- * Twenty-seven server actions that move money or stock returned Promise<void>
+ * Thirty-four server actions that move money or stock returned Promise<void>
  * and dropped the write result — nine on the visit screens (3B-2), three on
- * cost-price once 0149 gave inventory a delete path (1a2e47d), and the fifteen
- * of the visit batch spine (3E-6). That matters
+ * cost-price once 0149 gave inventory a delete path (1a2e47d), the fifteen
+ * of the visit batch spine (3E-6), and the seven approval/release actions of
+ * 3E-6D: the owner's two cost-batch rulings, the gate's acknowledgement, the
+ * advance and expense decisions, the store check, and the supplier account
+ * switch. That matters
  * here specifically because an RLS-denied write is NOT an error — PostgREST
  * answers `error: null, data: []` — so the action
  * revalidated the page and the unchanged figures re-rendered as though the
@@ -21,7 +24,14 @@ import { fromWrite } from "../../src/lib/actions/result";
  *
  *   1. the database really does answer a denied write with zero rows;
  *   2. fromWrite() calls that a failure;
- *   3. all twenty-seven actions actually route through it.
+ *   3. all thirty-four actions actually route through it.
+ *
+ * The 3E-6D seven differ from the earlier tranches in what the operator saw:
+ * their callers are server-rendered with no optimistic UI, so a refusal did not
+ * fake success — it re-rendered the row untouched. That is still a silent
+ * no-op: the owner could not tell "my click missed" from "the system refused",
+ * or why. Each of the seven has a genuine refusal below, exercised against the
+ * database rather than asserted from source.
  *
  * The batch spine added a third shape. `unsettleLine`, `resettleLine` and
  * `removeLineAsManager` do not write themselves — they hand back whatever the
@@ -65,6 +75,16 @@ const ACTIONS: { file: string; fn: string; kind: "table" | "rpc" | "delegate"; d
   { file: "batch-actions.ts", fn: "finalizeLinePrice", kind: "table" },
   { file: "batch-actions.ts", fn: "setPriceAgreed", kind: "table" },
   { file: "batch-actions.ts", fn: "setLinePrice", kind: "table" },
+  // 3E-6D: the approval / release tier. Each sits at the end of an approval
+  // chain, so the refusal it used to swallow is the one that decides whether
+  // stock left, money moved, or a payout changed hands.
+  { file: "actions.ts", fn: "approveCostBatch", kind: "table", dir: "(owner)/owner/cost-batches" },
+  { file: "actions.ts", fn: "rejectCostBatch", kind: "table", dir: "(owner)/owner/cost-batches" },
+  { file: "actions.ts", fn: "acknowledgeGatePass", kind: "table", dir: "(gate)/gate" },
+  { file: "actions.ts", fn: "setAdvanceApproval", kind: "table", dir: "(manager)/manager/advances" },
+  { file: "actions.ts", fn: "reviewExpense", kind: "table", dir: "(inventory)/inventory/consumables" },
+  { file: "actions.ts", fn: "confirmLot", kind: "rpc", dir: "stocked-materials" },
+  { file: "actions.ts", fn: "switchSupplierAccount", kind: "table", dir: "suppliers" },
 ];
 
 const source = (file: string, dir = VISIT_ACTIONS) =>
@@ -228,6 +248,221 @@ describe("silent write failure", () => {
       const { data } = await adminClient()
         .from("xrf_records").select("result").eq("visit_material_id", lateLineId).single();
       expect(data!.result, "the analyst's edit never landed").toBe("SN 60%");
+    });
+  });
+
+  // ── 2c. The 3E-6D approval tier really is refused, and says so ───────────
+  describe("the approval and release tier really does get refused", () => {
+    let owner: TestUser, gate: TestUser, mgr: TestUser;
+    let site: string, materialTypeId: string, supplierId: string;
+    const stamp = Date.now();
+
+    // A lot backed by a matching 'in' movement, so its bucket can cover the
+    // 'out' the approval writes. `covered: false` leaves the bucket empty,
+    // which is how the 0153 balance guard gets exercised.
+    async function lot(kg: number, covered = true) {
+      const admin = adminClient();
+      if (covered) {
+        await admin.from("stock_movements").insert({
+          site_id: site, material_type_id: materialTypeId, grade: null,
+          weight: kg, direction: "in", reason: "purchase_intake",
+        });
+      }
+      const { data, error } = await admin.from("stock_lots").insert({
+        site_id: site, material_type_id: materialTypeId,
+        weight_kg: kg, status: "available", cost_price_per_kg: 5,
+      }).select("id").single();
+      expect(error, `lot fixture: ${error?.message}`).toBeNull();
+      return data!.id as string;
+    }
+
+    async function run(label: string, lots: string[]) {
+      const admin = adminClient();
+      const { data, error } = await admin.from("cost_price_runs").insert({
+        site_id: site, label: `${label} ${stamp}`, material_type_id: materialTypeId,
+        approval_status: "pending", sold: true,
+      }).select("id").single();
+      expect(error, `run fixture: ${error?.message}`).toBeNull();
+      await admin.from("cost_price_run_lots")
+        .insert(lots.map((id) => ({ run_id: data!.id as string, stock_lot_id: id })));
+      return data!.id as string;
+    }
+
+    // Exactly what approveCostBatch / rejectCostBatch send.
+    const rule = (runId: string, decision: "approved" | "rejected") =>
+      owner.client.from("cost_price_runs")
+        .update({ approval_status: decision, approved_by: owner.userId, approved_at: new Date().toISOString() })
+        .eq("id", runId).eq("approval_status", "pending").select("id");
+
+    const statusOfRun = async (id: string) => {
+      const { data } = await adminClient()
+        .from("cost_price_runs").select("approval_status").eq("id", id).single();
+      return data!.approval_status as string;
+    };
+
+    beforeAll(async () => {
+      const admin = adminClient();
+      const { data: sites } = await admin.from("sites").select("id, name");
+      site = sites!.find((s) => s.name === "Dong")!.id as string;
+      // Its own material type, so this suite's buckets are nobody else's.
+      const { data: mt } = await admin.from("material_types")
+        .insert({ name: `Tier1 ${stamp}` }).select("id").single();
+      materialTypeId = mt!.id as string;
+      owner = await makeUser({ username: `t1-owner-${stamp}`, role: "owner", siteId: null });
+      gate = await makeUser({ username: `t1-gate-${stamp}`, role: "gate", siteId: site });
+      mgr = await makeUser({ username: `t1-mgr-${stamp}`, role: "manager", siteId: site });
+      const { data: sup } = await admin.from("suppliers")
+        .insert({ name: `Tier1 ${stamp}` }).select("id").single();
+      supplierId = sup!.id as string;
+    });
+
+    // ── approveCostBatch ──────────────────────────────────────────────────
+    it("approveCostBatch: a batch already ruled on matches no rows", async () => {
+      const runId = await run("already ruled", [await lot(10)]);
+      expect((await rule(runId, "approved")).data ?? [], "the first approval lands").toHaveLength(1);
+
+      const res = await rule(runId, "approved");
+      expect(res.error, "the shape that fooled the UI: no error").toBeNull();
+      expect(res.data ?? [], "and no rows — nothing was approved twice").toHaveLength(0);
+      expect(fromWrite(res as never).ok, "which fromWrite must call a failure").toBe(false);
+      expect(fromWrite(res as never).error, "and must explain").toBeTruthy();
+    });
+
+    it("approveCostBatch: a lot that already left stock raises, and nothing sells", async () => {
+      // Nothing stops two pending runs sharing a lot — the key is (run, lot).
+      const shared = await lot(20);
+      const first = await run("first claim", [shared]);
+      const second = await run("second claim", [shared]);
+      expect((await rule(first, "approved")).data ?? []).toHaveLength(1);
+
+      const res = await rule(second, "approved");
+      expect(res.error, "the second approval must be refused").not.toBeNull();
+      expect(res.error!.message).toMatch(/already left stock/i);
+      expect(fromWrite(res as never).ok).toBe(false);
+      expect(await statusOfRun(second), "and the batch stays pending").toBe("pending");
+    });
+
+    // ── rejectCostBatch ───────────────────────────────────────────────────
+    it("rejectCostBatch: a batch already ruled on matches no rows", async () => {
+      const runId = await run("reject twice", [await lot(5)]);
+      expect((await rule(runId, "rejected")).data ?? []).toHaveLength(1);
+
+      const res = await rule(runId, "rejected");
+      expect(res.error).toBeNull();
+      expect(res.data ?? []).toHaveLength(0);
+      expect(fromWrite(res as never).ok).toBe(false);
+      expect(await statusOfRun(runId), "it stays rejected, not re-ruled").toBe("rejected");
+    });
+
+    // ── acknowledgeGatePass ───────────────────────────────────────────────
+    async function pass(status: string, stockLotId: string | null, kg: number | null) {
+      const { data, error } = await adminClient().from("gate_passes").insert({
+        site_id: site, material_type_id: materialTypeId,
+        material_owner: `Tier1 ${stamp}-${Math.random()}`, reason: "out of spec",
+        status, issued_by: mgr.userId, stock_lot_id: stockLotId, weight_kg: kg,
+      }).select("id").single();
+      expect(error, `pass fixture: ${error?.message}`).toBeNull();
+      return data!.id as string;
+    }
+    const ack = (id: string) => gate.client.from("gate_passes")
+      .update({ status: "acknowledged" }).eq("id", id).select("id");
+    const statusOfPass = async (id: string) => {
+      const { data } = await adminClient().from("gate_passes").select("status").eq("id", id).single();
+      return data!.status as string;
+    };
+
+    it("acknowledgeGatePass: a release the store cannot cover is refused", async () => {
+      // A lot with no 'in' behind it: the 0153 balance guard sees an empty
+      // bucket and refuses the 'out' the acknowledgement would write.
+      const id = await pass("issued", await lot(30, false), 30);
+      const res = await ack(id);
+      expect(res.error, "the gate must not be told the material may leave").not.toBeNull();
+      expect(res.error!.message).toMatch(/insufficient stock/i);
+      expect(await statusOfPass(id), "the pass stays issued").toBe("issued");
+    });
+
+    it("acknowledgeGatePass: an illegal transition is refused", async () => {
+      // pending is a manager's to authorise; the gate cannot jump the queue.
+      const id = await pass("pending", null, null);
+      const res = await ack(id);
+      expect(res.error).not.toBeNull();
+      expect(res.error!.message).toMatch(/illegal gate pass transition/i);
+      expect(await statusOfPass(id)).toBe("pending");
+    });
+
+    // ── setAdvanceApproval ────────────────────────────────────────────────
+    it("setAdvanceApproval: a paid advance can no longer be ruled on", async () => {
+      const { data: a, error } = await adminClient().from("advances").insert({
+        supplier_id: supplierId, site_id: site, purpose: `paid ${stamp}`,
+        amount_naira: 25000, recorded_by: mgr.userId, approval_status: "paid",
+      }).select("id").single();
+      expect(error, `advance fixture: ${error?.message}`).toBeNull();
+
+      const res = await owner.client.from("advances")
+        .update({ approval_status: "approved" }).eq("id", a!.id as string).select("id");
+      expect(res.error, "the owner must be told, not shown an unchanged row").not.toBeNull();
+      expect(res.error!.message).toMatch(/paid advance can no longer be modified/i);
+      const { data: after } = await adminClient()
+        .from("advances").select("approval_status").eq("id", a!.id as string).single();
+      expect(after!.approval_status, "and the debt is untouched").toBe("paid");
+    });
+
+    // ── reviewExpense ─────────────────────────────────────────────────────
+    it("reviewExpense: a paid expense can no longer be ruled on", async () => {
+      const { data: c, error } = await adminClient().from("consumables").insert({
+        site_id: site, name: `paid expense ${stamp}`, category: "fuel_lubricants",
+        amount_naira: 8000, recorded_by: mgr.userId, approval_status: "paid",
+      }).select("id").single();
+      expect(error, `expense fixture: ${error?.message}`).toBeNull();
+
+      const res = await owner.client.from("consumables")
+        .update({ approval_status: "approved" }).eq("id", c!.id as string).select("id");
+      expect(res.error).not.toBeNull();
+      expect(res.error!.message).toMatch(/paid expense can no longer be modified/i);
+      const { data: after } = await adminClient()
+        .from("consumables").select("approval_status").eq("id", c!.id as string).single();
+      expect(after!.approval_status).toBe("paid");
+    });
+
+    // ── confirmLot ────────────────────────────────────────────────────────
+    it("confirmLot: record_stock_check's refusal reaches the caller", async () => {
+      const lotId = await lot(12);
+      await adminClient().from("stock_lots").update({ status: "sold" }).eq("id", lotId);
+
+      const { error } = await mgr.client.rpc("record_stock_check", {
+        p_lot_id: lotId, p_status: "confirmed", p_counted_weight: 12, p_note: undefined,
+      } as never);
+      expect(error, "the RPC raises — dropping it is what hid the refusal").not.toBeNull();
+      expect(error!.message).toMatch(/not in stock/i);
+      const { count } = await adminClient().from("stock_confirmations")
+        .select("stock_lot_id", { count: "exact", head: true }).eq("stock_lot_id", lotId);
+      expect(count, "and no count was filed").toBe(0);
+    });
+
+    // ── switchSupplierAccount ─────────────────────────────────────────────
+    it("switchSupplierAccount: an incomplete former account is refused", async () => {
+      const admin = adminClient();
+      // A historic account with a number but no name or bank — the shape the
+      // account trio rejects. Real history predates the trio rule.
+      const { data: s, error } = await admin.from("suppliers").insert({
+        name: `Tier1 switch ${stamp}`,
+        account_name: "Current Holder", account_number: "0123456789", bank_name: "Zenith",
+        former_accounts: [{ account_name: null, account_number: "9876543210", bank_name: null }],
+      }).select("id").single();
+      expect(error, `supplier fixture: ${error?.message}`).toBeNull();
+      const id = s!.id as string;
+
+      // Exactly what switchSupplierAccount writes for that former entry.
+      const res = await mgr.client.from("suppliers").update({
+        account_name: null, account_number: "9876543210", bank_name: null,
+      }).eq("id", id).select("id");
+      expect(res.error, "the switch must not look like it happened").not.toBeNull();
+      expect(res.error!.message).toMatch(/provided together/i);
+      expect(fromWrite(res as never).ok).toBe(false);
+      const { data: after } = await admin.from("suppliers")
+        .select("account_number").eq("id", id).single();
+      expect(after!.account_number, "payouts still go to the account on file").toBe("0123456789");
+      await admin.from("suppliers").delete().eq("id", id);
     });
   });
 

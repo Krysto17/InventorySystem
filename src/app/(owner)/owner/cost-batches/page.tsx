@@ -4,6 +4,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
+import { ActionForm } from "@/components/ui/ActionForm";
 import { approveCostBatch, rejectCostBatch } from "./actions";
 
 import { one as g1 } from "@/lib/db/relation";
@@ -57,18 +58,23 @@ function BatchCard({ r, pending }: { r: Record<string, unknown>; pending: boolea
         })}
       </ul>
       {pending && (
+        /* ActionForm is the client wrapper that shows what the write did; the
+           page itself stays a server component. A batch that another window
+           already ruled on, or one whose lots have left stock elsewhere, is
+           refused — and the owner has to be told rather than left reading an
+           unchanged Pending list. */
         <div className="mt-3 flex flex-wrap items-end gap-2">
-          <form action={approveCostBatch}>
+          <ActionForm action={approveCostBatch}>
             <input type="hidden" name="run_id" value={r.id as string} />
             <button type="submit" className="rounded bg-approve px-3 py-1.5 text-xs font-semibold text-white">
               Approve &amp; remove from stock
             </button>
-          </form>
-          <form action={rejectCostBatch} className="flex items-end gap-2">
+          </ActionForm>
+          <ActionForm action={rejectCostBatch} className="flex flex-wrap items-end gap-2">
             <input type="hidden" name="run_id" value={r.id as string} />
             <input type="text" name="note" placeholder="Reason (optional)" className="rounded border px-2 py-1 text-xs" />
             <button type="submit" className="rounded border px-3 py-1.5 text-xs">Reject</button>
-          </form>
+          </ActionForm>
         </div>
       )}
     </div>

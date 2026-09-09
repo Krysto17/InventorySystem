@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { parseAccountTrio } from "@/lib/validation/account";
 import { revalidateSupplierFinance } from "@/lib/finance/revalidate";
+import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 
 export type SupplierEditState = { error?: string; ok?: string };
 
@@ -211,24 +212,36 @@ export async function saveSupplierAccount(_prev: SupplierEditState, formData: Fo
 
 // Switch the supplier's active account to one from its history. The current
 // account is archived; the chosen one becomes current (and leaves history).
-export async function switchSupplierAccount(formData: FormData): Promise<void> {
+//
+// This decides where the company's money is sent, and every way it could
+// decline used to be a bare `return` — the operator pressed "Use this account",
+// the page came back with the old account still active, and nothing said why.
+// Each condition now names itself, and the write reports its own refusal: RLS
+// grants the update to manager/owner only (anyone else matches no rows), and
+// the DB rejects a historic account that is not a complete name + 10-digit
+// number + bank.
+export async function switchSupplierAccount(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || (me.role !== "manager" && me.role !== "owner")) return;
+  if (!me || (me.role !== "manager" && me.role !== "owner")) return fail("Not authorized.");
   const id = String(formData.get("supplier_id") ?? "");
   const number = String(formData.get("account_number") ?? "").trim();
-  if (!id || !number) return;
+  if (!id || !number) return fail("Pick the account to switch to.");
 
   const supabase = await createClient();
   const { data: s } = await supabase.from("suppliers").select("former_accounts, account_number").eq("id", id).maybeSingle();
-  if (!s || s.account_number === number) return; // already current
+  if (!s) return fail("This supplier could not be loaded.");
+  if (s.account_number === number) return fail("That account is already the active one.");
   const formers = (s.former_accounts as { account_name?: string | null; account_number?: string | null; bank_name?: string | null }[] | null) ?? [];
   const target = formers.find((a) => a.account_number === number);
-  if (!target?.account_number) return;
+  if (!target?.account_number) return fail("That is not one of this supplier's previous accounts.");
 
-  await supabase.from("suppliers").update({
+  const res = await supabase.from("suppliers").update({
     account_name: target.account_name ?? null,
     account_number: target.account_number,
     bank_name: target.bank_name ?? null,
-  }).eq("id", id);
+  }).eq("id", id).select("id");
+  const result = fromWrite(res, "The account was not switched — you may not have permission to edit this supplier.");
+  if (!result.ok) return result;
   revalidatePath(`/suppliers/${id}`);
+  return ok("Payouts now go to this account.");
 }

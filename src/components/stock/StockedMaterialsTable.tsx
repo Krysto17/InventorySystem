@@ -65,6 +65,26 @@ function DisputeForm({ row, onDone }: { row: StockedRow; onDone: () => void }) {
   );
 }
 
+// Every refusal inside record_stock_check raises — the lot is not in stock, the
+// material is not paid for yet, the store is not yours. Dropping that error
+// re-rendered the row untouched, so a count that was turned away looked exactly
+// like one that had not been pressed. Same shape as DisputeForm above: the hook
+// lives in its own component so each row owns its result.
+function ConfirmForm({ row }: { row: StockedRow }) {
+  const [state, action] = useActionState(confirmLot, init);
+  return (
+    <form action={action} data-confirm="skip" className="flex flex-wrap items-end gap-1.5">
+      <input type="hidden" name="stock_lot_id" value={row.id} />
+      <input type="number" name="counted_weight_kg" step="0.001" min="0" defaultValue={row.weight}
+        aria-label="Counted kg" className="w-24 rounded border px-2 py-1 text-xs" />
+      <SubmitButton pendingText="…" className="rounded bg-approve px-2 py-1 text-[11px] text-white disabled:opacity-50">
+        ✓ In store
+      </SubmitButton>
+      {state.error && <p role="alert" className="w-full text-[11px] text-reject">{state.error}</p>}
+    </form>
+  );
+}
+
 function CheckCell({ row, canCheck }: { row: StockedRow; canCheck: boolean }) {
   const [disputing, setDisputing] = useState(false);
 
@@ -107,14 +127,7 @@ function CheckCell({ row, canCheck }: { row: StockedRow; canCheck: boolean }) {
   if (row.check === "unchecked") {
     return (
       <span className="flex flex-wrap items-end gap-1.5">
-        <form action={confirmLot} data-confirm="skip" className="flex items-end gap-1.5">
-          <input type="hidden" name="stock_lot_id" value={row.id} />
-          <input type="number" name="counted_weight_kg" step="0.001" min="0" defaultValue={row.weight}
-            aria-label="Counted kg" className="w-24 rounded border px-2 py-1 text-xs" />
-          <SubmitButton pendingText="…" className="rounded bg-approve px-2 py-1 text-[11px] text-white disabled:opacity-50">
-            ✓ In store
-          </SubmitButton>
-        </form>
+        <ConfirmForm row={row} />
         <button type="button" onClick={() => setDisputing(true)}
           className="rounded border border-reject px-2 py-1 text-[11px] text-reject hover:bg-reject-soft">
           Dispute

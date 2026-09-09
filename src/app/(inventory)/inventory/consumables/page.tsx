@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { getProfile } from "@/lib/auth/get-profile";
+import { ActionForm } from "@/components/ui/ActionForm";
 import { reviewExpense, deleteConsumable } from "./actions";
 import { CATEGORY_LABELS } from "./categories";
 import { ConsumableForm } from "@/components/consumables/ConsumableForm";
@@ -166,16 +167,19 @@ export default async function ConsumablesPage({ searchParams }: {
                         </span>
                         {isOwner && status === "pending" && (
                           <span className="ml-2 inline-flex gap-1">
-                            <form action={reviewExpense} className="inline">
+                            {/* ActionForm so a refused decision — a paid
+                                expense, or one already ruled on — is shown on
+                                the row that failed. */}
+                            <ActionForm action={reviewExpense} className="inline-block">
                               <input type="hidden" name="consumable_id" value={c.id as string} />
                               <input type="hidden" name="decision" value="approved" />
                               <button type="submit" className="rounded bg-green-700 px-1.5 py-0.5 text-[10px] text-white">✓</button>
-                            </form>
-                            <form action={reviewExpense} className="inline">
+                            </ActionForm>
+                            <ActionForm action={reviewExpense} className="inline-block">
                               <input type="hidden" name="consumable_id" value={c.id as string} />
                               <input type="hidden" name="decision" value="rejected" />
                               <button type="submit" className="rounded border px-1.5 py-0.5 text-[10px]">✗</button>
-                            </form>
+                            </ActionForm>
                           </span>
                         )}
                       </td>

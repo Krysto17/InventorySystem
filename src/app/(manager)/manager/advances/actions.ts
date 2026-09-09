@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
-import { fail, ok, type ActionResult } from "@/lib/actions/result";
+import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 import { accountTrioFromForm } from "@/lib/validation/account";
 import { revalidateSupplierFinance } from "@/lib/finance/revalidate";
 
@@ -76,15 +76,26 @@ export async function deleteAdvance(formData: FormData): Promise<void> {
 
 // Owner approves / rejects an advance (so it counts toward — or is removed from
 // — the supplier debt balance).
-export async function setAdvanceApproval(formData: FormData): Promise<void> {
+//
+// The DB refuses this in two shapes worth showing: an advance already paid
+// raises rather than quietly winding back, and any transition other than
+// pending → approved/rejected is illegal. Since the decision is what moves the
+// supplier's debt, a refusal the owner never sees means a balance they believe
+// they changed.
+export async function setAdvanceApproval(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || me.role !== "owner") return;
+  if (!me || me.role !== "owner") return fail("Not authorized.");
   const id = String(formData.get("advance_id") ?? "");
   const decision = String(formData.get("decision") ?? "");
-  if (!id || !["approved", "rejected"].includes(decision)) return;
+  if (!id) return fail("Missing advance.");
+  if (!["approved", "rejected"].includes(decision)) return fail("Choose approve or reject.");
   const supabase = await createClient();
-  await supabase.from("advances").update({ approval_status: decision }).eq("id", id);
+  const res = await supabase.from("advances")
+    .update({ approval_status: decision }).eq("id", id).select("id");
+  const result = fromWrite(res, "That decision was not recorded — the advance may already have been ruled on.");
+  if (!result.ok) return result;
   revalidateSupplierFinance();
+  return ok(decision === "approved" ? "Advance approved." : "Advance rejected.");
 }
 
 // ─── Sharing one advance across several suppliers ────────────────────────────

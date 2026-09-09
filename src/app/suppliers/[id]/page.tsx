@@ -11,6 +11,7 @@ import { OpeningBalanceForm } from "@/components/suppliers/OpeningBalanceForm";
 import { DebtRepaymentForm } from "@/components/suppliers/DebtRepaymentForm";
 import { OverpaymentForm } from "@/components/suppliers/OverpaymentForm";
 import { MergeSupplierTool } from "@/components/suppliers/MergeSupplierTool";
+import { ActionForm } from "@/components/ui/ActionForm";
 import { switchSupplierAccount } from "@/app/suppliers/actions";
 import { SupplierStatement } from "@/components/suppliers/SupplierStatement";
 import { formatTimestamp } from "@/lib/visits/format";
@@ -140,11 +141,14 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
                         {a.replaced_at && <span className="text-gray-400"> · until {new Date(a.replaced_at).toLocaleDateString()}</span>}
                       </span>
                       {canEdit && complete && (
-                        <form action={switchSupplierAccount} data-confirm="Make this the supplier's active account for payouts?">
+                        /* This decides where the money is sent, so a switch
+                           that did not happen must say so on the account it
+                           was pressed against. */
+                        <ActionForm action={switchSupplierAccount} data-confirm="Make this the supplier's active account for payouts?">
                           <input type="hidden" name="supplier_id" value={s.id as string} />
                           <input type="hidden" name="account_number" value={a.account_number as string} />
                           <button type="submit" className="rounded border border-line px-2 py-0.5 text-[11px] font-semibold hover:bg-white dark:hover:bg-zinc-800">Use this account</button>
-                        </form>
+                        </ActionForm>
                       )}
                     </li>
                   );

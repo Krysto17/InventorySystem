@@ -4,6 +4,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
+import { ActionForm } from "@/components/ui/ActionForm";
 import { recordGateLog, acknowledgeGatePass } from "./actions";
 import { releaseSupplier } from "@/app/visits/[id]/gate-exit-actions";
 
@@ -89,10 +90,14 @@ export default async function GateHomePage() {
                       <span>{p.material_owner ?? "—"} · {mat?.name ?? "—"}{p.weight_kg != null ? ` · ${p.weight_kg} kg` : ""}{p.bags != null ? ` · ${p.bags} bags` : ""}</span>
                       <span className="text-ink-2">· {p.reason as string}</span>
                     </div>
-                    <form action={acknowledgeGatePass}>
+                    {/* The gate releases material on the strength of this
+                        button, so a refused acknowledgement — an illegal
+                        transition, or a lot the store cannot cover — must be
+                        said out loud rather than revalidating away. */}
+                    <ActionForm action={acknowledgeGatePass}>
                       <input type="hidden" name="pass_id" value={p.id as string} />
                       <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Acknowledge &amp; release</button>
-                    </form>
+                    </ActionForm>
                   </li>
                 );
               })}

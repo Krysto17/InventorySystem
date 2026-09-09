@@ -5,6 +5,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Stamp } from "@/components/ui/stamp";
 import { formatTimestamp } from "@/lib/visits/format";
+import { ActionForm } from "@/components/ui/ActionForm";
 import { setAdvanceApproval, deleteAdvance } from "./actions";
 import { AdvanceForm } from "@/components/advances/AdvanceForm";
 import { AdvanceEditForm } from "@/components/advances/AdvanceEditForm";
@@ -133,16 +134,19 @@ export default async function ManagerAdvancesPage({ searchParams }: {
                       <Badge variant={st === "approved" ? "green" : st === "rejected" ? "red" : "yellow"}>{st}</Badge>
                       {isOwner && st === "pending" && (
                         <>
-                          <form action={setAdvanceApproval}>
+                          {/* ActionForm so a refused decision — a paid advance,
+                              or one already ruled on — is shown here instead of
+                              revalidating back as though it had landed. */}
+                          <ActionForm action={setAdvanceApproval}>
                             <input type="hidden" name="advance_id" value={a.id as string} />
                             <input type="hidden" name="decision" value="approved" />
                             <button type="submit" className="rounded bg-approve px-2.5 py-0.5 text-xs text-white">Approve</button>
-                          </form>
-                          <form action={setAdvanceApproval}>
+                          </ActionForm>
+                          <ActionForm action={setAdvanceApproval}>
                             <input type="hidden" name="advance_id" value={a.id as string} />
                             <input type="hidden" name="decision" value="rejected" />
                             <button type="submit" className="rounded border px-2.5 py-0.5 text-xs">Reject</button>
-                          </form>
+                          </ActionForm>
                         </>
                       )}
                       {/* Manager/owner may delete an advance before it is paid. */}

@@ -253,16 +253,18 @@ export default async function OwnerApprovalsPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{ngn(Number(a.amount_naira))}</span>
-                      <form action={setAdvanceApproval}>
+                      {/* Each ActionForm owns its own state, so a refusal shows
+                          on the row and the button that caused it. */}
+                      <ActionForm action={setAdvanceApproval}>
                         <input type="hidden" name="advance_id" value={a.id as string} />
                         <input type="hidden" name="decision" value="approved" />
                         <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve</button>
-                      </form>
-                      <form action={setAdvanceApproval}>
+                      </ActionForm>
+                      <ActionForm action={setAdvanceApproval}>
                         <input type="hidden" name="advance_id" value={a.id as string} />
                         <input type="hidden" name="decision" value="rejected" />
                         <button type="submit" className="rounded border px-3 py-1 text-xs">Reject</button>
-                      </form>
+                      </ActionForm>
                     </div>
                   </li>
                 );
@@ -295,16 +297,16 @@ export default async function OwnerApprovalsPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{e.amount_naira != null ? ngn(Number(e.amount_naira)) : "—"}</span>
-                      <form action={reviewExpense}>
+                      <ActionForm action={reviewExpense}>
                         <input type="hidden" name="consumable_id" value={e.id as string} />
                         <input type="hidden" name="decision" value="approved" />
                         <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve</button>
-                      </form>
-                      <form action={reviewExpense}>
+                      </ActionForm>
+                      <ActionForm action={reviewExpense}>
                         <input type="hidden" name="consumable_id" value={e.id as string} />
                         <input type="hidden" name="decision" value="rejected" />
                         <button type="submit" className="rounded border px-3 py-1 text-xs">Reject</button>
-                      </form>
+                      </ActionForm>
                     </div>
                   </li>
                 );
