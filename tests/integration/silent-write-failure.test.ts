@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
 import { fromWrite } from "../../src/lib/actions/result";
@@ -6,13 +6,14 @@ import { fromWrite } from "../../src/lib/actions/result";
 /**
  * S-1: a write the database refused must not be reported as success.
  *
- * Thirty-nine server actions that move money or stock returned Promise<void>
- * and dropped the write result — nine on the visit screens (3B-2), three on
- * cost-price once 0149 gave inventory a delete path (1a2e47d), the fifteen
- * of the visit batch spine (3E-6), the seven approval/release actions of
- * 3E-6D (the owner's two cost-batch rulings, the gate's acknowledgement, the
- * advance and expense decisions, the store check, and the supplier account
- * switch), and the five money/stock deletes of 3E-6F. That matters
+ * Forty-one server actions that move money, stock or master data returned
+ * Promise<void> and dropped the write result — nine on the visit screens
+ * (3B-2), three on cost-price once 0149 gave inventory a delete path
+ * (1a2e47d), the fifteen of the visit batch spine (3E-6), the seven
+ * approval/release actions of 3E-6D (the owner's two cost-batch rulings, the
+ * gate's acknowledgement, the advance and expense decisions, the store check,
+ * and the supplier account switch), the five money/stock deletes of 3E-6F, and
+ * the two master-data creates of tranche 2A. That matters
  * here specifically because an RLS-denied write is NOT an error — PostgREST
  * answers `error: null, data: []` — so the action
  * revalidated the page and the unchanged figures re-rendered as though the
@@ -24,7 +25,8 @@ import { fromWrite } from "../../src/lib/actions/result";
  *
  *   1. the database really does answer a denied write with zero rows;
  *   2. fromWrite() calls that a failure;
- *   3. all thirty-nine actions actually route through it.
+ *   3. all forty-one actions actually route through it — bar the two INSERTs,
+ *      which raise instead of returning zero rows and are checked on `error`.
  *
  * The 3E-6D seven differ from the earlier tranches in what the operator saw:
  * their callers are server-rendered with no optimistic UI, so a refusal did not
@@ -44,7 +46,7 @@ import { fromWrite } from "../../src/lib/actions/result";
 // 0149 gave inventory a delete path, and a delete RLS refuses on an approved
 // batch returns no error and no rows.
 const VISIT_ACTIONS = "visits/[id]";
-const ACTIONS: { file: string; fn: string; kind: "table" | "rpc" | "delegate"; dir?: string }[] = [
+const ACTIONS: { file: string; fn: string; kind: "table" | "rpc" | "delegate" | "insert"; dir?: string }[] = [
   { file: "finance-actions.ts", fn: "removePayoutSplit", kind: "table" },
   { file: "finance-actions.ts", fn: "addUtilityCharge", kind: "table" },
   { file: "finance-actions.ts", fn: "adjustUtilityCharge", kind: "table" },
@@ -93,6 +95,12 @@ const ACTIONS: { file: string; fn: string; kind: "table" | "rpc" | "delegate"; d
   { file: "actions.ts", fn: "deleteConsumable", kind: "table", dir: "(inventory)/inventory/consumables" },
   { file: "actions.ts", fn: "setSamplePrice", kind: "table", dir: "(qc)/qc/samples" },
   { file: "actions.ts", fn: "deleteSample", kind: "table", dir: "(qc)/qc/samples" },
+  // 3E-6F tranche 2A: the master-data creates. These are "insert", NOT "table":
+  // an INSERT that RLS refuses RAISES, so there is no zero-row case to detect —
+  // and on `machines` a select-back would actively break a working operation
+  // (see the GM cross-site test below). `error` is the whole signal.
+  { file: "actions.ts", fn: "createMaterialType", kind: "insert", dir: "(owner)/owner/material-types" },
+  { file: "actions.ts", fn: "createMachine", kind: "insert", dir: "(owner)/owner/machines" },
 ];
 
 const source = (file: string, dir = VISIT_ACTIONS) =>
@@ -635,6 +643,97 @@ describe("silent write failure", () => {
     });
   });
 
+  // ── 2e. The 3E-6F tranche 2A master-data creates ─────────────────────────
+  describe("the master-data creates really do get refused", () => {
+    let gm: TestUser, owner: TestUser;
+    let dong: string, newSite: string;
+    const stamp = Date.now();
+    const made: { materials: string[]; machines: string[] } = { materials: [], machines: [] };
+
+    beforeAll(async () => {
+      const admin = adminClient();
+      const { data: sites } = await admin.from("sites").select("id, name");
+      dong = sites!.find((s) => s.name === "Dong")!.id as string;
+      newSite = sites!.find((s) => s.name === "New-Site")!.id as string;
+      // The general manager IS the New-Site manager — that is what
+      // is_general_manager() resolves to, and /owner/machines admits them.
+      gm = await makeUser({ username: `t2a-gm-${stamp}`, role: "manager", siteId: newSite });
+      owner = await makeUser({ username: `t2a-own-${stamp}`, role: "owner", siteId: null });
+    });
+
+    afterAll(async () => {
+      const admin = adminClient();
+      if (made.machines.length) await admin.from("machines").delete().in("name", made.machines);
+      if (made.materials.length) await admin.from("material_types").delete().in("name", made.materials);
+    });
+
+    // ── createMaterialType ────────────────────────────────────────────────
+    it("createMaterialType: a duplicate name is refused, and adds nothing", async () => {
+      const name = `T2A Material ${stamp}`;
+      made.materials.push(name);
+      const first = await owner.client.from("material_types").insert({ name, created_by: owner.userId });
+      expect(first.error, `first insert: ${first.error?.message}`).toBeNull();
+
+      const second = await owner.client.from("material_types").insert({ name, created_by: owner.userId });
+      expect(second.error, "the duplicate must be refused, not swallowed").not.toBeNull();
+      expect(second.error!.code, "a unique-violation").toBe("23505");
+      const { count } = await adminClient()
+        .from("material_types").select("id", { count: "exact", head: true }).eq("name", name);
+      expect(count, "exactly one material type survives").toBe(1);
+    });
+
+    // ── createMachine ─────────────────────────────────────────────────────
+    it("createMachine: a duplicate (site, name) is refused, and adds nothing", async () => {
+      const name = `T2A Machine ${stamp}`;
+      made.machines.push(name);
+      const row = { site_id: newSite, name, charge_basis: "weight", rate: 12, created_by: gm.userId };
+      const first = await gm.client.from("machines").insert(row);
+      expect(first.error, `first insert: ${first.error?.message}`).toBeNull();
+
+      const second = await gm.client.from("machines").insert(row);
+      expect(second.error, "the duplicate must be refused").not.toBeNull();
+      expect(second.error!.code).toBe("23505");
+      const { count } = await adminClient()
+        .from("machines").select("id", { count: "exact", head: true }).eq("name", name);
+      expect(count, "exactly one machine survives").toBe(1);
+    });
+
+    // ── The reason createMachine must never gain a .select() ──────────────
+    it("createMachine: the GM can still create a machine for ANOTHER site", async () => {
+      // `machines: gm inserts` lets the general manager insert for any site, and
+      // the form's site selector offers all of them — so this is a real, working
+      // operation that must survive the H4 fix.
+      const name = `T2A Cross-site ${stamp}`;
+      made.machines.push(name);
+      const res = await gm.client.from("machines").insert({
+        site_id: dong, name, charge_basis: "weight", rate: 9, created_by: gm.userId,
+      });
+      expect(res.error, `GM cross-site create must succeed: ${res.error?.message}`).toBeNull();
+      const { count } = await adminClient()
+        .from("machines").select("id", { count: "exact", head: true }).eq("name", name);
+      expect(count, "and the machine must genuinely persist").toBe(1);
+    });
+
+    it("createMachine: a select-back would break that create — why .select() is banned", async () => {
+      // `machines: read own site` is (site_id = current_site() OR is_owner()) —
+      // no general-manager clause. So INSERT ... RETURNING cannot read the new
+      // cross-site row back, and the WHOLE statement aborts: the machine is not
+      // created at all. This pins the hazard, so that if anyone ever
+      // "standardises" createMachine onto .select() + fromWrite, or widens the
+      // read policy, this test forces the change to be looked at deliberately.
+      const name = `T2A Selectback ${stamp}`;
+      made.machines.push(name);
+      const res = await gm.client.from("machines").insert({
+        site_id: dong, name, charge_basis: "weight", rate: 9, created_by: gm.userId,
+      }).select("id");
+      expect(res.error, "the select-back is refused").not.toBeNull();
+      expect(res.error!.code).toBe("42501");
+      const { count } = await adminClient()
+        .from("machines").select("id", { count: "exact", head: true }).eq("name", name);
+      expect(count, "and nothing is written — the row never lands").toBe(0);
+    });
+  });
+
   // ── 3. Every one of them routes through it ───────────────────────────────
   describe("every money- or stock-touching action consumes the safe pattern", () => {
     for (const { file, fn, kind, dir } of ACTIONS) {
@@ -649,6 +748,14 @@ describe("silent write failure", () => {
         } else if (kind === "rpc") {
           // An RPC raises instead of returning rows.
           expect(body, `${fn} must check the RPC error`).toMatch(/if \(error\) return fail/);
+        } else if (kind === "insert") {
+          // An INSERT refused by RLS raises, so `error` is the whole signal —
+          // and asking for the row back is not merely redundant here, it breaks
+          // the GM's cross-site machine create. Pinned in both directions.
+          expect(body, `${fn} must inspect the insert error`).toMatch(/if \(error\)/);
+          expect(body, `${fn} must not use fromWrite — there is no zero-row case`)
+            .not.toContain("fromWrite(");
+          expect(body, `${fn} must NOT select the new row back`).not.toMatch(/\.select\(/);
         } else {
           // A delegate must hand the helper's verdict back, not swallow it.
           expect(body, `${fn} must return the helper's result`).toMatch(/return lineAction\(/);
@@ -677,7 +784,9 @@ describe("silent write failure", () => {
         const body = bodyOf(file, fn, dir);
         const revalidate = body.search(/revalidate(Path|SupplierFinance|CostPages)\(/);
         if (revalidate === -1) return; // nothing to order
-        const guard = body.search(/if \(!\w+\.ok\) return \w+;|if \(error\) return fail|return lineAction\(/);
+        // `if (error) {` covers the insert actions, which branch on error.code
+        // to give a duplicate its own message before falling through to fail().
+        const guard = body.search(/if \(!\w+\.ok\) return \w+;|if \(error\) return fail|if \(error\) \{|return lineAction\(/);
         expect(guard, `${fn} must decide the write landed before revalidating`).toBeGreaterThan(-1);
         expect(guard).toBeLessThan(revalidate);
       });

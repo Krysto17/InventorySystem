@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireConfigManager } from "@/lib/auth/require-config-manager";
+import { ActionForm } from "@/components/ui/ActionForm";
 import { createMachine, updateMachine } from "./actions";
 
 export default async function MachinesPage() {
@@ -15,7 +16,9 @@ export default async function MachinesPage() {
     <main className="p-6 max-w-3xl mx-auto space-y-6">
       <h1 className="text-2xl font-semibold">Machines</h1>
 
-      <form action={createMachine} className="border rounded p-3 grid grid-cols-2 gap-2">
+      {/* ActionForm so a duplicate (site, name) — or a charge basis this action
+          does not accept — is stated rather than swallowed. */}
+      <ActionForm action={createMachine} className="border rounded p-3 grid grid-cols-2 gap-2">
         <select name="site_id" required className="border rounded px-2 py-1">
           <option value="">— site —</option>
           {(sites ?? []).map((s) => (
@@ -46,7 +49,7 @@ export default async function MachinesPage() {
         <button type="submit" className="col-span-2 px-3 py-2 bg-black text-white rounded">
           Add machine
         </button>
-      </form>
+      </ActionForm>
 
       <div className="overflow-x-auto"><table className="w-full border rounded text-sm">
         <thead className="bg-gray-50">

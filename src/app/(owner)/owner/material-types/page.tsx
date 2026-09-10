@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireConfigManager } from "@/lib/auth/require-config-manager";
+import { ActionForm } from "@/components/ui/ActionForm";
 import { createMaterialType, toggleMaterialType } from "./actions";
 
 export default async function MaterialTypesPage() {
@@ -14,7 +15,9 @@ export default async function MaterialTypesPage() {
     <main className="p-6 max-w-2xl mx-auto space-y-6">
       <h1 className="text-2xl font-semibold">Material types</h1>
 
-      <form action={createMaterialType} className="flex gap-2">
+      {/* ActionForm so a duplicate name says so, instead of the page simply
+          re-rendering with the material still missing. */}
+      <ActionForm action={createMaterialType} className="flex flex-wrap gap-2">
         <input
           name="name"
           required
@@ -24,7 +27,7 @@ export default async function MaterialTypesPage() {
         <button type="submit" className="px-3 py-2 bg-black text-white rounded">
           Add
         </button>
-      </form>
+      </ActionForm>
 
       <ul className="border rounded divide-y">
         {(rows ?? []).map((r) => (
