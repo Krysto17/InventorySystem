@@ -111,13 +111,17 @@ describe("stock_movements RLS", () => {
     expect(data!.length).toBeGreaterThan(0);
   });
 
-  it("inventory at site A cannot read site B movements", async () => {
+  // 0154 reversed this deliberately: inventory mixes stock from every site into
+  // cost-price batches, so it READS every site's ledger. Writing stays own-site —
+  // see "inventory at site B cannot insert for site A" above.
+  it("inventory at site A can read site B movements (0154)", async () => {
     await addStock(siteBId, 100, invB.userId);
-    const { data } = await invA.client
+    const { data, error } = await invA.client
       .from("stock_movements")
       .select("id")
       .eq("site_id", siteBId);
-    expect(data?.length).toBe(0);
+    expect(error).toBeNull();
+    expect(data!.length).toBeGreaterThan(0);
   });
 
   it("owner can read movements across all sites", async () => {

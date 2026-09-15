@@ -37,24 +37,35 @@ export default async function InventoryPage() {
   // Current stock at hand, grouped by material + grade. Aggregated in the
   // database: summing the raw ledger here lost everything past PostgREST's
   // 1000-row cap once the ledger grew (see 0121).
-  type StockRow = { material_type_id: string; material_name: string; grade: string | null; balance: number };
+  //
+  // Grouped by SITE as well. Since 0154 inventory reads stock at every site, so
+  // keying on material + grade alone would quietly add New-Site and Old-Site
+  // together under one figure — and the heading used to say "this site".
+  type StockRow = {
+    site_id: string; site_name: string;
+    material_type_id: string; material_name: string; grade: string | null; balance: number;
+  };
   const { data: balances } = await supabase
     .from("stock_balances")
-    .select("material_type_id, material_name, grade, weight_kg");
+    .select("site_id, site_name, material_type_id, material_name, grade, weight_kg");
 
   const stockMap = new Map<string, StockRow>();
   for (const b of balances ?? []) {
-    const key = `${b.material_type_id}::${b.grade ?? ""}`;
+    const key = `${b.site_id}::${b.material_type_id}::${b.grade ?? ""}`;
     const existing = stockMap.get(key);
     if (existing) existing.balance += Number(b.weight_kg);
     else stockMap.set(key, {
+      site_id: b.site_id as string,
+      site_name: (b.site_name as string) ?? "—",
       material_type_id: b.material_type_id as string,
       material_name: (b.material_name as string) ?? "—",
       grade: b.grade as string | null,
       balance: Number(b.weight_kg),
     });
   }
-  const stockRows = Array.from(stockMap.values()).filter((r) => r.balance > 0);
+  const stockRows = Array.from(stockMap.values())
+    .filter((r) => r.balance > 0)
+    .sort((a, b) => a.site_name.localeCompare(b.site_name) || a.material_name.localeCompare(b.material_name));
 
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
@@ -134,7 +145,7 @@ export default async function InventoryPage() {
 
       <Card>
         <CardHeader>
-          <h2 className="font-semibold text-sm">Current stock (this site)</h2>
+          <h2 className="font-semibold text-sm">Current stock by site</h2>
         </CardHeader>
         <CardContent className="p-0">
           {stockRows.length === 0 ? (
@@ -143,6 +154,7 @@ export default async function InventoryPage() {
             <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-gray-500 border-b">
+                  <th className="text-left px-4 py-2">Site</th>
                   <th className="text-left px-4 py-2">Material</th>
                   <th className="text-left px-4 py-2">Grade</th>
                   <th className="text-right px-4 py-2">On hand</th>
@@ -150,7 +162,8 @@ export default async function InventoryPage() {
               </thead>
               <tbody className="divide-y">
                 {stockRows.map((r) => (
-                  <tr key={`${r.material_type_id}::${r.grade ?? ""}`}>
+                  <tr key={`${r.site_id}::${r.material_type_id}::${r.grade ?? ""}`}>
+                    <td className="px-4 py-2 text-gray-600">{r.site_name}</td>
                     <td className="px-4 py-2">{r.material_name}</td>
                     <td className="px-4 py-2 text-gray-600">{r.grade ?? "—"}</td>
                     <td className="px-4 py-2 text-right font-medium">{formatWeight(r.balance)}</td>

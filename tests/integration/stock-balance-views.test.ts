@@ -7,7 +7,7 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 // aggregate in the database, so the answer is right at any ledger size.
 describe("stock balances aggregate in the database", () => {
   let siteA: string, siteB: string, material: string;
-  let owner: TestUser, invA: TestUser;
+  let owner: TestUser, invA: TestUser, procA: TestUser;
 
   beforeAll(async () => {
     const { data: sites } = await adminClient().from("sites").select("id, name");
@@ -18,6 +18,7 @@ describe("stock balances aggregate in the database", () => {
     material = mt!.id as string;
     owner = await makeUser({ username: "sb-owner", role: "owner", siteId: null });
     invA = await makeUser({ username: "sb-inv", role: "inventory", siteId: siteA });
+    procA = await makeUser({ username: "sb-proc", role: "processing", siteId: siteA });
   });
 
   // The cap test below writes 1,200 movements. Left behind, they make every
@@ -74,8 +75,13 @@ describe("stock balances aggregate in the database", () => {
     const { data: all } = await owner.client.from("stock_balances").select("site_id, weight_kg").eq("material_type_id", twoSite);
     expect(all).toHaveLength(2);
 
-    // The site's own inventory role sees only its own site.
-    const { data: mine } = await invA.client.from("stock_balances").select("site_id, weight_kg").eq("material_type_id", twoSite);
+    // 0154: inventory reads stock at every site — and still gets each site as its
+    // own bucket, never one merged figure.
+    const { data: inv } = await invA.client.from("stock_balances").select("site_id, weight_kg").eq("material_type_id", twoSite);
+    expect(inv).toHaveLength(2);
+
+    // A site-bound role still sees only its own site.
+    const { data: mine } = await procA.client.from("stock_balances").select("site_id, weight_kg").eq("material_type_id", twoSite);
     expect(mine).toHaveLength(1);
     expect(mine![0].site_id).toBe(siteA);
     expect(Number(mine![0].weight_kg)).toBe(10);

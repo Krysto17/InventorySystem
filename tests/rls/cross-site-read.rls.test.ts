@@ -70,13 +70,21 @@ describe("cross-site read RLS (manager + accountant)", () => {
     expect(adv.data ?? []).toHaveLength(0);
   });
 
-  it("processing + inventory remain site-scoped for reads", async () => {
+  it("processing + inventory remain site-scoped for visits", async () => {
     for (const u of [procA, invA]) {
       const { data } = await u.client.from("visits").select("id").eq("site_id", siteBId);
       expect(data ?? []).toHaveLength(0);
     }
-    const { data: stock } = await invA.client.from("stock_movements").select("id").eq("site_id", siteBId);
-    expect(stock ?? []).toHaveLength(0);
+  });
+
+  it("stock: inventory reads every site (0154); processing still does not", async () => {
+    // Inventory mixes stock from any site into cost-price batches. Only its
+    // stock READ widened — visits above, and every inventory write, stay scoped.
+    const { data: invStock, error } = await invA.client.from("stock_movements").select("id").eq("site_id", siteBId);
+    expect(error).toBeNull();
+    expect((invStock ?? []).length).toBeGreaterThan(0);
+    const { data: procStock } = await procA.client.from("stock_movements").select("id").eq("site_id", siteBId);
+    expect(procStock ?? []).toHaveLength(0);
   });
 
   it("cross-site WRITE: general manager allowed; site manager + accountant denied", async () => {

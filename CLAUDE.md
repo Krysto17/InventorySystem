@@ -60,10 +60,12 @@ as a branded PDF.
   after that manager/owner only. All edits audited.
 - **Inventory runs the cost-price module** (0149) as well as the general manager: the
   mixing-batch / weighted-cost screen is at `/inventory/cost-price` (same component as
-  `/manager/cost-price`). Inventory's reach is **site-scoped** — form, edit and delete
-  runs on their own site — where the GM's cost-price read is role-wide. Owner approval is
-  still the only thing that turns a batch into a sale, and an approved batch stays locked.
-  Pinned by `tests/rls/cost-batch.rls.test.ts` + `cost-price-edit.rls.test.ts`.
+  `/manager/cost-price`). Inventory's **writes are site-scoped** — form, edit and delete
+  runs on their own site — but since **0154 inventory READS stock (`stock_lots`,
+  `stock_movements`) at every site**, so it can mix lots from any site into its batches, as
+  the GM does. Owner approval is still the only thing that turns a batch into a sale, and an
+  approved batch stays locked. Pinned by `tests/rls/cost-batch.rls.test.ts` +
+  `cost-price-edit.rls.test.ts` + `inventory-cross-site-stock.rls.test.ts`.
 - **Inventory issues the cash** (0150). Cash part payments to a supplier are counted out
   of the safe by the inventory employee, so `record_settlement_payment` accepts them —
   **own site, `cash` method only** (a transfer stays accounting's). The approval chain is
