@@ -85,6 +85,22 @@ function ConfirmForm({ row }: { row: StockedRow }) {
   );
 }
 
+// Undo is offered wherever the lot is readable, but the delete is own-site only
+// — so the general manager, who reads every store, could press it on another
+// site's lot and have nothing happen. Its own state, like the two forms above.
+function UndoCheckForm({ row }: { row: StockedRow }) {
+  const [state, action] = useActionState(clearCheck, init);
+  return (
+    <form action={action} data-confirm="Undo this check?" className="mt-1">
+      <input type="hidden" name="stock_lot_id" value={row.id} />
+      <SubmitButton pendingText="…" className="rounded border px-1.5 py-0.5 text-[10px] text-ink-2 hover:bg-zinc-50 disabled:opacity-50">
+        Undo
+      </SubmitButton>
+      {state.error && <p role="alert" className="mt-0.5 text-[11px] text-reject">{state.error}</p>}
+    </form>
+  );
+}
+
 function CheckCell({ row, canCheck }: { row: StockedRow; canCheck: boolean }) {
   const [disputing, setDisputing] = useState(false);
 
@@ -140,12 +156,7 @@ function CheckCell({ row, canCheck }: { row: StockedRow; canCheck: boolean }) {
     <span>
       {badge}
       {detail}
-      <form action={clearCheck} data-confirm="Undo this check?" className="mt-1">
-        <input type="hidden" name="stock_lot_id" value={row.id} />
-        <SubmitButton pendingText="…" className="rounded border px-1.5 py-0.5 text-[10px] text-ink-2 hover:bg-zinc-50 disabled:opacity-50">
-          Undo
-        </SubmitButton>
-      </form>
+      <UndoCheckForm row={row} />
     </span>
   );
 }

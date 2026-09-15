@@ -74,7 +74,7 @@ export default async function MachinesPage() {
                 <td className="p-2">{m.charge_basis}</td>
                 <td className="p-2 text-right">₦{m.rate}</td>
                 <td className="p-2 text-right">
-                  <form action={updateMachine}>
+                  <ActionForm action={updateMachine}>
                     <input type="hidden" name="id" value={m.id} />
                     <input
                       type="hidden"
@@ -84,7 +84,7 @@ export default async function MachinesPage() {
                     <button type="submit" className="text-xs underline">
                       {m.active ? "Disable" : "Enable"}
                     </button>
-                  </form>
+                  </ActionForm>
                 </td>
               </tr>
             );

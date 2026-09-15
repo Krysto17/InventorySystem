@@ -33,13 +33,13 @@ export default async function MaterialTypesPage() {
         {(rows ?? []).map((r) => (
           <li key={r.id} className="flex items-center justify-between px-3 py-2">
             <span className={r.active ? "" : "text-gray-400 line-through"}>{r.name}</span>
-            <form action={toggleMaterialType}>
+            <ActionForm action={toggleMaterialType}>
               <input type="hidden" name="id" value={r.id} />
               <input type="hidden" name="active" value={r.active ? "false" : "true"} />
               <button type="submit" className="text-sm underline">
                 {r.active ? "Disable" : "Enable"}
               </button>
-            </form>
+            </ActionForm>
           </li>
         ))}
       </ul>

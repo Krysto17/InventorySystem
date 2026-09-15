@@ -6,14 +6,15 @@ import { fromWrite } from "../../src/lib/actions/result";
 /**
  * S-1: a write the database refused must not be reported as success.
  *
- * Forty-one server actions that move money, stock or master data returned
+ * Forty-five server actions that move money, stock or master data returned
  * Promise<void> and dropped the write result — nine on the visit screens
  * (3B-2), three on cost-price once 0149 gave inventory a delete path
  * (1a2e47d), the fifteen of the visit batch spine (3E-6), the seven
  * approval/release actions of 3E-6D (the owner's two cost-batch rulings, the
  * gate's acknowledgement, the advance and expense decisions, the store check,
- * and the supplier account switch), the five money/stock deletes of 3E-6F, and
- * the two master-data creates of tranche 2A. That matters
+ * and the supplier account switch), the five money/stock deletes of 3E-6F, the
+ * two master-data creates of tranche 2A, and the four zero-row updates and
+ * deletes of tranche 2B. That matters
  * here specifically because an RLS-denied write is NOT an error — PostgREST
  * answers `error: null, data: []` — so the action
  * revalidated the page and the unchanged figures re-rendered as though the
@@ -25,7 +26,7 @@ import { fromWrite } from "../../src/lib/actions/result";
  *
  *   1. the database really does answer a denied write with zero rows;
  *   2. fromWrite() calls that a failure;
- *   3. all forty-one actions actually route through it — bar the two INSERTs,
+ *   3. all forty-five actions actually route through it — bar the two INSERTs,
  *      which raise instead of returning zero rows and are checked on `error`.
  *
  * The 3E-6D seven differ from the earlier tranches in what the operator saw:
@@ -101,10 +102,27 @@ const ACTIONS: { file: string; fn: string; kind: "table" | "rpc" | "delegate" | 
   // (see the GM cross-site test below). `error` is the whole signal.
   { file: "actions.ts", fn: "createMaterialType", kind: "insert", dir: "(owner)/owner/material-types" },
   { file: "actions.ts", fn: "createMachine", kind: "insert", dir: "(owner)/owner/machines" },
+  // 3E-6I tranche 2B: the UPDATE/DELETE zero-row group. `.select()` was verified
+  // safe for each of these four — unlike createMachine above, where a
+  // select-back turns a working INSERT into a 42501 and the row never lands.
+  { file: "actions.ts", fn: "clearCheck", kind: "table", dir: "stocked-materials" },
+  { file: "gate-exit-actions.ts", fn: "releaseSupplier", kind: "table" },
+  { file: "actions.ts", fn: "updateMachine", kind: "table", dir: "(owner)/owner/machines" },
+  { file: "actions.ts", fn: "toggleMaterialType", kind: "table", dir: "(owner)/owner/material-types" },
 ];
 
 const source = (file: string, dir = VISIT_ACTIONS) =>
   readFileSync(new URL(`../../src/app/${dir}/${file}`, import.meta.url), "utf8");
+
+/**
+ * The same body with comments removed, for assertions about what the code
+ * DOES. An action's slice runs up to the next export, so it carries the
+ * explanatory comment written above that next function — and those comments
+ * discuss `.select()` and `fromWrite` by name. Matching prose would have
+ * reported createMachine as select-backed when it plainly is not.
+ */
+const codeOf = (file: string, fn: string, dir?: string) =>
+  bodyOf(file, fn, dir).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
 
 /** The body of one exported action, up to the next top-level export. */
 function bodyOf(file: string, fn: string, dir?: string): string {
@@ -734,11 +752,180 @@ describe("silent write failure", () => {
     });
   });
 
+  // ── 2f. The 3E-6I tranche 2B zero-row group ──────────────────────────────
+  describe("the zero-row update and delete group really does get refused", () => {
+    let gm: TestUser, mgrDong: TestUser, gateDong: TestUser;
+    let dong: string, newSite: string, materialTypeId: string, supplierId: string;
+    const stamp = Date.now();
+    const madeMachines: string[] = [];
+
+    beforeAll(async () => {
+      const admin = adminClient();
+      const { data: sites } = await admin.from("sites").select("id, name");
+      dong = sites!.find((s) => s.name === "Dong")!.id as string;
+      newSite = sites!.find((s) => s.name === "New-Site")!.id as string;
+      const { data: mt } = await admin.from("material_types").select("id").limit(1).single();
+      materialTypeId = mt!.id as string;
+      // The general manager is the New-Site manager, and reads every site.
+      gm = await makeUser({ username: `t2b-gm-${stamp}`, role: "manager", siteId: newSite });
+      mgrDong = await makeUser({ username: `t2b-mgr-${stamp}`, role: "manager", siteId: dong });
+      gateDong = await makeUser({ username: `t2b-gate-${stamp}`, role: "gate", siteId: dong });
+      const { data: sup } = await admin.from("suppliers")
+        .insert({ name: `T2B ${stamp}` }).select("id").single();
+      supplierId = sup!.id as string;
+    });
+
+    afterAll(async () => {
+      if (madeMachines.length) await adminClient().from("machines").delete().in("name", madeMachines);
+    });
+
+    // ── clearCheck ────────────────────────────────────────────────────────
+    async function checkedLot(site: string) {
+      const admin = adminClient();
+      const { data: lot } = await admin.from("stock_lots").insert({
+        site_id: site, material_type_id: materialTypeId, weight_kg: 7, status: "available",
+      }).select("id").single();
+      const { error } = await admin.from("stock_confirmations").insert({
+        stock_lot_id: lot!.id as string, site_id: site, status: "confirmed", checked_by: mgrDong.userId,
+      });
+      expect(error, `confirmation fixture: ${error?.message}`).toBeNull();
+      return lot!.id as string;
+    }
+    const stillChecked = async (lotId: string) => {
+      const { count } = await adminClient().from("stock_confirmations")
+        .select("stock_lot_id", { count: "exact", head: true }).eq("stock_lot_id", lotId);
+      return count === 1;
+    };
+
+    it("clearCheck: the GM cannot undo another store's check, silently", async () => {
+      const lotId = await checkedLot(dong);
+      // The GM reads every store, so the Undo button is offered to them.
+      expect(
+        ((await gm.client.from("stock_lots").select("id").eq("id", lotId)).data ?? []).length,
+        "the GM can see the lot — which is why the button appears",
+      ).toBe(1);
+
+      const res = await gm.client.from("stock_confirmations")
+        .delete().eq("stock_lot_id", lotId).select("stock_lot_id");
+      expect(res.error, "the shape that fooled the UI: no error").toBeNull();
+      expect(res.data ?? [], "and no rows").toHaveLength(0);
+      expect(fromWrite(res as never).ok, "fromWrite must call that a failure").toBe(false);
+      expect(await stillChecked(lotId), "the check genuinely still stands").toBe(true);
+    });
+
+    it("clearCheck: the own-site manager still clears their own check", async () => {
+      const lotId = await checkedLot(dong);
+      const res = await mgrDong.client.from("stock_confirmations")
+        .delete().eq("stock_lot_id", lotId).select("stock_lot_id");
+      expect(res.error, `own-site clear: ${res.error?.message}`).toBeNull();
+      expect(res.data ?? [], "the allowed delete must still work").toHaveLength(1);
+      expect(fromWrite(res as never).ok).toBe(true);
+      expect(await stillChecked(lotId), "and the check is genuinely gone").toBe(false);
+    });
+
+    // ── releaseSupplier ───────────────────────────────────────────────────
+    async function parkedVisit() {
+      const { data, error } = await adminClient().from("visits").insert({
+        site_id: dong, supplier_id: supplierId, declared_material_type_id: materialTypeId,
+        entry_path: "processed", state: "awaiting_gate_exit", created_by: mgrDong.userId,
+      }).select("id").single();
+      expect(error, `visit fixture: ${error?.message}`).toBeNull();
+      return data!.id as string;
+    }
+    const stateOf = async (id: string) => {
+      const { data } = await adminClient().from("visits").select("state").eq("id", id).single();
+      return data!.state as string;
+    };
+
+    it("releaseSupplier: a release with no gate-exit authorisation is refused", async () => {
+      const visitId = await parkedVisit();
+      const res = await gateDong.client.from("visits")
+        .update({ state: "exited" }).eq("id", visitId).select("id");
+      expect(res.error, "the gate must not be told the supplier may leave").not.toBeNull();
+      expect(res.error!.message).toMatch(/without a gate exit authorization/i);
+      expect(fromWrite(res as never).ok).toBe(false);
+      expect(await stateOf(visitId), "the visit stays parked").toBe("awaiting_gate_exit");
+    });
+
+    it("releaseSupplier: an authorised release still lands", async () => {
+      const visitId = await parkedVisit();
+      await adminClient().from("gate_exit_authorizations")
+        .insert({ visit_id: visitId, authorized_by: mgrDong.userId });
+      const res = await gateDong.client.from("visits")
+        .update({ state: "exited" }).eq("id", visitId).select("id");
+      expect(res.error, `authorised release: ${res.error?.message}`).toBeNull();
+      expect(res.data ?? [], "the legitimate release must still work").toHaveLength(1);
+      expect(await stateOf(visitId)).toBe("exited");
+    });
+
+    // ── updateMachine ─────────────────────────────────────────────────────
+    async function machine(site: string, label: string) {
+      const name = `T2B ${label} ${stamp}`;
+      madeMachines.push(name);
+      const { data, error } = await adminClient().from("machines").insert({
+        site_id: site, name, charge_basis: "weight", rate: 10, active: true,
+      }).select("id").single();
+      expect(error, `machine fixture: ${error?.message}`).toBeNull();
+      return data!.id as string;
+    }
+    const activeOf = async (id: string) => {
+      const { data } = await adminClient().from("machines").select("active").eq("id", id).single();
+      return data!.active as boolean;
+    };
+
+    it("updateMachine: a machine outside the caller's reach matches no rows", async () => {
+      const id = await machine(dong, "OutOfReach");
+      const res = await gm.client.from("machines")
+        .update({ active: false }).eq("id", id).select("id");
+      expect(res.error).toBeNull();
+      expect(res.data ?? []).toHaveLength(0);
+      expect(fromWrite(res as never).ok).toBe(false);
+      expect(await activeOf(id), "and the machine is genuinely untouched").toBe(true);
+    });
+
+    it("updateMachine: the GM's own-site toggle still works — .select() is safe here", async () => {
+      // The distinction from createMachine: for an UPDATE the select-back only
+      // reveals the zero-row, it never prevents a write that would have landed.
+      const id = await machine(newSite, "OwnSite");
+      const res = await gm.client.from("machines")
+        .update({ active: false }).eq("id", id).select("id");
+      expect(res.error, `own-site toggle: ${res.error?.message}`).toBeNull();
+      expect(res.data ?? [], "the legitimate toggle must still work").toHaveLength(1);
+      expect(await activeOf(id)).toBe(false);
+    });
+
+    it("updateMachine: a blank id is rejected before it reaches Postgres as a bad uuid", () => {
+      // Guarded in the action, so 22P02 can no longer be raised and swallowed.
+      const body = bodyOf("actions.ts", "updateMachine", "(owner)/owner/machines");
+      expect(body, "must refuse a missing id itself").toMatch(/if \(!id\) return fail\(/);
+    });
+
+    // ── toggleMaterialType ────────────────────────────────────────────────
+    it("toggleMaterialType: a row that no longer exists matches nothing", async () => {
+      const res = await gm.client.from("material_types")
+        .update({ active: false }).eq("id", "00000000-0000-0000-0000-000000000000").select("id");
+      expect(res.error, "no error — just nothing").toBeNull();
+      expect(res.data ?? []).toHaveLength(0);
+      expect(fromWrite(res as never).ok).toBe(false);
+    });
+
+    it("toggleMaterialType: a real material still toggles", async () => {
+      const { data: mt } = await adminClient().from("material_types")
+        .insert({ name: `T2B mat ${stamp}`, active: true }).select("id").single();
+      const id = mt!.id as string;
+      const res = await gm.client.from("material_types")
+        .update({ active: false }).eq("id", id).select("id");
+      expect(res.error, `toggle: ${res.error?.message}`).toBeNull();
+      expect(res.data ?? []).toHaveLength(1);
+      await adminClient().from("material_types").delete().eq("id", id);
+    });
+  });
+
   // ── 3. Every one of them routes through it ───────────────────────────────
   describe("every money- or stock-touching action consumes the safe pattern", () => {
     for (const { file, fn, kind, dir } of ACTIONS) {
       it(`${fn} returns ActionResult and cannot silently succeed`, () => {
-        const body = bodyOf(file, fn, dir);
+        const body = codeOf(file, fn, dir);
         expect(body, `${fn} must return ActionResult`).toContain("Promise<ActionResult>");
         expect(body, `${fn} must take the useActionState prev arg`).toContain("_prev: ActionResult");
         if (kind === "table") {

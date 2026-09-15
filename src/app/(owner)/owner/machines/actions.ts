@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
-import { fail, ok, type ActionResult } from "@/lib/actions/result";
+import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 
 const BASES = ["weight", "bag", "hour"] as const;
 
@@ -44,16 +44,29 @@ export async function createMachine(_prev: ActionResult, formData: FormData): Pr
   return ok(`${name} added.`);
 }
 
-export async function updateMachine(formData: FormData): Promise<void> {
+// The Enable/Disable toggle on the machines list (it also accepts a rate, which
+// no current form submits). There was no id guard, so a missing one reached
+// Postgres as an invalid uuid (22P02); and a machine the caller cannot read
+// matches no rows. Both were discarded and the row re-rendered unchanged.
+//
+// .select() IS correct here, unlike createMachine above — verified: for a
+// machine outside the caller's reach the UPDATE already changes nothing, so
+// asking for the row back only reveals the zero-row, it does not turn a working
+// write into a failing one.
+export async function updateMachine(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || !(me.role === "owner" || me.is_general_manager)) return;
-  const id = String(formData.get("id") ?? "");
+  if (!me || !(me.role === "owner" || me.is_general_manager)) return fail("Not authorized.");
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return fail("Missing machine.");
   const patch: Record<string, unknown> = {};
   const rate = formData.get("rate");
   if (rate != null && String(rate).trim() !== "") patch.rate = Number(rate);
   const activeRaw = formData.get("active");
   if (activeRaw != null) patch.active = activeRaw === "true";
   const supabase = await createClient();
-  await supabase.from("machines").update(patch as never).eq("id", id);
+  const res = await supabase.from("machines").update(patch as never).eq("id", id).select("id");
+  const result = fromWrite(res, "That machine was not updated — it may belong to another site.");
+  if (!result.ok) return result;
   revalidatePath("/owner/machines");
+  return ok("Machine updated.");
 }

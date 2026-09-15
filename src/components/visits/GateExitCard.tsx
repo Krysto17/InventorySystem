@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatTimestamp } from "@/lib/visits/format";
 import type { Role } from "@/lib/auth/roles";
 import type { VisitState } from "@/lib/visits/state-machine";
+import { ActionForm } from "@/components/ui/ActionForm";
 import { authorizeGateExit, releaseSupplier } from "@/app/visits/[id]/gate-exit-actions";
 
 import { one as g1 } from "@/lib/db/relation";
@@ -70,12 +71,12 @@ export async function GateExitCard({
         )}
 
         {authorized && canRelease && (
-          <form action={releaseSupplier}>
+          <ActionForm action={releaseSupplier}>
             <input type="hidden" name="visit_id" value={visitId} />
             <button type="submit" className="rounded bg-ink px-4 py-1.5 text-sm font-semibold text-white">
               Release supplier
             </button>
-          </form>
+          </ActionForm>
         )}
 
         {!authorized && !canAuthorize && (

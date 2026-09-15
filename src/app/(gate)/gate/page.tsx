@@ -53,10 +53,10 @@ export default async function GateHomePage() {
                   <li key={v.id as string} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
                     <Link href={`/visits/${v.id}`} className="font-medium hover:underline">{sup?.name ?? "—"}</Link>
                     {authed ? (
-                      <form action={releaseSupplier}>
+                      <ActionForm action={releaseSupplier}>
                         <input type="hidden" name="visit_id" value={v.id as string} />
                         <button type="submit" className="rounded bg-ink px-3 py-1 text-xs font-semibold text-white">Release supplier</button>
-                      </form>
+                      </ActionForm>
                     ) : (
                       <Badge variant="yellow">Awaiting manager/owner authorisation</Badge>
                     )}

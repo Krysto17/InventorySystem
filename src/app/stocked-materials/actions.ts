@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
-import { fail, ok, type ActionResult } from "@/lib/actions/result";
+import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 
 // A store without its own keeper is walked by the site manager.
 const CAN_CHECK = ["stock_keeper", "manager", "owner"];
@@ -60,13 +60,24 @@ export async function disputeLot(_prev: ActionResult, formData: FormData): Promi
 }
 
 // Undo a check recorded by mistake, putting the lot back on the uncounted list.
-export async function clearCheck(formData: FormData): Promise<void> {
+//
+// The Undo button appears wherever the lot is readable, and `stock_lots` is
+// readable cross-site by the general manager — but the DELETE is own-site only.
+// So the GM could press Undo on another store's lot and get `error: null,
+// data: []`: nothing deleted, nothing said, the check still standing. Asking for
+// the deleted row back turns that into something the operator can see, and is
+// safe here because everyone allowed to DELETE can also SELECT the row.
+export async function clearCheck(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || !CAN_CHECK.includes(me.role)) return;
+  if (!me || !CAN_CHECK.includes(me.role)) return fail("Not authorized.");
   const lotId = String(formData.get("stock_lot_id") ?? "");
-  if (!lotId) return;
+  if (!lotId) return fail("Missing lot.");
   const supabase = await createClient();
-  await supabase.from("stock_confirmations").delete().eq("stock_lot_id", lotId);
+  const res = await supabase.from("stock_confirmations")
+    .delete().eq("stock_lot_id", lotId).select("stock_lot_id");
+  const result = fromWrite(res, "That check was not undone — it may belong to another store.");
+  if (!result.ok) return result;
   revalidatePath("/stocked-materials");
   revalidatePath("/inventory");
+  return ok("Check undone.");
 }
