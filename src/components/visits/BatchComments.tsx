@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { ActionForm } from "@/components/ui/ActionForm";
 import { addBatchComment } from "@/app/visits/[id]/settlement-actions";
 import { formatTimestamp } from "@/lib/visits/format";
 import { one as g1 } from "@/lib/db/relation";
@@ -41,7 +42,7 @@ export async function BatchComments({ visitId, viewerRole }: { visitId: string; 
         )}
 
         {canComment && (
-          <form action={addBatchComment} data-confirm="skip" className="space-y-2 border-t border-line pt-3">
+          <ActionForm action={addBatchComment} data-confirm="skip" className="space-y-2 border-t border-line pt-3">
             <input type="hidden" name="visit_id" value={visitId} />
             <label className="block text-xs font-medium">
               Add a comment <span className="font-normal text-ink-2">(visible to owner &amp; accountant)</span>
@@ -56,7 +57,7 @@ export async function BatchComments({ visitId, viewerRole }: { visitId: string; 
             <SubmitButton pendingText="Posting…" className="rounded bg-ink px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
               Post comment
             </SubmitButton>
-          </form>
+          </ActionForm>
         )}
       </CardContent>
     </Card>

@@ -110,7 +110,11 @@ export default async function GateHomePage() {
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">Register material movement</h2></CardHeader>
         <CardContent>
-          <form action={recordGateLog} className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {/* ActionForm renders its result under the grid, so the gate sees
+              "Movement registered." — or why not — instead of a silent reset
+              that invites a second, duplicate entry. */}
+          <ActionForm action={recordGateLog}>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <label className="text-xs font-medium">Direction
               <select name="direction" defaultValue="in" className="mt-1 block w-full rounded border px-2 py-1 text-sm">
                 <option value="in">Incoming</option>
@@ -143,7 +147,8 @@ export default async function GateHomePage() {
             <button type="submit" className="col-span-2 rounded bg-ink px-4 py-1.5 text-sm font-semibold text-white sm:col-span-3">
               Register movement
             </button>
-          </form>
+          </div>
+          </ActionForm>
         </CardContent>
       </Card>
 

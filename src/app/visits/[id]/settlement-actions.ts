@@ -13,20 +13,33 @@ import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 
 // Manager (or owner) leaves a note on a supply/batch — visible to the owner
 // (approving) and the accountant (before paying).
-export async function addBatchComment(formData: FormData): Promise<void> {
+//
+// Informational rather than money or stock, but a comment that silently never
+// posted still misleads the owner and accountant who read it before paying —
+// and a retry after an apparently dead click would post it twice. The .select()
+// below is the READ of the visit's site; the insert itself is checked on
+// `error`, because an INSERT that RLS refuses raises.
+export async function addBatchComment(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || (me.role !== "manager" && me.role !== "owner")) return;
+  if (!me || (me.role !== "manager" && me.role !== "owner")) return fail("Not authorized.");
   const visitId = String(formData.get("visit_id") ?? "");
   const body = String(formData.get("body") ?? "").trim();
-  if (!visitId || !body) return;
+  if (!visitId) return fail("Missing supply.");
+  if (!body) return fail("Write a comment first.");
 
   const supabase = await createClient();
   const { data: visit } = await supabase.from("visits").select("site_id").eq("id", visitId).single();
-  if (!visit) return;
-  await supabase.from("batch_comments").insert({
+  if (!visit) return fail("That supply could not be loaded.");
+  const { error } = await supabase.from("batch_comments").insert({
     visit_id: visitId, site_id: visit.site_id as string, body, author: me.id,
   });
+  if (error) {
+    if (error.code === "42501") return fail("You can only comment on supplies at your own site.");
+    if (error.code === "23503") return fail("That supply no longer exists.");
+    return fail(error.message.replace(/^.*?:\s*/, ""));
+  }
   revalidatePath(`/visits/${visitId}`);
+  return ok("Comment posted.");
 }
 
 // Manager records the supplier's bank/account details before submitting the

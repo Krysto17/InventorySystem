@@ -58,7 +58,7 @@ export async function GateExitCard({
           </div>
         ) : (
           canAuthorize && (
-            <form action={authorizeGateExit} className="flex flex-wrap items-end gap-2">
+            <ActionForm action={authorizeGateExit} className="flex flex-wrap items-end gap-2">
               <input type="hidden" name="visit_id" value={visitId} />
               <label className="flex-1 text-xs font-medium">Note (optional)
                 <input type="text" name="note" className="mt-1 block w-full rounded border px-2 py-1 text-sm" />
@@ -66,7 +66,7 @@ export async function GateExitCard({
               <button type="submit" className="rounded bg-approve px-4 py-1.5 text-sm font-semibold text-white">
                 Authorise exit
               </button>
-            </form>
+            </ActionForm>
           )
         )}
 

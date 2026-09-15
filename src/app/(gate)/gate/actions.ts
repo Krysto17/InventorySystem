@@ -14,19 +14,24 @@ async function mySiteId(): Promise<string | null> {
 }
 
 // The gate registers material moving in/out at the gate.
-export async function recordGateLog(formData: FormData): Promise<void> {
+//
+// This one is not retry-safe — there is no unique key on a gate log — so a
+// click that looked dead used to invite a second press and a duplicate entry.
+// The insert now reports both outcomes. An RLS refusal on an INSERT raises, so
+// `error` is the whole signal; no .select() of the new row.
+export async function recordGateLog(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || (me.role !== "gate" && me.role !== "owner")) return;
+  if (!me || (me.role !== "gate" && me.role !== "owner")) return fail("Not authorized.");
   const siteId = await mySiteId();
-  if (!siteId) return;
+  if (!siteId) return fail("Your account has no site, so the movement can't be logged against one.");
 
   const direction = String(formData.get("direction") ?? "");
-  if (!["in", "out"].includes(direction)) return;
+  if (!["in", "out"].includes(direction)) return fail("Choose incoming or outgoing.");
   const bagsRaw = String(formData.get("bags") ?? "").trim();
   const gatePassId = String(formData.get("gate_pass_id") ?? "") || null;
 
   const supabase = await createClient();
-  await supabase.from("gate_logs").insert({
+  const { error } = await supabase.from("gate_logs").insert({
     site_id: siteId,
     direction,
     driver_name: String(formData.get("driver_name") ?? "").trim() || null,
@@ -37,7 +42,14 @@ export async function recordGateLog(formData: FormData): Promise<void> {
     gate_pass_id: gatePassId,
     recorded_by: me.id,
   });
+  if (error) {
+    if (error.code === "42501") return fail("You can only log movements at your own site's gate.");
+    if (error.code === "23503") return fail("That gate pass is no longer valid — pick it again.");
+    if (error.code === "23514") return fail("Bags must be zero or more.");
+    return fail(error.message.replace(/^.*?:\s*/, ""));
+  }
   revalidatePath("/gate");
+  return ok("Movement registered.");
 }
 
 // The gate acknowledges a manager/owner-issued gate pass before release. If the

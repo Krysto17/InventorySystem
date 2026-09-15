@@ -6,20 +6,36 @@ import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 
 // A manager (own site) or the owner authorises a no-agreement visit to leave.
-export async function authorizeGateExit(formData: FormData): Promise<void> {
+//
+// An INSERT that RLS refuses RAISES rather than matching zero rows, so `error`
+// is the whole signal and there is deliberately no .select() here. The one
+// everyday refusal is UNIQUE (visit_id): a second click, or a colleague who got
+// there first. That means the exit IS authorised — the state asked for already
+// exists — so it is reported as such rather than as a failure, the same way a
+// repeated release is. The audit event is written by an AFTER INSERT trigger,
+// so a refused insert leaves no stray event behind.
+export async function authorizeGateExit(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || (me.role !== "manager" && me.role !== "owner")) return;
+  if (!me || (me.role !== "manager" && me.role !== "owner")) return fail("Not authorized.");
   const visitId = String(formData.get("visit_id") ?? "");
-  if (!visitId) return;
+  if (!visitId) return fail("Missing visit.");
 
   const supabase = await createClient();
-  await supabase.from("gate_exit_authorizations").insert({
+  const { error } = await supabase.from("gate_exit_authorizations").insert({
     visit_id: visitId,
     authorized_by: me.id,
     note: String(formData.get("note") ?? "").trim() || null,
   });
+  if (error) {
+    if (error.code !== "23505") {
+      if (error.code === "42501") return fail("You can only authorise an exit for a visit on your own site.");
+      if (error.code === "23503") return fail("That visit no longer exists.");
+      return fail(error.message.replace(/^.*?:\s*/, ""));
+    }
+  }
   revalidatePath(`/visits/${visitId}`);
   revalidatePath("/gate");
+  return ok(error ? "This exit was already authorised." : "Exit authorised — the gate can release the supplier.");
 }
 
 // The gate releases the supplier once an authorisation exists (→ exited). The DB

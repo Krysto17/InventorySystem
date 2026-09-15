@@ -13,8 +13,9 @@ import { fromWrite } from "../../src/lib/actions/result";
  * approval/release actions of 3E-6D (the owner's two cost-batch rulings, the
  * gate's acknowledgement, the advance and expense decisions, the store check,
  * and the supplier account switch), the five money/stock deletes of 3E-6F, the
- * two master-data creates of tranche 2A, and the four zero-row updates and
- * deletes of tranche 2B. That matters
+ * two master-data creates of tranche 2A, the four zero-row updates and deletes
+ * of tranche 2B, and the three gate/comment inserts of tranche 2C (forty-eight
+ * in all). That matters
  * here specifically because an RLS-denied write is NOT an error — PostgREST
  * answers `error: null, data: []` — so the action
  * revalidated the page and the unchanged figures re-rendered as though the
@@ -26,8 +27,9 @@ import { fromWrite } from "../../src/lib/actions/result";
  *
  *   1. the database really does answer a denied write with zero rows;
  *   2. fromWrite() calls that a failure;
- *   3. all forty-five actions actually route through it — bar the two INSERTs,
- *      which raise instead of returning zero rows and are checked on `error`.
+ *   3. all forty-eight actions actually route through it — bar the five
+ *      INSERTs, which raise instead of returning zero rows and are checked on
+ *      `error`.
  *
  * The 3E-6D seven differ from the earlier tranches in what the operator saw:
  * their callers are server-rendered with no optimistic UI, so a refusal did not
@@ -109,6 +111,11 @@ const ACTIONS: { file: string; fn: string; kind: "table" | "rpc" | "delegate" | 
   { file: "gate-exit-actions.ts", fn: "releaseSupplier", kind: "table" },
   { file: "actions.ts", fn: "updateMachine", kind: "table", dir: "(owner)/owner/machines" },
   { file: "actions.ts", fn: "toggleMaterialType", kind: "table", dir: "(owner)/owner/material-types" },
+  // 3E-6J tranche 2C: the last three technically actionable H4s, all INSERTs.
+  // A refused INSERT raises (42501 / 23505 / 23503), so these are "insert".
+  { file: "gate-exit-actions.ts", fn: "authorizeGateExit", kind: "insert" },
+  { file: "actions.ts", fn: "recordGateLog", kind: "insert", dir: "(gate)/gate" },
+  { file: "settlement-actions.ts", fn: "addBatchComment", kind: "insert" },
 ];
 
 const source = (file: string, dir = VISIT_ACTIONS) =>
@@ -921,6 +928,118 @@ describe("silent write failure", () => {
     });
   });
 
+  // ── 2g. The 3E-6J tranche 2C inserts ─────────────────────────────────────
+  describe("the tranche 2C inserts raise their refusals instead of hiding them", () => {
+    let mgrDong: TestUser, mgrOld: TestUser, gateDong: TestUser;
+    let dong: string, oldSite: string, materialTypeId: string, supplierId: string;
+    const stamp = Date.now();
+
+    beforeAll(async () => {
+      const admin = adminClient();
+      const { data: sites } = await admin.from("sites").select("id, name");
+      dong = sites!.find((s) => s.name === "Dong")!.id as string;
+      oldSite = sites!.find((s) => s.name === "Old-Site")!.id as string;
+      const { data: mt } = await admin.from("material_types").select("id").limit(1).single();
+      materialTypeId = mt!.id as string;
+      // Plain site managers — the general manager is the New-Site one.
+      mgrDong = await makeUser({ username: `t2c-mgr-d-${stamp}`, role: "manager", siteId: dong });
+      mgrOld = await makeUser({ username: `t2c-mgr-o-${stamp}`, role: "manager", siteId: oldSite });
+      gateDong = await makeUser({ username: `t2c-gate-${stamp}`, role: "gate", siteId: dong });
+      const { data: sup } = await admin.from("suppliers")
+        .insert({ name: `T2C ${stamp}` }).select("id").single();
+      supplierId = sup!.id as string;
+    });
+
+    async function parkedVisit() {
+      const { data, error } = await adminClient().from("visits").insert({
+        site_id: dong, supplier_id: supplierId, declared_material_type_id: materialTypeId,
+        entry_path: "processed", state: "awaiting_gate_exit", created_by: mgrDong.userId,
+      }).select("id").single();
+      expect(error, `visit fixture: ${error?.message}`).toBeNull();
+      return data!.id as string;
+    }
+    const countWhere = async (table: string, col: string, val: string) => {
+      const { count } = await adminClient().from(table)
+        .select("id", { count: "exact", head: true }).eq(col, val);
+      return count ?? 0;
+    };
+
+    // ── authorizeGateExit ─────────────────────────────────────────────────
+    it("authorizeGateExit: the first authorisation lands", async () => {
+      const visitId = await parkedVisit();
+      const res = await mgrDong.client.from("gate_exit_authorizations")
+        .insert({ visit_id: visitId, authorized_by: mgrDong.userId, note: "t2c" });
+      expect(res.error, `authorise: ${res.error?.message}`).toBeNull();
+      expect(await countWhere("gate_exit_authorizations", "visit_id", visitId)).toBe(1);
+    });
+
+    it("authorizeGateExit: a second authorisation raises 23505 and writes nothing", async () => {
+      // The double click. UNIQUE (visit_id) means the exit already stands, which
+      // is why the action reports "already authorised" rather than a failure.
+      const visitId = await parkedVisit();
+      await mgrDong.client.from("gate_exit_authorizations")
+        .insert({ visit_id: visitId, authorized_by: mgrDong.userId });
+      const dup = await mgrDong.client.from("gate_exit_authorizations")
+        .insert({ visit_id: visitId, authorized_by: mgrDong.userId });
+      expect(dup.error, "the duplicate is raised, not swallowed").not.toBeNull();
+      expect(dup.error!.code).toBe("23505");
+      expect(await countWhere("gate_exit_authorizations", "visit_id", visitId), "still exactly one").toBe(1);
+      const { count } = await adminClient().from("transaction_events")
+        .select("id", { count: "exact", head: true })
+        .eq("visit_id", visitId).eq("event_type", "gate_exit_authorized");
+      expect(count, "exactly one audit event — the refused insert fired no trigger").toBe(1);
+    });
+
+    it("authorizeGateExit: another site's manager is refused by a raise, not zero rows", async () => {
+      const visitId = await parkedVisit();
+      const res = await mgrOld.client.from("gate_exit_authorizations")
+        .insert({ visit_id: visitId, authorized_by: mgrOld.userId });
+      expect(res.error, "an INSERT that RLS refuses raises").not.toBeNull();
+      expect(res.error!.code).toBe("42501");
+      expect(await countWhere("gate_exit_authorizations", "visit_id", visitId)).toBe(0);
+    });
+
+    // ── recordGateLog ─────────────────────────────────────────────────────
+    it("recordGateLog: a log against another site's gate raises 42501 and writes nothing", async () => {
+      const marker = `T2C wrong site ${stamp}`;
+      const res = await gateDong.client.from("gate_logs").insert({
+        site_id: oldSite, direction: "in", material_owner: marker, recorded_by: gateDong.userId,
+      });
+      expect(res.error).not.toBeNull();
+      expect(res.error!.code).toBe("42501");
+      expect(await countWhere("gate_logs", "material_owner", marker)).toBe(0);
+    });
+
+    it("recordGateLog: the gate's own-site log still lands, exactly once", async () => {
+      const marker = `T2C own site ${stamp}`;
+      const res = await gateDong.client.from("gate_logs").insert({
+        site_id: dong, direction: "in", bags: 3, material_owner: marker, recorded_by: gateDong.userId,
+      });
+      expect(res.error, `own-site log: ${res.error?.message}`).toBeNull();
+      expect(await countWhere("gate_logs", "material_owner", marker)).toBe(1);
+    });
+
+    // ── addBatchComment ───────────────────────────────────────────────────
+    it("addBatchComment: another site's manager is refused by a raise, not zero rows", async () => {
+      const visitId = await parkedVisit();
+      const res = await mgrOld.client.from("batch_comments").insert({
+        visit_id: visitId, site_id: dong, body: "cross-site note", author: mgrOld.userId,
+      });
+      expect(res.error).not.toBeNull();
+      expect(res.error!.code).toBe("42501");
+      expect(await countWhere("batch_comments", "visit_id", visitId)).toBe(0);
+    });
+
+    it("addBatchComment: an own-site comment still posts", async () => {
+      const visitId = await parkedVisit();
+      const res = await mgrDong.client.from("batch_comments").insert({
+        visit_id: visitId, site_id: dong, body: "Rate reduced for moisture", author: mgrDong.userId,
+      });
+      expect(res.error, `own-site comment: ${res.error?.message}`).toBeNull();
+      expect(await countWhere("batch_comments", "visit_id", visitId)).toBe(1);
+    });
+  });
+
   // ── 3. Every one of them routes through it ───────────────────────────────
   describe("every money- or stock-touching action consumes the safe pattern", () => {
     for (const { file, fn, kind, dir } of ACTIONS) {
@@ -942,7 +1061,18 @@ describe("silent write failure", () => {
           expect(body, `${fn} must inspect the insert error`).toMatch(/if \(error\)/);
           expect(body, `${fn} must not use fromWrite — there is no zero-row case`)
             .not.toContain("fromWrite(");
-          expect(body, `${fn} must NOT select the new row back`).not.toMatch(/\.select\(/);
+          // Scoped to the insert STATEMENT: addBatchComment legitimately reads the
+          // visit's site with a .select() before it inserts, and that is not a
+          // select-back of the new row.
+          const at = body.indexOf(".insert(");
+          expect(at, `${fn} must perform the insert`).toBeGreaterThan(-1);
+          expect(body.slice(at, body.indexOf(";", at)), `${fn} must NOT select the new row back`)
+            .not.toMatch(/\.select\(/);
+          if (fn === "createMachine") {
+            // Stricter here, as pinned in tranche 2A: any select-back breaks the
+            // GM's cross-site create (42501, row never lands).
+            expect(body, "createMachine must contain no .select() at all").not.toMatch(/\.select\(/);
+          }
         } else {
           // A delegate must hand the helper's verdict back, not swallow it.
           expect(body, `${fn} must return the helper's result`).toMatch(/return lineAction\(/);
