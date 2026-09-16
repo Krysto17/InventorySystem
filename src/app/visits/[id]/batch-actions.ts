@@ -103,6 +103,10 @@ export async function updateMaterialLine(_prev: ActionResult, formData: FormData
   // answers `error: null, data: []`, so only .select() can tell us it was refused.
   const res = await supabase.from("visit_materials")
     .update(patch as never).eq("id", lineId).select("id");
+  // 0157: an edit that meets the payment stocking this batch is refused rather
+  // than committed beside stock written from the old figures.
+  if (res.error?.code === "VM002") return fail("This batch is being settled right now — try again in a moment.");
+  if (res.error?.code === "VM001") return fail("This material line is locked — its batch has been finalised.");
   const result = fromWrite(res, "That line was not changed — it may be locked because the batch has moved on.");
   if (!result.ok) return result;
   if (visitId) revalidatePath(`/visits/${visitId}`);
@@ -404,6 +408,9 @@ export async function setLinePrice(_prev: ActionResult, formData: FormData): Pro
     .from("visit_materials")
     .update({ unit_price: unitPrice, priced_by: me.id })
     .eq("id", lineId).select("id");
+  // 0157: same lock as a line edit — a price cannot change under a settling batch.
+  if (res.error?.code === "VM002") return fail("This batch is being settled right now — try again in a moment.");
+  if (res.error?.code === "VM001") return fail("This material line is locked — its batch has been finalised.");
   const result = fromWrite(res, "That price was not saved — the line may be finalized or the batch already approved.");
   if (!result.ok) return result;
   if (visitId) revalidatePath(`/visits/${visitId}`);
