@@ -51,6 +51,11 @@ export async function sendBackToOwner(_prev: ActionResult, formData: FormData): 
   const { error } = await supabase.rpc("accountant_send_back_to_owner", {
     p_visit_id: visitId, p_reason: reason,
   });
+  // 0156: a settlement with recorded payments is never voided — sending it back
+  // used to delete the payments with it.
+  if (error?.code === "SP001") {
+    return fail("Payments have already been recorded for this settlement. Resolve the payment before sending it back for repricing.");
+  }
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidatePath(`/visits/${visitId}`);
   revalidatePath("/accounting");

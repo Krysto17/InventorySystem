@@ -24,6 +24,9 @@ export async function deleteBatch(_prev: ActionResult, formData: FormData): Prom
   // The RPC raises when the gate refuses (already approved, already paid, wrong
   // site). Redirecting to the dashboard on that path told the user the batch was
   // gone when it was still there.
+  // 0156: deleting the batch would cascade away recorded payments — refused for
+  // every role, the owner included.
+  if (error?.code === "SP001") return fail("This batch has recorded payments and cannot be deleted.");
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidatePath("/manager");
   revalidatePath("/owner");
@@ -252,6 +255,11 @@ export async function approvePricing(_prev: ActionResult, formData: FormData): P
   if (!visitId) return fail("Missing batch.");
   const supabase = await createClient();
   const { error } = await supabase.rpc("approve_pricing", { p_visit_id: visitId });
+  // 0156: approval replaces the settlement, which must not happen once payments
+  // are recorded against it.
+  if (error?.code === "SP001") {
+    return fail("Payments have already been recorded for this settlement. Resolve the payment before repricing it.");
+  }
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidatePath(`/visits/${visitId}`);
   revalidatePath("/owner/approvals");

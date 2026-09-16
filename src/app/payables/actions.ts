@@ -86,6 +86,10 @@ export async function sendPayableBack(_prev: ActionResult, formData: FormData): 
   if (!reason) return fail("Give the manager a reason for the correction.");
   const supabase = await createClient();
   const { error } = await supabase.rpc(SEND_BACK[kind], { p_id: id, p_reason: reason });
+  // 0156: a settlement with recorded payments is never voided.
+  if (error?.code === "SP001") {
+    return fail("Payments have already been recorded for this settlement. Resolve the payment before sending it back for repricing.");
+  }
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidateHubs();
   if (kind === "settlement") revalidatePath("/manager");

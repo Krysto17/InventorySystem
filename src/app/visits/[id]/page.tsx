@@ -102,7 +102,7 @@ export default async function VisitDetailPage({
       .select("id", { count: "exact", head: true })
       .eq("visit_id", id)
       .eq("price_finalized", true),
-    supabase.from("batch_settlements").select("status").eq("visit_id", id).maybeSingle(),
+    supabase.from("batch_settlements").select("id, status").eq("visit_id", id).maybeSingle(),
     supabase
       .from("stock_movements")
       .select(`
@@ -130,14 +130,27 @@ export default async function VisitDetailPage({
   // Batch delete gate (#4/#5): general manager may delete until owner-approval,
   // owner until paid. Mirrors the delete_batch RPC, which re-checks server-side.
   const settlementStatus = (settlement?.status as string | null) ?? null;
+  // Once a payment is recorded the settlement is preserved (0156): it can no
+  // longer be sent back, re-priced or deleted with its batch. Hiding the
+  // controls is convenience only — the database refuses either way.
+  const { count: paymentCount } = settlement
+    ? await supabase.from("settlement_payments")
+        .select("id", { count: "exact", head: true })
+        .eq("settlement_id", settlement.id as string)
+    : { count: 0 };
+  const hasPayments = (paymentCount ?? 0) > 0;
   // Accounting (or owner) can return an in-accounting, not-yet-paid batch to the
   // owner for review (owner then re-approves or sends it to the manager).
   const canSendBackToOwner =
     (me.role === "accounting" || me.role === "owner") &&
     (visit.state as string) === "in_accounting" &&
-    settlementStatus !== "paid";
+    settlementStatus !== "paid" &&
+    !hasPayments;
+  // The roles that would otherwise be offered send-back or delete, told why not.
+  const paymentsLockBatch =
+    hasPayments && settlementStatus !== "paid" && ["accounting", "owner", "manager"].includes(me.role);
   const visitState = visit.state as string;
-  const canDeleteBatch =
+  const canDeleteBatch = !hasPayments && (
     (me.role === "owner" && settlementStatus !== "paid") ||
     // Any manager may remove a batch on their own site until the owner approves
     // it; the RPC re-checks both. (RLS scopes which visits they can see at all.)
@@ -146,7 +159,7 @@ export default async function VisitDetailPage({
       settlementStatus !== "paid") ||
     // Processing / receiving may remove a mistaken entry still in their stage.
     (me.role === "processing" && visitState === "in_processing") ||
-    (me.role === "receiving" && ["in_processing", "in_receiving"].includes(visitState));
+    (me.role === "receiving" && ["in_processing", "in_receiving"].includes(visitState)));
   // Receiving pulls a submitted batch back to add / correct a line, then
   // re-submits it to QC.
   const canReopenReceiving =
@@ -356,6 +369,12 @@ export default async function VisitDetailPage({
           <SendBackToOwnerForm visitId={visitNorm.id} />
         </CardContent>
       </Card>
+    )}
+    {paymentsLockBatch && (
+      <p className="text-xs text-ink-2">
+        Payments have already been recorded for this settlement, so it can no longer be sent back for repricing or
+        deleted. Resolve the payment first.
+      </p>
     )}
     <PriceCorrections
       visitId={visitNorm.id}
