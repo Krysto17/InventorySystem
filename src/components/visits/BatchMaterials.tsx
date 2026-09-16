@@ -32,11 +32,14 @@ export async function BatchMaterials({
   visitState,
   viewerRole,
   isGeneralManager = false,
+  hasSettlement = false,
 }: {
   visitId: string;
   visitState: VisitState;
   viewerRole: Role;
   isGeneralManager?: boolean;
+  // 0158: an existing settlement fixes the line figures; the DB refuses edits.
+  hasSettlement?: boolean;
 }) {
   const supabase = await createClient();
 
@@ -95,8 +98,11 @@ export async function BatchMaterials({
   const canSkipAnalysis = (viewerRole === "manager" || viewerRole === "owner") && visitState === "in_qc";
   // Manager (own site, RPC-enforced) or owner may unsettle a line before/after
   // pricing — remove it or gate-pass it out when it fails spec/pricing.
+  // Once pricing is approved the settlement is a snapshot of the batch (0158):
+  // send it back before pulling a line out.
   const canUnsettle = (viewerRole === "manager" || viewerRole === "owner")
-    && ["in_qc", "pricing", "in_accounting", "awaiting_stock_intake"].includes(visitState);
+    && ["in_qc", "pricing", "in_accounting", "awaiting_stock_intake"].includes(visitState)
+    && !hasSettlement;
   // Receiving pulls a failing material out too — their gate pass is raised
   // pending for a manager to authorise. Re-settling a line and removing one
   // change the batch total, so those stay with the manager.
@@ -106,7 +112,8 @@ export async function BatchMaterials({
   // while the visit is still open. RLS enforces the manager's own site.
   const canEditLines = (viewerRole === "manager" || viewerRole === "owner")
     && !canReceive
-    && !["exited", "stocked"].includes(visitState);
+    && !["exited", "stocked"].includes(visitState)
+    && !hasSettlement;
 
   const { data: materialTypes } = canReceive || canEditLines
     ? await supabase.from("material_types").select("id, name").order("name")

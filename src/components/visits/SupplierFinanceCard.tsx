@@ -14,10 +14,13 @@ export async function SupplierFinanceCard({
   visitId,
   supplierId,
   viewerRole,
+  hasSettlement = false,
 }: {
   visitId: string;
   supplierId: string | null;
   viewerRole: Role;
+  // 0158: a deduction against this visit would move its approved settlement.
+  hasSettlement?: boolean;
 }) {
   if (!["manager", "accounting", "owner"].includes(viewerRole)) return null;
   if (!supplierId) return null;
@@ -37,7 +40,7 @@ export async function SupplierFinanceCard({
   // (light bills carried from dressing elsewhere).
   const debt = Number(debtRaw ?? 0);
   const processingDebt = Number(procDebtRaw ?? 0);
-  const canDeduct = ["manager", "accounting", "owner"].includes(viewerRole);
+  const canDeduct = ["manager", "accounting", "owner"].includes(viewerRole) && !hasSettlement;
 
   return (
     <Card>

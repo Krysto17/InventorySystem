@@ -356,7 +356,9 @@ describe("GM cross-site state integrity (0157)", () => {
         gm.client.from("visit_materials").update({ weight_kg: 5 }).eq("id", lineId).select("id"),
       ]);
       expect(pay.error, `round ${i}: payment`).toBeNull();
-      if (edit.error) expect(["VM001", "VM002"]).toContain(edit.error.code);
+      // 0158: the batch already has an approved settlement, so the edit is refused
+      // outright (SF002) unless it meets the payment holding the lock (VM002).
+      if (edit.error) expect(["VM001", "VM002", "SF002"]).toContain(edit.error.code);
       const after = await batchState(visitId, lineId);
       expect(after.v!.state).toBe("stocked");
       expect(Number(after.lot!.weight_kg), `round ${i}: lot matches the committed line`).toBe(Number(after.l!.weight_kg));

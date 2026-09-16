@@ -325,12 +325,14 @@ export default async function VisitDetailPage({
         visitState={visitNorm.state}
         viewerRole={me.role as Role}
         isGeneralManager={!!me.is_general_manager}
+        hasSettlement={settlement != null}
       />
     )}
     <UtilityChargesCard
       visitId={visitNorm.id}
       visitState={visitNorm.state}
       viewerRole={me.role as Role}
+      hasSettlement={settlement != null}
     />
     {["processing", "manager", "owner"].includes(me.role) &&
       ["in_receiving", "pricing"].includes(visitNorm.state) &&
@@ -346,6 +348,7 @@ export default async function VisitDetailPage({
       visitState={visitNorm.state}
       viewerRole={me.role as Role}
       machines={(machines ?? []) as { id: string; name: string; charge_basis: string; rate: number }[]}
+      hasSettlement={settlement != null}
     />
     <BatchComments visitId={visitNorm.id} viewerRole={me.role as Role} />
     <BatchSettlementCard
@@ -386,6 +389,7 @@ export default async function VisitDetailPage({
       visitId={visitNorm.id}
       supplierId={(visit as { supplier_id?: string }).supplier_id ?? null}
       viewerRole={me.role as Role}
+      hasSettlement={settlement != null}
     />
     <VisitTimeline
       visit={visitNorm}

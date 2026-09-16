@@ -13,10 +13,13 @@ export async function UtilityChargesCard({
   visitId,
   visitState,
   viewerRole,
+  hasSettlement = false,
 }: {
   visitId: string;
   visitState: VisitState;
   viewerRole: Role;
+  // 0158: charges feed the approved settlement; the DB refuses changes under it.
+  hasSettlement?: boolean;
 }) {
   const supabase = await createClient();
   const { data: charges } = await supabase
@@ -26,9 +29,9 @@ export async function UtilityChargesCard({
     .order("created_at", { ascending: true });
 
   const canAdd =
-    ["processing", "manager", "owner"].includes(viewerRole) && isVisitOpen(visitState);
+    ["processing", "manager", "owner"].includes(viewerRole) && isVisitOpen(visitState) && !hasSettlement;
   const canDownload = ["processing", "manager", "owner"].includes(viewerRole);
-  const canDiscount = ["manager", "owner"].includes(viewerRole) && isVisitOpen(visitState);
+  const canDiscount = ["manager", "owner"].includes(viewerRole) && isVisitOpen(visitState) && !hasSettlement;
 
   if ((charges?.length ?? 0) === 0 && !canAdd) return null;
 

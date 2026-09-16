@@ -68,6 +68,8 @@ export async function addMaterialLine(_prev: ActionResult, formData: FormData): 
     requires_analysis: requiresAnalysis,
     recorded_by: me.id,
   }).select("id");
+  // 0158: an approved settlement fixes which lines the batch is made of.
+  if (res.error?.code === "SF002") return fail("This pricing is already approved. Send the settlement back before changing the material.");
   const result = fromWrite(res, "That line was not added — the batch may have moved on to the next stage.");
   if (!result.ok) return result;
   revalidatePath(`/visits/${visitId}`);
@@ -107,6 +109,8 @@ export async function updateMaterialLine(_prev: ActionResult, formData: FormData
   // than committed beside stock written from the old figures.
   if (res.error?.code === "VM002") return fail("This batch is being settled right now — try again in a moment.");
   if (res.error?.code === "VM001") return fail("This material line is locked — its batch has been finalised.");
+  // 0158: the approved settlement is a snapshot of these figures.
+  if (res.error?.code === "SF002") return fail("This pricing is already approved. Send the settlement back before changing the material.");
   const result = fromWrite(res, "That line was not changed — it may be locked because the batch has moved on.");
   if (!result.ok) return result;
   if (visitId) revalidatePath(`/visits/${visitId}`);
@@ -128,6 +132,7 @@ export async function deleteMaterialLine(_prev: ActionResult, formData: FormData
 
   const supabase = await createClient();
   const res = await supabase.from("visit_materials").delete().eq("id", lineId).select("id");
+  if (res.error?.code === "SF002") return fail("This pricing is already approved. Send the settlement back before changing the material.");
   const result = fromWrite(res, "That line was not removed — it may be locked because the batch has moved on.");
   if (!result.ok) return result;
   if (visitId) revalidatePath(`/visits/${visitId}`);
@@ -197,6 +202,11 @@ async function lineAction(
         p_reason: String(formData.get("reason") ?? "").trim() || undefined,
       })
     : await supabase.rpc(rpc, { p_line_id: lineId });
+  // 0158: unsettling, re-settling or removing a line changes an approved total.
+  if (error?.code === "SF002") {
+    return fail("This pricing is already approved. Send the settlement back before changing the material.");
+  }
+  if (error?.code === "VM002") return fail("This batch is being settled right now — try again in a moment.");
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   if (visitId) revalidatePath(`/visits/${visitId}`);
   revalidatePath("/manager");
@@ -411,6 +421,8 @@ export async function setLinePrice(_prev: ActionResult, formData: FormData): Pro
   // 0157: same lock as a line edit — a price cannot change under a settling batch.
   if (res.error?.code === "VM002") return fail("This batch is being settled right now — try again in a moment.");
   if (res.error?.code === "VM001") return fail("This material line is locked — its batch has been finalised.");
+  // 0158: the approved settlement is a snapshot of these figures.
+  if (res.error?.code === "SF002") return fail("This pricing is already approved. Send the settlement back before changing the material.");
   const result = fromWrite(res, "That price was not saved — the line may be finalized or the batch already approved.");
   if (!result.ok) return result;
   if (visitId) revalidatePath(`/visits/${visitId}`);

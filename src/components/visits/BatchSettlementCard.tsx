@@ -105,7 +105,10 @@ export async function BatchSettlementCard({
   const canCloseZero = (isManager || isAccounting || isOwner) && settlementOpen && remaining <= 0.005;
   // Manager/owner may remove an applied deduction (mistake) before the batch is
   // approved/paid.
-  const canEditDeductions = (isManager || isOwner) && !locked;
+  // Any settlement at all is an approved snapshot of these deductions and charges
+  // (0158), so they stay put while it exists — not only once it is approved.
+  const snapshotExists = status != null;
+  const canEditDeductions = (isManager || isOwner) && !locked && !snapshotExists;
 
   // Supply invoice (downloadable + WhatsApp-shareable) once the batch is submitted.
   const h = await headers();
@@ -205,7 +208,7 @@ export async function BatchSettlementCard({
         </div>
 
         {/* Manager: deduct an advance against this batch (partial or full) */}
-        {isManager && !locked && outstandingDebt > 0 && (
+        {isManager && !locked && !snapshotExists && outstandingDebt > 0 && (
           <ActionForm action={recordDeduction} className="flex flex-wrap items-end gap-2 border-t border-line pt-3">
             <input type="hidden" name="visit_id" value={visitId} />
             <input type="hidden" name="supplier_id" value={supplierId} />

@@ -2532,6 +2532,7 @@ export type Database = {
       release_expense: { Args: { p_id: string }; Returns: undefined }
       send_expense_back: { Args: { p_id: string; p_reason: string }; Returns: undefined }
       sync_processing_fee: { Args: { p_visit_id: string }; Returns: undefined }
+      resave_processing_fee: { Args: { p_visit_id: string; p_usage: Json }; Returns: undefined }
       record_opening_balance: { Args: { p_supplier_id: string; p_amount: number; p_as_of?: string; p_site_id?: string }; Returns: string }
       current_role: {
         Args: never

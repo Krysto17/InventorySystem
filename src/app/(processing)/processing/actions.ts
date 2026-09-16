@@ -240,7 +240,6 @@ export async function resaveProcessingFee(
     .maybeSingle();
   if (!rec) return { error: "No processing record" };
   if (!rec.fee_reopened && me.role !== "owner") return { error: "Fee is not open for correction" };
-  const recordId = rec.id as string;
 
   const lines: UsageLine[] = [];
   for (const [key, val] of formData.entries()) {
@@ -253,27 +252,18 @@ export async function resaveProcessingFee(
   }
   const cleaned = lines.filter((l) => l && l.machine_id && l.measurement > 0);
 
-  const { error: delErr } = await supabase
-    .from("processing_machine_usage").delete().eq("processing_record_id", recordId);
-  if (delErr) return { error: delErr.message };
-
-  if (cleaned.length > 0) {
-    const { data: machineRows } = await supabase
-      .from("machines").select("id, rate").in("id", cleaned.map((l) => l.machine_id));
-    const rates = new Map<string, number>((machineRows ?? []).map((r) => [r.id as string, Number(r.rate)]));
-    const rows = cleaned.map((l) => ({
-      processing_record_id: recordId,
-      machine_id: l.machine_id,
-      measurement: l.measurement,
-      rate_snapshot: rates.get(l.machine_id) ?? 0,
-    }));
-    const { error: insErr } = await supabase.from("processing_machine_usage").insert(rows);
-    if (insErr) return { error: insErr.message };
+  // 0158: replacing the usage and re-syncing the fee is one database transaction.
+  // It used to be three requests, and a refused sync left the new usage rows
+  // behind a failed save. An approved settlement is refused before anything is
+  // written.
+  const { error: saveErr } = await supabase.rpc("resave_processing_fee", {
+    p_visit_id: visitId,
+    p_usage: cleaned.map((l) => ({ machine_id: l.machine_id, measurement: l.measurement })),
+  });
+  if (saveErr?.code === "SF003") {
+    return { error: "This pricing is already approved. Send the settlement back before changing the processing fee." };
   }
-
-  // Recompute the light-bill fee + clear the reopened flag (SECURITY DEFINER).
-  const { error: syncErr } = await supabase.rpc("sync_processing_fee", { p_visit_id: visitId });
-  if (syncErr) return { error: syncErr.message };
+  if (saveErr) return { error: saveErr.message };
 
   revalidatePath(`/visits/${visitId}`);
   revalidatePath("/processing");

@@ -14,11 +14,14 @@ export async function ProcessingFeeReopen({
   visitState,
   viewerRole,
   machines,
+  hasSettlement = false,
 }: {
   visitId: string;
   visitState: string;
   viewerRole: Role;
   machines: Machine[];
+  // 0158: the fee is a charge on the approved settlement; re-syncing it is refused.
+  hasSettlement?: boolean;
 }) {
   if (!["manager", "owner", "processing"].includes(viewerRole)) return null;
 
@@ -37,6 +40,19 @@ export async function ProcessingFeeReopen({
   const isManager = viewerRole === "manager";
   const isOwner = viewerRole === "owner";
   const isProcessing = viewerRole === "processing";
+
+  // Pricing approved: the fee is part of the settlement snapshot and can't change
+  // until the settlement is sent back.
+  if (hasSettlement && (isManager || isOwner || (reopened && isProcessing))) {
+    return (
+      <Card>
+        <CardHeader><h2 className="text-sm font-semibold">Processing fee</h2></CardHeader>
+        <CardContent>
+          <p className="text-sm text-ink-2">This pricing is already approved. Send the settlement back before changing charges.</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   // Processing (or owner) corrects the fee once it's been reopened.
   if (reopened && (isProcessing || isOwner)) {

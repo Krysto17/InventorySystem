@@ -254,6 +254,8 @@ export async function addUtilityCharge(_prev: ActionResult, formData: FormData):
   const res = await supabase.from("utility_charges").insert({
     visit_id: visitId, kind, description, amount, recorded_by: me.id,
   }).select("id");
+  // 0158: charges feed the approved settlement, which is a fixed snapshot.
+  if (res.error?.code === "SF003") return fail("This pricing is already approved. Send the settlement back before changing charges.");
   const result = fromWrite(res, "The charge was not added — the batch may be closed to you.");
   if (!result.ok) return result;
   revalidatePath(`/visits/${visitId}`);
@@ -275,6 +277,7 @@ export async function adjustUtilityCharge(_prev: ActionResult, formData: FormDat
 
   const supabase = await createClient();
   const res = await supabase.from("utility_charges").update({ amount }).eq("id", chargeId).select("id");
+  if (res.error?.code === "SF003") return fail("This pricing is already approved. Send the settlement back before changing charges.");
   const result = fromWrite(res, "The charge was not adjusted — the batch may no longer be open to you.");
   if (!result.ok) return result;
   if (visitId) revalidatePath(`/visits/${visitId}`);
@@ -337,6 +340,8 @@ export async function recordDeduction(_prev: ActionResult, formData: FormData): 
     kind,
     recorded_by: me.id,
   }).select("id");
+  // 0158: a deduction against this visit feeds its approved settlement.
+  if (res.error?.code === "SF004") return fail("This pricing is already approved. Send the settlement back before changing deductions.");
   const result = fromWrite(res, "The deduction was not recorded — you may not have permission for this supplier.");
   if (!result.ok) return result;
   revalidateSupplierFinance();
@@ -359,6 +364,7 @@ export async function removeDeduction(_prev: ActionResult, formData: FormData): 
     if (st?.status === "paid") return fail("This batch has been paid — the deduction is locked.");
   }
   const res = await supabase.from("advance_deductions").delete().eq("id", deductionId).select("id");
+  if (res.error?.code === "SF004") return fail("This pricing is already approved. Send the settlement back before changing deductions.");
   const result = fromWrite(res, "The deduction was not removed — you may not have permission for it.");
   if (!result.ok) return result;
   revalidateSupplierFinance();
@@ -376,6 +382,7 @@ export async function removeUtilityCharge(_prev: ActionResult, formData: FormDat
 
   const supabase = await createClient();
   const res = await supabase.from("utility_charges").delete().eq("id", chargeId).select("id");
+  if (res.error?.code === "SF003") return fail("This pricing is already approved. Send the settlement back before changing charges.");
   const result = fromWrite(res, "The charge was not removed — the batch may no longer be open to you.");
   if (!result.ok) return result;
   if (visitId) revalidatePath(`/visits/${visitId}`);
