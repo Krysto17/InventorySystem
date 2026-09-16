@@ -68,8 +68,17 @@ export async function acknowledgeGatePass(_prev: ActionResult, formData: FormDat
   const id = String(formData.get("pass_id") ?? "");
   if (!id) return fail("Missing gate pass.");
   const supabase = await createClient();
+  // A retry after a real acknowledgement is not a failure — the database treats
+  // it as a no-op and writes nothing — so say what actually happened. Messaging
+  // only: correctness never depends on this read.
+  const { data: current } = await supabase.from("gate_passes").select("status").eq("id", id).maybeSingle();
+  if (current?.status === "acknowledged") return ok("This gate pass has already been acknowledged.");
   const res = await supabase.from("gate_passes")
     .update({ status: "acknowledged" }).eq("id", id).select("id");
+  // 0155 releases a lot-linked pass's lot under a lock and refuses if the lot
+  // has already left stock or no longer matches the pass.
+  if (res.error?.code === "GP006") return fail("This lot is no longer available for release.");
+  if (res.error?.code === "GP009") return fail("This gate pass no longer matches its stock lot — ask a manager to cancel it.");
   const result = fromWrite(res, "This pass was not acknowledged — it may already have been released or cancelled.");
   if (!result.ok) return result;
   revalidatePath("/gate");

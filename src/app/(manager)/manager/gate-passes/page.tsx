@@ -19,6 +19,14 @@ const STATUS_VARIANT: Record<string, "default" | "green" | "yellow" | "red"> = {
 export default async function ManagerGatePassesPage() {
   const me = await requireGeneralManager();
   const supabase = await createClient();
+  // A lot already on a live lot-linked pass cannot take another — 0155's
+  // one-live-pass-per-lot index would refuse it — so it is not offered.
+  const { data: claimed } = me.site_id
+    ? await supabase.from("gate_passes").select("stock_lot_id")
+        .eq("site_id", me.site_id).not("stock_lot_id", "is", null)
+        .in("status", ["pending", "issued", "acknowledged"])
+    : { data: null };
+  const claimedLotIds = (claimed ?? []).map((c) => c.stock_lot_id as string);
   const [{ data: passes }, { data: suppliers }, { data: materialTypes }, { data: lots }] = await Promise.all([
     supabase.from("gate_passes")
       .select("id, pass_code, material_owner, reason, bags, weight_kg, status, issued_at, material:material_types(name), supplier:suppliers(name)")
@@ -35,6 +43,8 @@ export default async function ManagerGatePassesPage() {
       ? supabase.from("stock_lots")
           .select("id, weight_kg, material:material_types(name), supplier:suppliers(name)")
           .eq("status", "available").eq("site_id", me.site_id)
+          // The nil uuid keeps `in.()` well-formed when nothing is claimed.
+          .not("id", "in", `(${claimedLotIds.length ? claimedLotIds.join(",") : "00000000-0000-0000-0000-000000000000"})`)
           .order("created_at", { ascending: false }).limit(200)
       : Promise.resolve({ data: null }),
   ]);

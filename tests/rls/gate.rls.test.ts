@@ -111,6 +111,9 @@ describe("gate intake + passes + stock release RLS", () => {
       direction: "in", recorded_by: owner.userId, reason: "purchase_intake",
     });
 
+    // 0155 (ruling 3E-7B): a lot-linked pass releases the WHOLE lot. The 40 kg
+    // asked for here is replaced by the lot's 100 kg on insert — before 0155 a
+    // 40 kg release left the lot 'available' at 100 kg, which is the defect.
     const pass = await issuePass(siteAId, mgrA.userId, { stock_lot_id: lot!.id, weight_kg: 40 });
     const { error } = await gateA.client
       .from("gate_passes").update({ status: "acknowledged" }).eq("id", pass.id);
@@ -118,9 +121,13 @@ describe("gate intake + passes + stock release RLS", () => {
 
     const { data: outRows } = await adminClient()
       .from("stock_movements")
-      .select("weight, direction, reason")
-      .eq("site_id", siteAId).eq("material_type_id", materialId).eq("reason", "gate_release");
-    expect((outRows ?? []).some((r) => Number(r.weight) === 40 && r.direction === "out")).toBe(true);
+      .select("weight, direction, reason, gate_pass_id")
+      .eq("gate_pass_id", pass.id).eq("reason", "gate_release");
+    expect(outRows ?? [], "exactly one release, traced to the pass").toHaveLength(1);
+    expect(Number(outRows![0].weight), "the lot's own weight").toBe(100);
+    expect(outRows![0].direction).toBe("out");
+    const { data: lotAfter } = await adminClient().from("stock_lots").select("status").eq("id", lot!.id).single();
+    expect(lotAfter!.status, "the lot has left stock").toBe("released");
   });
 
   it("gate at site A logs a movement; inventory cannot", async () => {

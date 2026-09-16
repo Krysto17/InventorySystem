@@ -32,6 +32,14 @@ export async function approveCostBatch(_prev: ActionResult, formData: FormData):
     .eq("id", id)
     .eq("approval_status", "pending")
     .select("id");
+  // 0155: a lot on a live gate pass is being released from stock, not sold.
+  if (res.error?.code === "GP007") return fail("Lot is on a live gate pass — cancel the pass first.");
+  // The approval's own refusal for a lot that is no longer available names the
+  // lot's id and says "sold elsewhere" — untrue for a released lot, and neither
+  // detail is the operator's. The sentence covers both terminal cases.
+  if (res.error?.code === "P0001" && /already left stock/.test(res.error.message)) {
+    return fail("This lot has already left stock and can no longer be sold.");
+  }
   const result = fromWrite(res, "This batch was not approved — it may already have been approved or rejected.");
   if (!result.ok) return result;
   revalidatePath("/owner/cost-batches");

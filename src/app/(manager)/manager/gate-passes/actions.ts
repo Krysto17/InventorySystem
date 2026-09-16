@@ -84,6 +84,18 @@ export async function issueGatePass(_prev: ActionResult, formData: FormData): Pr
     }
     if (error.code === "23503") return fail("Something on this pass no longer exists — reload the page and try again.");
     if (error.code === "23514") return fail("Bags and weight must be zero or more.");
+    // 0155: one live pass per lot. The key named in the details identifies that
+    // index without showing its name to anyone.
+    if (error.code === "23505" && (error.details ?? "").includes("(stock_lot_id)")) {
+      return fail("That stock lot already has a live gate pass.");
+    }
+    // 0155's lot guard re-checks the lot under a lock at the moment of issue,
+    // so it catches what the checks above could only see a moment earlier.
+    if (error.code === "GP001") return fail("That stock lot is no longer available.");
+    if (error.code === "GP002") {
+      return fail("That stock lot is on another site — a gate pass can only release material from your own site.");
+    }
+    if (error.code === "GP003") return fail("That stock lot is a different material from the one selected.");
     // Anything unanticipated gets a fixed message: raw database text can name
     // tables, constraints or policies, and none of that is the operator's.
     return fail("The gate pass could not be saved. Please try again.");
