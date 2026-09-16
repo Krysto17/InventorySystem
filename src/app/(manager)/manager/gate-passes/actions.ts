@@ -8,9 +8,22 @@ import { fail, ok, type ActionResult } from "@/lib/actions/result";
 // Manager (or owner) issues a gate pass authorising outgoing material; the gate
 // acknowledges it before release. A pass can be tied to an available stock lot
 // (traceable back to receiving) — on acknowledgement that lot leaves stock.
-export async function issueGatePass(formData: FormData): Promise<void> {
+//
+// Authorization is deliberately unchanged (3E-6K, Option D): the database lets
+// only the owner or the general manager create an issued pass, and receiving a
+// pending request on its own site. What changed is that nothing is silent any
+// more. Every refusal below used to be a bare `return` or a swallowed insert
+// error — the form cleared and no pass appeared. The two that operators really
+// hit: the owner, whose account has no site, and the GM picking a lot from
+// another site. Neither rule is relaxed; both now say why.
+//
+// An INSERT that RLS refuses RAISES, so `error` is the whole signal and there is
+// no .select() of the new row (the .select() calls above it are lookups).
+export async function issueGatePass(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
-  if (!me || !["manager", "owner", "receiving"].includes(me.role)) return;
+  if (!me || !["manager", "owner", "receiving"].includes(me.role)) {
+    return fail("Only a manager, the owner or receiving can raise a gate pass.");
+  }
   // Receiving raises a request; it carries no authority until a manager signs
   // it off. Manager/owner passes are authorised on the spot.
   const isRequest = me.role === "receiving";
@@ -18,10 +31,12 @@ export async function issueGatePass(formData: FormData): Promise<void> {
   const supabase = await createClient();
   const { data: profile } = await supabase.from("profiles").select("site_id").eq("id", me.id).single();
   const siteId = profile?.site_id as string | null;
-  if (!siteId) return;
+  // Not inferred from the lot or anywhere else: a pass belongs to the issuer's
+  // site, and the owner has none.
+  if (!siteId) return fail("Your account has no site to issue this gate pass from.");
 
   const reason = String(formData.get("reason") ?? "").trim();
-  if (!reason) return;
+  if (!reason) return fail("Enter the reason the material is leaving.");
   const stockLotId = String(formData.get("stock_lot_id") ?? "") || null;
   let supplierId = String(formData.get("supplier_id") ?? "") || null;
   let materialTypeId = String(formData.get("material_type_id") ?? "") || null;
@@ -37,13 +52,17 @@ export async function issueGatePass(formData: FormData): Promise<void> {
       .select("material_type_id, supplier_id, weight_kg, site_id, status")
       .eq("id", stockLotId)
       .single();
-    if (!lot || lot.status !== "available" || lot.site_id !== siteId) return;
+    if (!lot) return fail("That stock lot could not be found.");
+    if (lot.site_id !== siteId) {
+      return fail("That stock lot is on another site — a gate pass can only release material from your own site.");
+    }
+    if (lot.status !== "available") return fail("That stock lot is no longer available.");
     materialTypeId = materialTypeId ?? (lot.material_type_id as string);
     supplierId = supplierId ?? (lot.supplier_id as string | null);
     weightKg = weightKg ?? Number(lot.weight_kg);
   }
 
-  await supabase.from("gate_passes").insert({
+  const { error } = await supabase.from("gate_passes").insert({
     site_id: siteId,
     supplier_id: supplierId,
     material_owner: String(formData.get("material_owner") ?? "").trim() || null,
@@ -57,8 +76,21 @@ export async function issueGatePass(formData: FormData): Promise<void> {
       ? { status: "pending", requested_by: me.id }
       : { status: "issued", authorized_by: me.id, authorized_at: new Date().toISOString() }),
   });
+  if (error) {
+    if (error.code === "42501") {
+      return fail(isRequest
+        ? "Receiving can only raise a gate pass request for its own site."
+        : "Only the general manager or the owner can issue a gate pass.");
+    }
+    if (error.code === "23503") return fail("Something on this pass no longer exists — reload the page and try again.");
+    if (error.code === "23514") return fail("Bags and weight must be zero or more.");
+    // Anything unanticipated gets a fixed message: raw database text can name
+    // tables, constraints or policies, and none of that is the operator's.
+    return fail("The gate pass could not be saved. Please try again.");
+  }
   revalidatePath("/manager/gate-passes");
   revalidatePath("/receiving");
+  return ok(isRequest ? "Gate pass request raised — a manager must authorise it." : "Gate pass issued.");
 }
 
 export async function cancelGatePass(_prev: ActionResult, formData: FormData): Promise<ActionResult> {

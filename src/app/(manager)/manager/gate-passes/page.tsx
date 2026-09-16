@@ -17,7 +17,7 @@ const STATUS_VARIANT: Record<string, "default" | "green" | "yellow" | "red"> = {
 };
 
 export default async function ManagerGatePassesPage() {
-  await requireGeneralManager();
+  const me = await requireGeneralManager();
   const supabase = await createClient();
   const [{ data: passes }, { data: suppliers }, { data: materialTypes }, { data: lots }] = await Promise.all([
     supabase.from("gate_passes")
@@ -27,9 +27,16 @@ export default async function ManagerGatePassesPage() {
     // cap does not decide who can be picked (it hid 119 of 319 suppliers).
     supabase.from("suppliers").select("id, name, supplier_code").order("name").limit(200),
     supabase.from("material_types").select("id, name").order("name"),
-    supabase.from("stock_lots")
-      .select("id, weight_kg, material:material_types(name), supplier:suppliers(name)")
-      .eq("status", "available").order("created_at", { ascending: false }).limit(200),
+    // Own-site lots only. The GM reads every site's stock, but a manual pass may
+    // only release material from the issuer's own site (issueGatePass refuses
+    // any other), so offering other sites' lots just set up a refusal. The owner
+    // has no site, so there is nothing to offer — and submitting says so.
+    me.site_id
+      ? supabase.from("stock_lots")
+          .select("id, weight_kg, material:material_types(name), supplier:suppliers(name)")
+          .eq("status", "available").eq("site_id", me.site_id)
+          .order("created_at", { ascending: false }).limit(200)
+      : Promise.resolve({ data: null }),
   ]);
 
   return (
@@ -42,7 +49,10 @@ export default async function ManagerGatePassesPage() {
       <Card>
         <CardHeader><h2 className="text-sm font-semibold">Issue a gate pass (outgoing material)</h2></CardHeader>
         <CardContent>
-          <form action={issueGatePass} className="grid grid-cols-2 gap-3">
+          {/* ActionForm shows why a pass was not issued — no site on the account,
+              a lot that has gone, another site's lot — instead of a silent reset. */}
+          <ActionForm action={issueGatePass}>
+          <div className="grid grid-cols-2 gap-3">
             <label className="col-span-2 text-xs font-medium">Release from stock lot (material leaves stock when the gate acknowledges)
               <select name="stock_lot_id" defaultValue="" className="mt-1 block w-full rounded border px-2 py-1 text-sm">
                 <option value="">— not from a tracked lot —</option>
@@ -83,7 +93,8 @@ export default async function ManagerGatePassesPage() {
             <button type="submit" className="col-span-2 rounded bg-ore px-4 py-1.5 text-sm font-semibold text-white hover:bg-ore-strong">
               Issue gate pass
             </button>
-          </form>
+          </div>
+          </ActionForm>
         </CardContent>
       </Card>
 

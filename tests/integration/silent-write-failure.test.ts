@@ -14,8 +14,8 @@ import { fromWrite } from "../../src/lib/actions/result";
  * gate's acknowledgement, the advance and expense decisions, the store check,
  * and the supplier account switch), the five money/stock deletes of 3E-6F, the
  * two master-data creates of tranche 2A, the four zero-row updates and deletes
- * of tranche 2B, and the three gate/comment inserts of tranche 2C (forty-eight
- * in all). That matters
+ * of tranche 2B, the three gate/comment inserts of tranche 2C, and issueGatePass
+ * (3E-6K) — forty-nine in all. That matters
  * here specifically because an RLS-denied write is NOT an error — PostgREST
  * answers `error: null, data: []` — so the action
  * revalidated the page and the unchanged figures re-rendered as though the
@@ -27,7 +27,7 @@ import { fromWrite } from "../../src/lib/actions/result";
  *
  *   1. the database really does answer a denied write with zero rows;
  *   2. fromWrite() calls that a failure;
- *   3. all forty-eight actions actually route through it — bar the five
+ *   3. all forty-nine actions actually route through it — bar the six
  *      INSERTs, which raise instead of returning zero rows and are checked on
  *      `error`.
  *
@@ -116,6 +116,9 @@ const ACTIONS: { file: string; fn: string; kind: "table" | "rpc" | "delegate" | 
   { file: "gate-exit-actions.ts", fn: "authorizeGateExit", kind: "insert" },
   { file: "actions.ts", fn: "recordGateLog", kind: "insert", dir: "(gate)/gate" },
   { file: "settlement-actions.ts", fn: "addBatchComment", kind: "insert" },
+  // 3E-6K: the last one. Authorization kept exactly (Option D); only the
+  // silence is gone.
+  { file: "actions.ts", fn: "issueGatePass", kind: "insert", dir: "(manager)/manager/gate-passes" },
 ];
 
 const source = (file: string, dir = VISIT_ACTIONS) =>
@@ -1037,6 +1040,147 @@ describe("silent write failure", () => {
       });
       expect(res.error, `own-site comment: ${res.error?.message}`).toBeNull();
       expect(await countWhere("batch_comments", "visit_id", visitId)).toBe(1);
+    });
+  });
+
+  // ── 2h. 3E-6K issueGatePass — visible refusals, unchanged authorization ──
+  describe("issueGatePass: every refusal is visible, and who may issue is unchanged", () => {
+    let gm: TestUser, owner: TestUser, mgrOld: TestUser, recvOld: TestUser;
+    let newSite: string, oldSite: string, materialTypeId: string, supplierId: string;
+    const stamp = Date.now();
+    const GP_DIR = "(manager)/manager/gate-passes";
+
+    beforeAll(async () => {
+      const admin = adminClient();
+      const { data: sites } = await admin.from("sites").select("id, name");
+      newSite = sites!.find((s) => s.name === "New-Site")!.id as string;
+      oldSite = sites!.find((s) => s.name === "Old-Site")!.id as string;
+      const { data: mt } = await admin.from("material_types")
+        .insert({ name: `GP 3E-6K ${stamp}` }).select("id").single();
+      materialTypeId = mt!.id as string;
+      const { data: sup } = await admin.from("suppliers")
+        .insert({ name: `GP 3E-6K ${stamp}` }).select("id").single();
+      supplierId = sup!.id as string;
+      // The general manager is the New-Site manager; Old-Site's is a site manager.
+      gm = await makeUser({ username: `gp6k-gm-${stamp}`, role: "manager", siteId: newSite });
+      owner = await makeUser({ username: `gp6k-own-${stamp}`, role: "owner", siteId: null });
+      mgrOld = await makeUser({ username: `gp6k-mgr-${stamp}`, role: "manager", siteId: oldSite });
+      recvOld = await makeUser({ username: `gp6k-rcv-${stamp}`, role: "receiving", siteId: oldSite });
+    });
+
+    // Exactly the row issueGatePass builds for an issued pass or a request.
+    const passRow = (who: TestUser, site: string, request: boolean, reason: string): Record<string, unknown> => ({
+      site_id: site, supplier_id: supplierId, material_owner: null, material_type_id: materialTypeId,
+      stock_lot_id: null, bags: null, weight_kg: null, reason, issued_by: who.userId,
+      ...(request
+        ? { status: "pending", requested_by: who.userId }
+        : { status: "issued", authorized_by: who.userId, authorized_at: new Date().toISOString() }),
+    });
+    const passesFor = async (reason: string) =>
+      (await adminClient().from("gate_passes").select("id, status, pass_code").eq("reason", reason)).data ?? [];
+
+    it("the GM's own-site pass lands: one issued row, a generated code, one audit event", async () => {
+      const reason = `GP6K gm ${stamp}`;
+      const res = await gm.client.from("gate_passes").insert(passRow(gm, newSite, false, reason));
+      expect(res.error, `GM issue: ${res.error?.message}`).toBeNull();
+      const rows = await passesFor(reason);
+      expect(rows, "exactly one pass").toHaveLength(1);
+      expect(rows[0].status).toBe("issued");
+      expect(rows[0].pass_code as string, "the code is generated on insert").toMatch(/^GP-/);
+      const { count } = await adminClient().from("transaction_events")
+        .select("id", { count: "exact", head: true })
+        .eq("entity", "gate_passes").eq("entity_id", rows[0].id as string).eq("event_type", "record_created");
+      expect(count, "exactly one audit event").toBe(1);
+    });
+
+    it("a site manager still cannot issue — refused with 42501, nothing written", async () => {
+      const reason = `GP6K site mgr ${stamp}`;
+      const res = await mgrOld.client.from("gate_passes").insert(passRow(mgrOld, oldSite, false, reason));
+      expect(res.error, "the refusal raises — it must be surfaced, not swallowed").not.toBeNull();
+      expect(res.error!.code).toBe("42501");
+      expect(await passesFor(reason)).toHaveLength(0);
+    });
+
+    it("receiving still cannot create an issued pass — refused with 42501, nothing written", async () => {
+      const reason = `GP6K rcv issued ${stamp}`;
+      const res = await recvOld.client.from("gate_passes").insert(passRow(recvOld, oldSite, false, reason));
+      expect(res.error).not.toBeNull();
+      expect(res.error!.code).toBe("42501");
+      expect(await passesFor(reason)).toHaveLength(0);
+    });
+
+    it("receiving's own-site pending request is still allowed", async () => {
+      const reason = `GP6K rcv pending ${stamp}`;
+      const res = await recvOld.client.from("gate_passes").insert(passRow(recvOld, oldSite, true, reason));
+      expect(res.error, `receiving request: ${res.error?.message}`).toBeNull();
+      const rows = await passesFor(reason);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].status, "a request carries no authority until authorised").toBe("pending");
+    });
+
+    it("the owner's block is application-level: the database would accept a pass with a site", async () => {
+      const reason = `GP6K owner ${stamp}`;
+      const res = await owner.client.from("gate_passes").insert(passRow(owner, newSite, false, reason));
+      expect(res.error, `owner insert with a site: ${res.error?.message}`).toBeNull();
+      expect(await passesFor(reason)).toHaveLength(1);
+    });
+
+    it("the action refuses an owner with no site explicitly, never silently", () => {
+      // Server actions cannot be invoked from this harness (getProfile needs
+      // next/headers), so the contract is pinned on the code itself.
+      const body = codeOf("actions.ts", "issueGatePass", GP_DIR);
+      expect(body).toContain('if (!siteId) return fail("Your account has no site to issue this gate pass from.")');
+      expect(body, "and no site is inferred from the lot").not.toMatch(/siteId\s*=\s*.*lot/);
+    });
+
+    it("the GM's lot picker offers own-site available lots only", async () => {
+      const admin = adminClient();
+      const { data: own } = await admin.from("stock_lots").insert({
+        site_id: newSite, material_type_id: materialTypeId, supplier_id: supplierId, weight_kg: 12, status: "available",
+      }).select("id").single();
+      const { data: foreign } = await admin.from("stock_lots").insert({
+        site_id: oldSite, material_type_id: materialTypeId, supplier_id: supplierId, weight_kg: 9, status: "available",
+      }).select("id").single();
+
+      // The defect: the GM reads every site's stock, so an unfiltered list
+      // offered lots the action would then refuse.
+      const unfiltered = await gm.client.from("stock_lots").select("id")
+        .eq("status", "available").eq("material_type_id", materialTypeId);
+      expect((unfiltered.data ?? []).map((l) => l.id), "without a site filter the foreign lot appears")
+        .toContain(foreign!.id);
+
+      // The picker's shape now: available AND the GM's own site.
+      const picker = await gm.client.from("stock_lots").select("id")
+        .eq("status", "available").eq("site_id", newSite).eq("material_type_id", materialTypeId);
+      const ids = (picker.data ?? []).map((l) => l.id);
+      expect(ids, "own-site lot offered").toContain(own!.id);
+      expect(ids, "foreign-site lot not offered").not.toContain(foreign!.id);
+
+      const page = source("page.tsx", GP_DIR);
+      // Bounded from the lot query onward: the supplier seed query above it also
+      // ends in .limit(200).
+      const lotStart = page.indexOf('from("stock_lots")');
+      expect(lotStart, "the page queries stock lots").toBeGreaterThan(-1);
+      const lotQuery = page.slice(lotStart, page.indexOf(".limit(200)", lotStart));
+      expect(lotQuery, "the page filters the lot list to the GM's site").toMatch(/\.eq\("site_id", me\.site_id\)/);
+      expect(lotQuery, "and still only available lots").toMatch(/\.eq\("status", "available"\)/);
+    });
+
+    it("an unanticipated database error gets a fixed message, never raw database text", () => {
+      const body = codeOf("actions.ts", "issueGatePass", GP_DIR);
+      expect(body, "the known refusals keep their own messages").toMatch(/error\.code === "42501"/);
+      expect(body).toMatch(/error\.code === "23503"/);
+      expect(body).toMatch(/error\.code === "23514"/);
+      expect(body, "the catch-all is a fixed, operator-safe message")
+        .toContain('return fail("The gate pass could not be saved. Please try again.")');
+      expect(body, "no database message reaches the operator").not.toContain("error.message");
+    });
+
+    it("a lot that is foreign, gone or no longer available is refused explicitly if it reaches the action", () => {
+      const body = codeOf("actions.ts", "issueGatePass", GP_DIR);
+      expect(body).toMatch(/if \(!lot\) return fail\(/);
+      expect(body).toMatch(/if \(lot\.site_id !== siteId\) \{\s*return fail\(/);
+      expect(body).toMatch(/if \(lot\.status !== "available"\) return fail\(/);
     });
   });
 
