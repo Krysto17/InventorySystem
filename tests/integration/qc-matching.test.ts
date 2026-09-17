@@ -17,9 +17,8 @@ describe("QC matching + analysis rules (integration)", () => {
   async function newVisit(state = "in_receiving") {
     const { data: v } = await adminClient().from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: monaziteId,
-      entry_path: "processed", state: "in_receiving", created_by: recv.userId,
+      entry_path: "processed", state, created_by: recv.userId,
     }).select("id").single();
-    if (state !== "in_receiving") await adminClient().from("visits").update({ state }).eq("id", v!.id);
     return v!.id as string;
   }
 
@@ -53,11 +52,10 @@ describe("QC matching + analysis rules (integration)", () => {
   });
 
   it("QC weight within 2% does not flag; beyond 2% flags a mismatch", async () => {
-    const v = await newVisit();
+    const v = await newVisit("in_qc");
     const { data: line } = await adminClient().from("visit_materials").insert({
       visit_id: v, material_type_id: monaziteId, weight_kg: 100, recorded_by: recv.userId,
     }).select("id").single();
-    await adminClient().from("visits").update({ state: "in_qc" }).eq("id", v);
 
     // 101 kg vs 100 kg = 1% → no flag
     await qc.client.from("xrf_records").insert({

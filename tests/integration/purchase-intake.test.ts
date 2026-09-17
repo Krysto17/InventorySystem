@@ -36,10 +36,13 @@ describe("purchase intake flow", () => {
     materialTypeId = m!.id as string;
   });
 
-  it("inserting purchase_intake stock_movement transitions visit to stocked", async () => {
+  // 0159 retired the July 2026 intake queue (awaiting_stock_intake → stocked) and
+  // gave inventory no stage authority. A purchase_intake movement pointed at a visit
+  // no longer stocks it: only the paid settlement's stock intake does.
+  it("a purchase_intake movement can no longer stock a visit on its own", async () => {
     const visitId = await makeAwaitingIntakeVisit();
 
-    await adminClient().from("stock_movements").insert({
+    const { error } = await adminClient().from("stock_movements").insert({
       site_id: siteId,
       material_type_id: materialTypeId,
       grade: "A",
@@ -49,18 +52,18 @@ describe("purchase intake flow", () => {
       recorded_by: inv.userId,
       ref_visit_id: visitId,
     });
+    expect(error?.code).toBe("VT001");
 
     const { data: visit } = await adminClient()
       .from("visits")
       .select("state, closed_at")
       .eq("id", visitId)
       .single();
-
-    expect(visit?.state).toBe("stocked");
-    expect(visit?.closed_at).not.toBeNull();
+    expect(visit?.state).toBe("awaiting_stock_intake");
+    expect(visit?.closed_at).toBeNull();
   });
 
-  it("stocked visit gets a transaction_events audit row", async () => {
+  it("the refused intake leaves no movement and no state change behind", async () => {
     const visitId = await makeAwaitingIntakeVisit();
 
     await adminClient().from("stock_movements").insert({
@@ -78,17 +81,26 @@ describe("purchase intake flow", () => {
       .from("transaction_events")
       .select("event_type")
       .eq("visit_id", visitId);
-
-    const types = (events ?? []).map((e) => e.event_type);
-    // Should have visit_created, state_changed (→stocked), record_created (stock_movements)
-    expect(types).toContain("state_changed");
-    expect(types).toContain("record_created");
+    expect((events ?? []).map((e) => e.event_type)).not.toContain("state_changed");
+    const { data: movements } = await adminClient()
+      .from("stock_movements").select("id").eq("ref_visit_id", visitId);
+    expect(movements ?? []).toHaveLength(0);
   });
 
-  it("inventory role can insert purchase_intake via RLS", async () => {
-    const visitId = await makeAwaitingIntakeVisit();
+  it("inventory may still record purchase_intake stock via RLS, but not stock a visit with it", async () => {
+    const plain = await inv.client.from("stock_movements").insert({
+      site_id: siteId,
+      material_type_id: materialTypeId,
+      grade: "A",
+      weight: 60,
+      direction: "in",
+      reason: "purchase_intake",
+      recorded_by: inv.userId,
+    });
+    expect(plain.error).toBeNull();
 
-    const { error } = await inv.client.from("stock_movements").insert({
+    const visitId = await makeAwaitingIntakeVisit();
+    const toVisit = await inv.client.from("stock_movements").insert({
       site_id: siteId,
       material_type_id: materialTypeId,
       grade: "A",
@@ -98,8 +110,7 @@ describe("purchase intake flow", () => {
       recorded_by: inv.userId,
       ref_visit_id: visitId,
     });
-
-    expect(error).toBeNull();
+    expect(toVisit.error?.code).toBe("VT001");
   });
 
   it("cannot insert purchase_intake for a visit at an early stage", async () => {

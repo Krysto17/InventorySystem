@@ -23,10 +23,10 @@ describe("delete_batch role gate", () => {
   // A brand-new visit still in processing: the earliest state, which every role
   // with a delete path is allowed to remove. Anything refused here is refused
   // for the role, not for the batch's condition.
-  const freshVisit = async () => {
+  const freshVisit = async (state = "in_processing") => {
     const { data } = await adminClient().from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: materialId,
-      entry_path: "unprocessed", state: "in_processing", created_by: users.owner.userId,
+      entry_path: "unprocessed", state, created_by: users.owner.userId,
     }).select("id").single();
     return data!.id as string;
   };
@@ -91,8 +91,7 @@ describe("delete_batch role gate", () => {
     });
 
   it("processing may not delete once the batch has moved past processing", async () => {
-    const v = await freshVisit();
-    await adminClient().from("visits").update({ state: "in_receiving" }).eq("id", v);
+    const v = await freshVisit("in_receiving");
     const { error } = await users.processing.client.rpc("delete_batch", { p_visit_id: v });
     expect(error).not.toBeNull();
     expect(error!.message).toMatch(/still in processing/i);
@@ -100,8 +99,7 @@ describe("delete_batch role gate", () => {
   });
 
   it("receiving may not delete once a settlement exists — money is involved", async () => {
-    const v = await freshVisit();
-    await adminClient().from("visits").update({ state: "in_accounting" }).eq("id", v);
+    const v = await freshVisit("in_accounting");
     await settle(v, "approved");
     const { error } = await users.receiving.client.rpc("delete_batch", { p_visit_id: v });
     expect(error).not.toBeNull();

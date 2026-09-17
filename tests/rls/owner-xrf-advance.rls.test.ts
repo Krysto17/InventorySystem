@@ -21,12 +21,11 @@ describe("XRF read-only for owner + manager deletes pending advance", () => {
   it("owner cannot record an XRF (read-only), but QC can", async () => {
     const { data: v } = await adminClient().from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: monaziteId,
-      entry_path: "processed", state: "in_receiving", created_by: recv.userId,
+      entry_path: "processed", state: "in_qc", created_by: recv.userId,
     }).select("id").single();
     const { data: line } = await adminClient().from("visit_materials").insert({
       visit_id: v!.id, material_type_id: monaziteId, weight_kg: 50, recorded_by: recv.userId,
     }).select("id").single();
-    await adminClient().from("visits").update({ state: "in_qc" }).eq("id", v!.id);
 
     const ownerTry = await owner.client.from("xrf_records").insert({ visit_material_id: line!.id, result: "owner", recorded_by: owner.userId });
     expect(ownerTry.error).not.toBeNull(); // owner is read-only for XRF

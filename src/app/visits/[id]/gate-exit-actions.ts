@@ -64,6 +64,9 @@ export async function releaseSupplier(_prev: ActionResult, formData: FormData): 
 
   const res = await supabase.from("visits")
     .update({ state: "exited" }).eq("id", visitId).select("id");
+  // 0159: the release is the only direct stage change, and only the gate at its
+  // own site or the owner may make it.
+  if (res.error?.code === "VT001") return fail("You cannot move this visit to that stage.");
   const result = fromWrite(res, "The supplier was not released — the exit may not be authorised, or the visit may be on another site.");
   if (!result.ok) return result;
   revalidatePath(`/visits/${visitId}`);

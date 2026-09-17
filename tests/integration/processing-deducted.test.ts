@@ -14,7 +14,7 @@ describe("processing_deducted flag", () => {
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
         entry_path: "unprocessed",
-        state: "in_processing",
+        state: "in_accounting",
         created_by: acct.userId,
       })
       .select("id")
@@ -49,7 +49,6 @@ describe("processing_deducted flag", () => {
       priced_by: acct.userId,
     });
 
-    await adminClient().from("visits").update({ state: "in_accounting" }).eq("id", v!.id);
     return v!.id as string;
   }
 

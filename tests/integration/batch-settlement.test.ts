@@ -106,7 +106,7 @@ describe("batch settlement (integration + RLS)", () => {
     const { data: m } = await adminClient().from("material_types").select("id").eq("name", "Monazite").single();
     const { data: v } = await adminClient().from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: m!.id,
-      entry_path: "processed", state: "pricing", created_by: mgr.userId,
+      entry_path: "processed", state: "in_accounting", created_by: mgr.userId,
     }).select("id").single();
     const { data: line } = await adminClient().from("visit_materials").insert({
       visit_id: v!.id, material_type_id: m!.id, weight_kg: 100, unit_price: 50, recorded_by: mgr.userId,

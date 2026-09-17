@@ -9,14 +9,11 @@ describe("xrf_records RLS (confidential QC results)", () => {
   async function newVisitWithLine(siteId: string, state = "in_qc") {
     const { data: v } = await adminClient().from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: materialTypeId,
-      entry_path: "processed", state: "in_receiving", created_by: qcA.userId,
+      entry_path: "processed", state, created_by: qcA.userId,
     }).select("id").single();
     const { data: line } = await adminClient().from("visit_materials").insert({
       visit_id: v!.id, material_type_id: materialTypeId, weight_kg: 100, recorded_by: qcA.userId,
     }).select("id").single();
-    if (state !== "in_receiving") {
-      await adminClient().from("visits").update({ state }).eq("id", v!.id);
-    }
     return { visitId: v!.id as string, lineId: line!.id as string };
   }
 
@@ -64,7 +61,7 @@ describe("xrf_records RLS (confidential QC results)", () => {
   // ── Confidentiality: only owner / manager / qc may READ the result ──────────
 
   it("manager and owner CAN read a submitted XRF result", async () => {
-    const { lineId } = await newVisitWithLine(siteAId);
+    const { lineId } = await newVisitWithLine(siteAId, "pricing"); // past QC: a submitted result seeded by the service key has no QC actor to move the visit (0159)
     await adminClient().from("xrf_records").insert({
       visit_material_id: lineId, result: "Confidential Sn 64%", submitted: true, recorded_by: qcA.userId,
     });
@@ -75,7 +72,7 @@ describe("xrf_records RLS (confidential QC results)", () => {
   });
 
   it("receiving / accounting / inventory CANNOT read XRF results", async () => {
-    const { lineId } = await newVisitWithLine(siteAId);
+    const { lineId } = await newVisitWithLine(siteAId, "pricing"); // past QC: a submitted result seeded by the service key has no QC actor to move the visit (0159)
     await adminClient().from("xrf_records").insert({
       visit_material_id: lineId, result: "secret", submitted: true, recorded_by: qcA.userId,
     });
@@ -86,7 +83,7 @@ describe("xrf_records RLS (confidential QC results)", () => {
   });
 
   it("QC (cross-site) can read another site's XRF result", async () => {
-    const { lineId } = await newVisitWithLine(siteAId);
+    const { lineId } = await newVisitWithLine(siteAId, "pricing"); // past QC: a submitted result seeded by the service key has no QC actor to move the visit (0159)
     await adminClient().from("xrf_records").insert({
       visit_material_id: lineId, result: "secret", submitted: true, recorded_by: qcA.userId,
     });
@@ -108,7 +105,7 @@ describe("xrf_records RLS (confidential QC results)", () => {
   // NOT the security boundary, and nobody should later mistake it for one.
   describe("QC authorization is role-wide, not per-analyst", () => {
     it("a QC user can read an XRF record another QC user created", async () => {
-      const { lineId } = await newVisitWithLine(siteAId);
+      const { lineId } = await newVisitWithLine(siteAId, "pricing"); // past QC: a submitted result seeded by the service key has no QC actor to move the visit (0159)
       await adminClient().from("xrf_records").insert({
         visit_material_id: lineId, result: "recorded by A", submitted: true, recorded_by: qcA.userId,
       });
@@ -142,21 +139,14 @@ describe("xrf_records RLS (confidential QC results)", () => {
     });
 
     it("but not once the visit has left the editable window", async () => {
-      const { visitId, lineId } = await newVisitWithLine(siteAId, "in_qc");
-      // `submitted` matters: the state machine refuses to enter pricing without a
-      // submitted XRF result or an analysis_records row.
+      // The batch already sits in accounting (seeded there: since 0159 no direct
+      // write walks a visit forward), with an analysis QC finished earlier.
+      const { visitId, lineId } = await newVisitWithLine(siteAId, "in_accounting");
       const { data: rec } = await adminClient().from("xrf_records").insert({
         visit_material_id: lineId, result: "locked", weight_kg: 100,
         submitted: true, recorded_by: qcA.userId,
       }).select("id").single();
 
-      // Walk the legal path — in_qc -> pricing -> in_accounting (0114). A direct
-      // jump raises, and a discarded error here would leave the visit in_qc and
-      // make this test silently assert nothing.
-      for (const state of ["pricing", "in_accounting"]) {
-        const { error } = await adminClient().from("visits").update({ state }).eq("id", visitId);
-        expect(error, `could not move the visit to ${state}: ${error?.message}`).toBeNull();
-      }
       const { data: v } = await adminClient().from("visits").select("state").eq("id", visitId).single();
       expect(v!.state).toBe("in_accounting"); // the gate is only meaningful if we got here
 

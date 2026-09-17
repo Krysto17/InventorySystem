@@ -31,7 +31,9 @@ describe("qc analyses ordering contract", () => {
       .insert({ name: `QAO-Ore ${Date.now()}` }).select("id").single();
     const { data: v } = await adminClient().from("visits").insert({
       site_id: siteId, supplier_id: sup!.id, declared_material_type_id: mt!.id,
-      entry_path: "processed", state: "in_qc", created_by: qc.userId,
+      // Seeded past QC: completed analyses inserted with the service key would
+      // otherwise ask the QC workflow to move the visit with no QC actor (0159).
+      entry_path: "processed", state: "pricing", created_by: qc.userId,
     }).select("id").single();
     visitId = v!.id as string;
 

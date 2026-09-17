@@ -89,8 +89,21 @@ describe("exempt material still passes through QC", () => {
   it("the manager's explicit waiver still goes straight to pricing", async () => {
     const v = await newVisit();
     await addLine(v, true);
-    await adminClient().from("visits").update({ state: "awaiting_manager" }).eq("id", v);
-    expect((await owner.client.rpc("approve_visit_by_manager", { p_visit_id: v, p_skip_qc: true })).error).toBeNull();
+    await recv.client.rpc("submit_visit_to_manager", { p_visit_id: v });
+    expect(await stateOf(v)).toBe("in_qc");
+    expect((await owner.client.rpc("manager_skip_to_pricing", { p_visit_id: v })).error).toBeNull();
     expect(await stateOf(v)).toBe("pricing");
+  });
+
+  it("the retired awaiting_manager approval can no longer move a visit (0159)", async () => {
+    const { data } = await adminClient().from("visits").insert({
+      site_id: siteId, supplier_id: supplierId, declared_material_type_id: material,
+      entry_path: "processed", state: "awaiting_manager", created_by: recv.userId,
+    }).select("id").single();
+    const v = data!.id as string;
+    await addLine(v, true);
+    const res = await owner.client.rpc("approve_visit_by_manager", { p_visit_id: v, p_skip_qc: true });
+    expect(res.error?.code).toBe("VT001");
+    expect(await stateOf(v)).toBe("awaiting_manager");
   });
 });

@@ -13,10 +13,10 @@ describe("the audit log records changes, not echoes", () => {
     return (data ?? []).filter((e) => (e.payload as { table?: string })?.table === table);
   };
 
-  const newVisit = async () => {
+  const newVisit = async (state = "pricing") => {
     const { data } = await adminClient().from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: material,
-      entry_path: "processed", state: "pricing", created_by: recv.userId,
+      entry_path: "processed", state, created_by: recv.userId,
     }).select("id").single();
     return data!.id as string;
   };
@@ -81,11 +81,11 @@ describe("the audit log records changes, not echoes", () => {
   });
 
   it("pruning is the owner's alone, and spares the workflow story", async () => {
-    const v = await newVisit();
+    // Created closed: since 0159 no direct write moves a visit to stocked.
+    const v = await newVisit("stocked");
     const { data: line } = await adminClient().from("visit_materials")
       .insert({ visit_id: v, material_type_id: material, weight_kg: 5 }).select("id").single();
     await adminClient().from("visit_materials").update({ weight_kg: 6 }).eq("id", line!.id);
-    await adminClient().from("visits").update({ state: "stocked" }).eq("id", v);
     // Age the rows past the cutoff.
     await adminClient().from("transaction_events")
       .update({ created_at: "2020-01-01T00:00:00Z" }).eq("visit_id", v);

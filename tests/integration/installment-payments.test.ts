@@ -14,7 +14,7 @@ describe("installment payments — running balance", () => {
         supplier_id: supplierId,
         declared_material_type_id: materialTypeId,
         entry_path: "processed",
-        state: "pricing",
+        state: "in_accounting",
         created_by: acct.userId,
       })
       .select("id")
@@ -32,8 +32,6 @@ describe("installment payments — running balance", () => {
       payment_terms: "installment",
       priced_by: acct.userId,
     });
-    // Now move to in_accounting
-    await adminClient().from("visits").update({ state: "in_accounting" }).eq("id", v!.id);
     return v!.id as string;
   }
 
@@ -77,7 +75,10 @@ describe("installment payments — running balance", () => {
     expect(totalPaid).toBe(300);
   });
 
-  it("settle transitions visit to awaiting_stock_intake", async () => {
+  // The July 2026 intake queue is retired (0159): a direct state write can no
+  // longer park a batch at awaiting_stock_intake — stock intake is the paid
+  // settlement's own workflow.
+  it("accounting can no longer settle by moving the visit to awaiting_stock_intake", async () => {
     const vid = await newAccountingVisitWithPricing(100);
     await adminClient().from("payments").insert({
       visit_id: vid,
@@ -86,17 +87,17 @@ describe("installment payments — running balance", () => {
       recorded_by: acct.userId,
     });
 
-    // Accounting settles (server action equivalent: update state)
-    await acct.client
+    const { error } = await acct.client
       .from("visits")
       .update({ state: "awaiting_stock_intake" })
       .eq("id", vid);
+    expect(error?.code).toBe("VT001");
 
     const { data } = await adminClient()
       .from("visits")
       .select("state")
       .eq("id", vid)
       .single();
-    expect(data?.state).toBe("awaiting_stock_intake");
+    expect(data?.state).toBe("in_accounting");
   });
 });

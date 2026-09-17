@@ -12,16 +12,8 @@ describe("payment status workflow", () => {
   async function visitInAccounting(): Promise<string> {
     const { data: v } = await adminClient().from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: materialTypeId,
-      entry_path: "processed", state: "in_receiving", created_by: acct.userId,
+      entry_path: "processed", state: "in_accounting", created_by: acct.userId,
     }).select("id").single();
-    // Walk legally: the analysis insert auto-advances in_receiving → pricing,
-    // then pricing → in_accounting is a legal forward edge.
-    await adminClient().from("analysis_records").insert({
-      visit_id: v!.id, weight: 100, grade: "A", recorded_by: acct.userId,
-    });
-    const { error } = await adminClient().from("visits")
-      .update({ state: "in_accounting" }).eq("id", v!.id);
-    if (error) throw error;
     return v!.id as string;
   }
 

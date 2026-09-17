@@ -125,7 +125,7 @@ describe("only bought material becomes stock", () => {
   it("stocks the priced, settled line only", async () => {
     const { data: v } = await adminClient().from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: material,
-      entry_path: "processed", state: "awaiting_stock_intake", created_by: recv.userId,
+      entry_path: "processed", state: "in_accounting", created_by: recv.userId,
     }).select("id").single();
     const visitId = v!.id as string;
 
@@ -140,7 +140,10 @@ describe("only bought material becomes stock", () => {
       other_deductions_total: 0, advance_deducted: 0, net_balance: 5000,
       submitted_by: recv.userId, status: "approved",
     }).select("id").single();
-    await adminClient().from("batch_settlements").update({ status: "paid", paid_by: owner.userId }).eq("id", st!.id);
+    // Paid through the payment workflow — its stock intake is what stocks the visit.
+    expect((await owner.client.rpc("record_settlement_payment", {
+      p_settlement_id: st!.id, p_amount: 5000, p_method: "transfer",
+    })).error).toBeNull();
 
     // Only the 100kg priced+settled line is stock.
     const { data: bal } = await owner.client.from("stock_balances").select("weight_kg").eq("material_type_id", material);

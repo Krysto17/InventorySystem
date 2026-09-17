@@ -19,7 +19,9 @@ describe("pricing RLS + transition + purchase_amount", () => {
       })
       .select("id")
       .single();
-    await adminClient()
+    // Recorded by receiving itself: the analysis is what moves the visit to
+    // pricing, and since 0159 that move needs its receiving actor.
+    await recvA.client
       .from("analysis_records")
       .insert({ visit_id: v!.id, weight, recorded_by: recvA.userId });
     return v!.id as string;

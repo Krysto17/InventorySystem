@@ -11,12 +11,11 @@ describe("hybrid record locking (integration)", () => {
   async function batchInQc() {
     const { data: v } = await adminClient().from("visits").insert({
       site_id: siteId, supplier_id: supplierId, declared_material_type_id: monaziteId,
-      entry_path: "processed", state: "in_receiving", created_by: recv.userId,
+      entry_path: "processed", state: "in_qc", created_by: recv.userId,
     }).select("id").single();
     const { data: line } = await adminClient().from("visit_materials").insert({
       visit_id: v!.id, material_type_id: monaziteId, weight_kg: 100, recorded_by: recv.userId,
     }).select("id").single();
-    await adminClient().from("visits").update({ state: "in_qc" }).eq("id", v!.id);
     return { visitId: v!.id as string, lineId: line!.id as string };
   }
 
@@ -48,8 +47,8 @@ describe("hybrid record locking (integration)", () => {
     let { data: row } = await adminClient().from("visit_materials").select("weight_kg").eq("id", line!.id).single();
     expect(Number(row!.weight_kg)).toBe(110);
 
-    // QC starts → receiving is locked out (0 rows updated)
-    await adminClient().from("visits").update({ state: "in_qc" }).eq("id", v!.id);
+    // QC starts (receiving submits the batch) → receiving is locked out (0 rows updated)
+    expect((await recv.client.rpc("submit_visit_to_manager", { p_visit_id: v!.id })).error).toBeNull();
     await recv.client.from("visit_materials").update({ weight_kg: 999 }).eq("id", line!.id);
     ({ data: row } = await adminClient().from("visit_materials").select("weight_kg").eq("id", line!.id).single());
     expect(Number(row!.weight_kg)).toBe(110);
@@ -77,15 +76,19 @@ describe("hybrid record locking (integration)", () => {
     expect(row!.result).toBe("v2");
 
     // Even in pricing (e.g. after a manager skipped analysis) QC can still analyse (#4)
-    await adminClient().from("visit_materials").update({ requires_analysis: false }).eq("id", lineId);
-    await adminClient().from("visits").update({ state: "pricing" }).eq("id", visitId);
+    expect((await mgr.client.rpc("manager_skip_to_pricing", { p_visit_id: visitId })).error).toBeNull();
     await qc.client.from("xrf_records").update({ result: "v3" }).eq("id", x!.id);
     ({ data: row } = await adminClient().from("xrf_records").select("result").eq("id", x!.id).single());
     expect(row!.result).toBe("v3");
 
     // Once the batch reaches accounting, QC is locked. XRF is read-only for the
     // owner too, so the owner cannot change it either — it stays as QC left it.
-    await adminClient().from("visits").update({ state: "in_accounting" }).eq("id", visitId);
+    // The real route to accounting: an agreed price, then the owner's approval.
+    expect((await owner.client.from("pricing").insert({
+      visit_id: visitId, unit_price: 100, agreement_status: "agreed", payment_terms: "immediate", priced_by: owner.userId,
+    })).error).toBeNull();
+    expect((await owner.client.rpc("approve_pricing", { p_visit_id: visitId })).error).toBeNull();
+    expect((await adminClient().from("visits").select("state").eq("id", visitId).single()).data!.state).toBe("in_accounting");
     await qc.client.from("xrf_records").update({ result: "v4" }).eq("id", x!.id);
     ({ data: row } = await adminClient().from("xrf_records").select("result").eq("id", x!.id).single());
     expect(row!.result).toBe("v3"); // QC locked at accounting

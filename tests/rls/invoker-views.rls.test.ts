@@ -27,7 +27,7 @@ describe("the flat views run as the caller", () => {
     // A real paid batch, so the lot carries a genuine paid state.
     const { data: v } = await adminClient().from("visits").insert({
       site_id: siteA, supplier_id: supplierId, declared_material_type_id: material,
-      entry_path: "processed", state: "awaiting_stock_intake", created_by: recv.userId,
+      entry_path: "processed", state: "in_accounting", created_by: recv.userId,
     }).select("id").single();
     await adminClient().from("visit_materials").insert({
       visit_id: v!.id, material_type_id: material, weight_kg: 70, unit_price: 100,
@@ -37,8 +37,9 @@ describe("the flat views run as the caller", () => {
       other_deductions_total: 0, advance_deducted: 0, net_balance: 7000,
       submitted_by: recv.userId, status: "approved",
     }).select("id").single();
-    await adminClient().from("batch_settlements")
-      .update({ status: "paid", paid_by: owner.userId }).eq("id", st!.id);
+    await owner.client.rpc("record_settlement_payment", {
+      p_settlement_id: st!.id, p_amount: 7000, p_method: "transfer",
+    });
 
     const { data: lot } = await adminClient().from("stock_lots")
       .select("id").eq("material_type_id", material).eq("status", "available").single();
@@ -96,7 +97,7 @@ describe("the flat views run as the caller", () => {
   it("keeps the lot's paid flag in step with its settlement", async () => {
     const { data: v } = await adminClient().from("visits").insert({
       site_id: siteA, supplier_id: supplierId, declared_material_type_id: material,
-      entry_path: "processed", state: "awaiting_stock_intake", created_by: recv.userId,
+      entry_path: "processed", state: "in_accounting", created_by: recv.userId,
     }).select("id").single();
     await adminClient().from("visit_materials").insert({
       visit_id: v!.id, material_type_id: material, weight_kg: 12, unit_price: 50,
@@ -106,8 +107,9 @@ describe("the flat views run as the caller", () => {
       other_deductions_total: 0, advance_deducted: 0, net_balance: 600,
       submitted_by: recv.userId, status: "approved",
     }).select("id").single();
-    await adminClient().from("batch_settlements")
-      .update({ status: "paid", paid_by: owner.userId }).eq("id", st!.id);
+    await owner.client.rpc("record_settlement_payment", {
+      p_settlement_id: st!.id, p_amount: 600, p_method: "transfer",
+    });
 
     const { data: lots } = await adminClient().from("stock_lots")
       .select("batch_paid").eq("ref_visit_material_id",
