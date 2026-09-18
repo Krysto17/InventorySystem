@@ -13,9 +13,9 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
  *     Y: lock lot B ---------------> wants bucket
  *
  * which PostgreSQL resolves by aborting one with 40P01. Reproduced
- * deterministically before the ordering fix. Nothing prevents two pending runs
- * from sharing a lot: the key on cost_price_run_lots is (run_id, stock_lot_id)
- * and no trigger objects.
+ * deterministically before the ordering fix. At the time nothing prevented two
+ * pending runs from sharing a lot; since 0160 a pending run reserves its lots
+ * (CP003), so that race is now refused at attach time instead.
  *
  * The fix takes every bucket the run touches first, in a deterministic order,
  * making the global order bucket -> lot. A run is not one bucket — 15 of 32
@@ -55,7 +55,7 @@ describe("cost-price approval lock ordering", () => {
   async function run(label: string, lots: string[], site: string) {
     const { data: r } = await adminClient().from("cost_price_runs").insert({
       site_id: site, label, material_type_id: materialTypeId,
-      approval_status: "pending", sold: true,
+      approval_status: "pending",
     }).select("id").single();
     await adminClient().from("cost_price_run_lots")
       .insert(lots.map((id) => ({ run_id: r!.id as string, stock_lot_id: id })));
@@ -88,26 +88,55 @@ describe("cost-price approval lock ordering", () => {
     await admin.from("stock_movements").delete().eq("material_type_id", materialTypeId);
   });
 
-  it("two approvals sharing a lot do not deadlock", async () => {
-    // X = {shared, extraX}, Y = {shared}. One shared lot is enough for the
-    // inverse order to bite once the bucket is taken mid-loop.
+  // 0160: a pending run reserves its lots, so two approvals can no longer race
+  // for one lot — the second run never gets it. What is left of the original
+  // race is two approvals in the same bucket over different lots.
+  it("a lot reserved by one pending run cannot join a second, so two approvals never share it", async () => {
     for (let trial = 1; trial <= 3; trial++) {
       const shared = await lot(siteA, 10);
       const extraX = await lot(siteA, 10);
+      const extraY = await lot(siteA, 10);
       const runX = await run(`dl-x-${stamp}-${trial}`, [shared, extraX], siteA);
-      const runY = await run(`dl-y-${stamp}-${trial}`, [shared], siteA);
 
-      const [x, y] = await Promise.all([approve(runX), approve(runY)]);
+      const { data: ry } = await adminClient().from("cost_price_runs").insert({
+        site_id: siteA, label: `dl-y-${stamp}-${trial}`, material_type_id: materialTypeId, approval_status: "pending",
+      }).select("id").single();
+      const refused = await adminClient().from("cost_price_run_lots")
+        .insert({ run_id: ry!.id as string, stock_lot_id: shared });
+      expect(refused.error?.code, `trial ${trial}: the shared lot is reserved`).toBe("CP003");
+      expect((await adminClient().from("cost_price_run_lots")
+        .insert({ run_id: ry!.id as string, stock_lot_id: extraY })).error).toBeNull();
+
+      const [x, y] = await Promise.all([approve(runX), approve(ry!.id as string)]);
 
       for (const [name, res] of [["X", x], ["Y", y]] as const) {
         expect(res.error?.code, `trial ${trial}: approval ${name} must not deadlock`).not.toBe(DEADLOCK);
         expect(res.error?.message ?? "", `trial ${trial}: ${name}`).not.toMatch(/deadlock/i);
       }
-      // Exactly one may take the shared lot; the other must be refused cleanly.
-      const winners = [x, y].filter((r) => !r.error).length;
-      expect(winners, `trial ${trial}: one approval wins, the other is refused`).toBe(1);
+      expect([x.error, y.error].filter(Boolean), `trial ${trial}: both approvals land`).toHaveLength(0);
       expect(await balance(siteA), `trial ${trial}: stock must not go negative`)
         .toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it("two pending runs attaching the same lot at the same instant: exactly one reserves it", async () => {
+    for (let trial = 1; trial <= 3; trial++) {
+      const shared = await lot(siteA, 10);
+      const ids: string[] = [];
+      for (const n of ["p", "q"]) {
+        const { data } = await adminClient().from("cost_price_runs").insert({
+          site_id: siteA, label: `dl-${n}-${stamp}-${trial}`, material_type_id: materialTypeId, approval_status: "pending",
+        }).select("id").single();
+        ids.push(data!.id as string);
+      }
+      const results = await Promise.all(ids.map((id) =>
+        adminClient().from("cost_price_run_lots").insert({ run_id: id, stock_lot_id: shared })));
+      for (const r of results) expect(r.error?.code, `trial ${trial}`).not.toBe(DEADLOCK);
+      expect(results.filter((r) => !r.error), `trial ${trial}: one reservation`).toHaveLength(1);
+      expect(results.find((r) => r.error)!.error!.code).toBe("CP003");
+      const { count } = await adminClient().from("cost_price_run_lots")
+        .select("run_id", { count: "exact", head: true }).eq("stock_lot_id", shared);
+      expect(count).toBe(1);
     }
   });
 

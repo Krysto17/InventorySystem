@@ -12,7 +12,9 @@ const init: ActionResult = { ok: false };
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 const kg = (n: number) => `${n.toLocaleString(undefined, { maximumFractionDigits: 3 })} kg`;
 
-export type RunLot = { stockLotId: string; material: string; supplier: string | null; weight: number; cost: number | null };
+// leftStock (0160): the lot was sold or released after it was picked. It stays
+// in the draft until someone removes it, and the owner cannot approve until then.
+export type RunLot = { stockLotId: string; material: string; supplier: string | null; weight: number; cost: number | null; leftStock: boolean };
 export type RunExtra = { id: string; name: string; weight: number; cost: number };
 
 // Correct a computed cost price after the fact: rename it, drop a stocked lot,
@@ -54,6 +56,7 @@ export function CostRunEditor({
                   <span>
                     <span className="font-medium">{l.material}</span>
                     <span className="text-ink-2"> · {l.supplier ?? "—"} · {kg(l.weight)} @ {l.cost != null ? `${ngn(l.cost)}/kg` : "—"}</span>
+                    {l.leftStock && <span className="ml-1 font-semibold text-red-700">· no longer in stock — remove it</span>}
                   </span>
                   <ActionForm action={removeRunLot} data-confirm="Remove this lot from the batch? It stays in stock.">
                     <input type="hidden" name="run_id" value={runId} />

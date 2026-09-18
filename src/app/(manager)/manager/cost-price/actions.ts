@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 import { canUseCostPrice } from "@/lib/auth/require-cost-price";
+import { costPriceRefusal } from "@/lib/cost-price/refusals";
 
 // A plain saved computation (sells nothing) when `sell` is falsy; a mixing batch
 // submitted for OWNER APPROVAL when `sell` is "1" — the lots stay in stock until
@@ -58,6 +59,10 @@ export async function createCostPriceRun(_prev: ActionResult, formData: FormData
       .insert(lotIds.map((id) => ({ run_id: run.id as string, stock_lot_id: id })));
     if (linkErr) {
       await supabase.from("cost_price_runs").delete().eq("id", run.id);
+      // 0160: a lot that left stock after the page loaded (CP002), or one another
+      // batch awaiting approval already holds (CP003).
+      const refusal = costPriceRefusal(linkErr.code);
+      if (refusal) return fail(`${refusal} Nothing was saved — refresh the page and pick again.`);
       return fail(`Couldn't attach the lots — nothing was saved. ${linkErr.message.replace(/^.*?:\s*/, "")}`);
     }
   }
@@ -76,8 +81,9 @@ export async function createCostPriceRun(_prev: ActionResult, formData: FormData
 }
 
 // ─── Editing a computed run (until it is sold) ───────────────────────────────
-// RLS blocks every one of these on an APPROVED (sold) batch; the weighted cost
-// price recomputes automatically via the DB triggers.
+// RLS blocks every one of these on an APPROVED (sold) batch, and since 0160 the
+// database refuses them for every caller (CP001); the weighted cost price
+// recomputes automatically via the DB triggers.
 
 const canEditRuns = canUseCostPrice;
 
@@ -97,6 +103,8 @@ export async function renameCostPriceRun(_prev: ActionResult, formData: FormData
   if (!label) return fail("Give the batch a label.");
   const supabase = await createClient();
   const res = await supabase.from("cost_price_runs").update({ label }).eq("id", id).select("id");
+  const refusal = costPriceRefusal(res.error?.code);
+  if (refusal) return fail(refusal);
   if (res.error) return fail(res.error.message.replace(/^.*?:\s*/, ""));
   if (!res.data?.length) return fail("Couldn't edit this batch — it may already be sold.");
   revalidateCostPages();
@@ -115,6 +123,8 @@ export async function removeRunLot(_prev: ActionResult, formData: FormData): Pro
   // silence — an approved batch is locked, and the operator must be told.
   const res = await supabase.from("cost_price_run_lots").delete()
     .eq("run_id", runId).eq("stock_lot_id", lotId).select("run_id");
+  const refusal = costPriceRefusal(res.error?.code);
+  if (refusal) return fail(refusal);
   const result = fromWrite(res, "That lot was not removed — the batch may already be approved.");
   if (!result.ok) return result;
   revalidateCostPages();
@@ -136,6 +146,9 @@ export async function addRunExtra(_prev: ActionResult, formData: FormData): Prom
   const supabase = await createClient();
   const { error } = await supabase.from("cost_price_run_extras")
     .insert({ run_id: runId, material_name: name, weight_kg: weight, cost_price_per_kg: cost });
+  // 0160: a stale page adding to a batch the owner has since approved.
+  const refusal = costPriceRefusal(error?.code);
+  if (refusal) return fail(refusal);
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidateCostPages();
   return ok("Material added.");
@@ -156,6 +169,8 @@ export async function updateRunExtra(_prev: ActionResult, formData: FormData): P
   const supabase = await createClient();
   const res = await supabase.from("cost_price_run_extras")
     .update({ material_name: name, weight_kg: weight, cost_price_per_kg: cost }).eq("id", id).select("id");
+  const refusal = costPriceRefusal(res.error?.code);
+  if (refusal) return fail(refusal);
   if (res.error) return fail(res.error.message.replace(/^.*?:\s*/, ""));
   if (!res.data?.length) return fail("Couldn't edit — the batch may already be sold.");
   revalidateCostPages();
@@ -169,6 +184,8 @@ export async function removeRunExtra(_prev: ActionResult, formData: FormData): P
   if (!id) return fail("Missing material.");
   const supabase = await createClient();
   const res = await supabase.from("cost_price_run_extras").delete().eq("id", id).select("id");
+  const refusal = costPriceRefusal(res.error?.code);
+  if (refusal) return fail(refusal);
   const result = fromWrite(res, "That material was not removed — the batch may already be approved.");
   if (!result.ok) return result;
   revalidateCostPages();
@@ -184,6 +201,8 @@ export async function deleteCostPriceRun(_prev: ActionResult, formData: FormData
   if (!id) return fail("Missing batch.");
   const supabase = await createClient();
   const res = await supabase.from("cost_price_runs").delete().eq("id", id).select("id");
+  const refusal = costPriceRefusal(res.error?.code);
+  if (refusal) return fail(refusal);
   const result = fromWrite(res, "That batch was not deleted — an approved (sold) batch is locked.");
   if (!result.ok) return result;
   revalidateCostPages();

@@ -60,7 +60,7 @@ export async function CostPriceModule({
         material:material_types(name),
         items:cost_price_run_lots(
           stock_lot_id,
-          stock_lot:stock_lots(weight_kg, cost_price_per_kg, material:material_types(name), supplier:suppliers(name))
+          stock_lot:stock_lots(status, weight_kg, cost_price_per_kg, material:material_types(name), supplier:suppliers(name))
         ),
         extras:cost_price_run_extras(id, material_name, weight_kg, cost_price_per_kg)
       `)
@@ -160,6 +160,12 @@ export async function CostPriceModule({
                     const items = (r as { items: unknown[] }).items ?? [];
                     const runMat = g1<{ name: string }>((r as { material: unknown }).material);
                     const st = r.approval_status as string | null;
+                    // 0160: a draft keeps a lot that left stock after it was picked (a
+                    // gate release, or a sale in another batch). It cannot be approved
+                    // like that, so say so rather than show the draft as sound.
+                    const leftStock = (lotOf: unknown) =>
+                      g1<{ status: string }>((lotOf as { stock_lot: unknown }).stock_lot)?.status !== "available";
+                    const staleCount = st === "approved" ? 0 : items.filter(leftStock).length;
                     const badge = st === "approved" ? <Badge variant="paid">Sold</Badge>
                       : st === "pending" ? <Badge variant="yellow">Awaiting owner</Badge>
                       : st === "rejected" ? <Badge variant="red">Rejected</Badge>
@@ -180,11 +186,20 @@ export async function CostPriceModule({
                                   const mat = g1<{ name: string }>(lot?.material ?? null);
                                   const sup = g1<{ name: string }>(lot?.supplier ?? null);
                                   return (
-                                    <li key={i}>{mat?.name ?? "—"} · {sup?.name ?? "—"} · {Number(lot?.weight_kg ?? 0).toFixed(3)} kg @ {lot?.cost_price_per_kg != null ? `${ngn(Number(lot.cost_price_per_kg))}/kg` : "—"}</li>
+                                    <li key={i}>
+                                      {mat?.name ?? "—"} · {sup?.name ?? "—"} · {Number(lot?.weight_kg ?? 0).toFixed(3)} kg @ {lot?.cost_price_per_kg != null ? `${ngn(Number(lot.cost_price_per_kg))}/kg` : "—"}
+                                      {st !== "approved" && leftStock(it) && <span className="ml-1 font-semibold text-red-700">· no longer in stock</span>}
+                                    </li>
                                   );
                                 })}
                               </ul>
                             </details>
+                          )}
+                          {staleCount > 0 && (
+                            <p className="mt-1 text-[11px] font-medium text-red-700">
+                              {staleCount} lot{staleCount === 1 ? " has" : "s have"} left stock since this batch was formed.
+                              Remove {staleCount === 1 ? "it" : "them"} under “Edit computation” — the owner cannot approve the batch until then.
+                            </p>
                           )}
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             <a href={`/api/pdf/cost-price/${r.id}`} target="_blank" rel="noreferrer"
@@ -201,13 +216,14 @@ export async function CostPriceModule({
                               runId={r.id as string}
                               label={r.label as string}
                               lots={items.map((it) => {
-                                const lot = g1<{ weight_kg: number; cost_price_per_kg: number | null; material: unknown; supplier: unknown }>((it as { stock_lot: unknown }).stock_lot);
+                                const lot = g1<{ status: string; weight_kg: number; cost_price_per_kg: number | null; material: unknown; supplier: unknown }>((it as { stock_lot: unknown }).stock_lot);
                                 return {
                                   stockLotId: (it as { stock_lot_id: string }).stock_lot_id,
                                   material: g1<{ name: string }>(lot?.material ?? null)?.name ?? "—",
                                   supplier: g1<{ name: string }>(lot?.supplier ?? null)?.name ?? null,
                                   weight: Number(lot?.weight_kg ?? 0),
                                   cost: lot?.cost_price_per_kg != null ? Number(lot.cost_price_per_kg) : null,
+                                  leftStock: lot?.status !== "available",
                                 } satisfies RunLot;
                               })}
                               extras={(((r as { extras: unknown }).extras ?? []) as Record<string, unknown>[]).map((e) => ({

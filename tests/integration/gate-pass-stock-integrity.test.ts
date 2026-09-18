@@ -98,7 +98,7 @@ describe("lot-linked gate passes release a lot once (0155)", () => {
     const admin = adminClient();
     const { data, error } = await admin.from("cost_price_runs").insert({
       site_id: site, label: `GPSI ${stamp} ${Math.random()}`, material_type_id: mat,
-      approval_status: "pending", sold: true, created_by: owner.userId,
+      approval_status: "pending", created_by: owner.userId,
     }).select("id").single();
     expect(error, `run fixture: ${error?.message}`).toBeNull();
     await admin.from("cost_price_run_lots").insert(lotIds.map((id) => ({ run_id: data!.id, stock_lot_id: id })));
@@ -303,10 +303,17 @@ describe("lot-linked gate passes release a lot once (0155)", () => {
   // ── Sale guard ────────────────────────────────────────────────────────────
   it("17. a released lot cannot be sold", async () => {
     const L = await lot();
+    // 0160: attaching a released lot is refused outright (CP002) …
+    const runId = await runFor([L]);
     const { data } = await issue(gm, L);
     await ack(gate, data!.id as string);
+    const late = await adminClient().from("cost_price_runs").insert({
+      site_id: NS, label: `GPSI late ${stamp} ${Math.random()}`, material_type_id: mat, approval_status: "pending", created_by: owner.userId,
+    }).select("id").single();
+    expect((await adminClient().from("cost_price_run_lots").insert({ run_id: late.data!.id, stock_lot_id: L })).error?.code).toBe("CP002");
+    // … and a draft that held it from before the release cannot sell it.
     const before = await outs("mixed_batch");
-    const res = await approve(await runFor([L]));
+    const res = await approve(runId);
     expect(res.error, "selling a released lot must be refused").not.toBeNull();
     expect(await lotStatus(L)).toBe("released");
     expect(await outs("mixed_batch")).toBe(before);
@@ -314,22 +321,23 @@ describe("lot-linked gate passes release a lot once (0155)", () => {
 
   it("17b. that refusal reaches the operator without the lot id, and without claiming it was sold", async () => {
     const L = await lot();
+    // 0160: the draft holds the lot from before the release.
+    const runId = await runFor([L]);
     const { data } = await issue(gm, L);
     await ack(gate, data!.id as string);
-    const res = await approve(await runFor([L]));
-    // What the database says — and why the action must not pass it through.
-    expect(res.error?.code).toBe("P0001");
-    expect(res.error!.message).toMatch(/already left stock/);
-    expect(res.error!.message, "the raw refusal carries the lot's id").toContain(L);
-    expect(res.error!.message, "and wrongly says sold for a released lot").toMatch(/sold elsewhere/);
+    // What the database says: a stable code and a sentence with no lot id.
+    const res = await approve(runId);
+    expect(res.error?.code).toBe("CP002");
+    expect(res.error!.message, "no lot id").not.toContain(L);
+    expect(res.error!.message, "and no claim that a released lot was sold").not.toMatch(/sold elsewhere/);
 
-    // What the operator gets instead, mapped before the raw pass-through.
+    // What the operator gets, mapped before the raw pass-through.
     const sale = src("app/(owner)/owner/cost-batches/actions.ts");
     const body = sale.slice(sale.indexOf("export async function approveCostBatch("), sale.indexOf("export async function rejectCostBatch("));
-    const safe = "This lot has already left stock and can no longer be sold.";
-    const mapping = body.search(/res\.error\?\.code === "P0001" && \/already left stock\/\.test\(res\.error\.message\)/);
+    const safe = "One or more selected lots are no longer available. Refresh the run before approving it.";
+    const mapping = body.indexOf("costPriceRefusal(res.error?.code)");
     expect(mapping, "the known refusal is mapped").toBeGreaterThan(-1);
-    expect(body).toContain(`return fail("${safe}")`);
+    expect(src("lib/cost-price/refusals.ts")).toContain(`CP002: "${safe}"`);
     expect(mapping, "before the raw database message could reach fromWrite").toBeLessThan(body.indexOf("fromWrite(res"));
     expect(safe, "no lot id").not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/i);
     // "can no longer be sold" is fine; asserting the lot WAS sold is not.
@@ -338,9 +346,16 @@ describe("lot-linked gate passes release a lot once (0155)", () => {
 
   it("18. a lot on a live pass cannot be sold", async () => {
     const L = await lot();
+    // 0160: a lot on a live pass cannot join a draft (CP002); one already in a
+    // draft when the pass was raised still meets the 0155 refusal on approval.
+    const runId = await runFor([L]);
     await issue(gm, L);
+    const late = await adminClient().from("cost_price_runs").insert({
+      site_id: NS, label: `GPSI late ${stamp} ${Math.random()}`, material_type_id: mat, approval_status: "pending", created_by: owner.userId,
+    }).select("id").single();
+    expect((await adminClient().from("cost_price_run_lots").insert({ run_id: late.data!.id, stock_lot_id: L })).error?.code).toBe("CP002");
     const before = await outs("mixed_batch");
-    const res = await approve(await runFor([L]));
+    const res = await approve(runId);
     expect(res.error?.code).toBe("GP007");
     expect(await lotStatus(L)).toBe("available");
     expect(await outs("mixed_batch")).toBe(before);
@@ -359,8 +374,9 @@ describe("lot-linked gate passes release a lot once (0155)", () => {
   it("20a. acknowledgement vs sale approval at the same instant: one deduction, no deadlock", async () => {
     for (let i = 0; i < REPEAT; i++) {
       const L = await lot();
-      const { data } = await issue(gm, L);
+      // 0160: the draft is formed first — a lot already on a pass cannot join it.
       const runId = await runFor([L]);
+      const { data } = await issue(gm, L);
       const mb = await outs("mixed_batch");
       const [a, s] = await Promise.all([ack(gate, data!.id as string), approve(runId)]);
       expect(a.error?.code, `iteration ${i}`).not.toBe(DEADLOCK);
@@ -368,9 +384,9 @@ describe("lot-linked gate passes release a lot once (0155)", () => {
       expect(a.error, `iteration ${i}: the release goes through`).toBeNull();
       // Which refusal the sale meets depends on commit order, and both are right:
       // it saw the live pass (GP007), or the release had already committed and
-      // the lot was no longer available (the approval's own P0001 check).
+      // the lot was no longer available (the approval's own CP002 check, 0160).
       expect(s.error, `iteration ${i}: the sale is refused`).not.toBeNull();
-      expect(["GP007", "P0001"], `iteration ${i}: refused by ${s.error?.code}`).toContain(s.error!.code);
+      expect(["GP007", "CP002"], `iteration ${i}: refused by ${s.error?.code}`).toContain(s.error!.code);
       expect(await releasesFor(data!.id as string)).toHaveLength(1);
       expect(await outs("mixed_batch"), `iteration ${i}: no second deduction`).toBe(mb);
       expect(await lotStatus(L)).toBe("released");

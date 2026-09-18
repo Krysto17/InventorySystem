@@ -123,7 +123,7 @@ describe("stock oversell concurrency", () => {
       }).select("id").single();
       const { data: run } = await admin.from("cost_price_runs").insert({
         site_id: siteId, label: `oversell-run-${stamp}-${trial}`, material_type_id: materialTypeId,
-        approval_status: "pending", sold: true,
+        approval_status: "pending",
       }).select("id").single();
       await admin.from("cost_price_run_lots").insert({ run_id: run!.id, stock_lot_id: lot!.id });
 

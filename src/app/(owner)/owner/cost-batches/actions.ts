@@ -4,14 +4,15 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
+import { costPriceRefusal } from "@/lib/cost-price/refusals";
 
 // Owner approves a pending mixing batch → the approval trigger removes every
 // attached lot from stock (flip to sold + 'mixed_batch' ledger 'out').
 //
 // Two ways this genuinely refuses, and both used to be invisible: a batch that
 // is no longer pending matches NO rows (someone else already ruled on it), and
-// the approval trigger RAISES when a lot has already left stock in another
-// batch. Either way nothing sold — so the owner must not be left reading an
+// the approval RAISES when a lot has already left stock (0160: CP002). Either
+// way nothing sold — so the owner must not be left reading an
 // unchanged Pending list and guessing whether the click registered.
 export async function approveCostBatch(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
@@ -34,12 +35,10 @@ export async function approveCostBatch(_prev: ActionResult, formData: FormData):
     .select("id");
   // 0155: a lot on a live gate pass is being released from stock, not sold.
   if (res.error?.code === "GP007") return fail("Lot is on a live gate pass — cancel the pass first.");
-  // The approval's own refusal for a lot that is no longer available names the
-  // lot's id and says "sold elsewhere" — untrue for a released lot, and neither
-  // detail is the operator's. The sentence covers both terminal cases.
-  if (res.error?.code === "P0001" && /already left stock/.test(res.error.message)) {
-    return fail("This lot has already left stock and can no longer be sold.");
-  }
+  // 0160: a lot that left stock (sold or released) while the batch waited, a
+  // batch with no lot left, or one no longer pending. The run stays as it was.
+  const refusal = costPriceRefusal(res.error?.code);
+  if (refusal) return fail(refusal);
   const result = fromWrite(res, "This batch was not approved — it may already have been approved or rejected.");
   if (!result.ok) return result;
   revalidatePath("/owner/cost-batches");
@@ -65,6 +64,8 @@ export async function rejectCostBatch(_prev: ActionResult, formData: FormData): 
     .eq("id", id)
     .eq("approval_status", "pending")
     .select("id");
+  const refusal = costPriceRefusal(res.error?.code);
+  if (refusal) return fail(refusal);
   const result = fromWrite(res, "This batch was not rejected — it may already have been approved or rejected.");
   if (!result.ok) return result;
   revalidatePath("/owner/cost-batches");

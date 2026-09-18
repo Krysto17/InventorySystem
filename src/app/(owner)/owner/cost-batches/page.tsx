@@ -16,7 +16,7 @@ const SELECT = `
   site:sites(name), material:material_types(name),
   by:profiles!cost_price_runs_created_by_fkey(full_name),
   items:cost_price_run_lots(
-    stock_lot:stock_lots(weight_kg, cost_price_per_kg, material:material_types(name), supplier:suppliers(name))
+    stock_lot:stock_lots(status, weight_kg, cost_price_per_kg, material:material_types(name), supplier:suppliers(name))
   )
 `;
 
@@ -25,6 +25,11 @@ function BatchCard({ r, pending }: { r: Record<string, unknown>; pending: boolea
   const site = g1<{ name: string }>(r.site);
   const mat = g1<{ name: string }>(r.material);
   const by = g1<{ full_name: string }>(r.by);
+  // 0160: a pending batch whose lot left stock after it was formed cannot be
+  // approved; the database refuses it, and the card says so up front.
+  const stale = pending
+    ? items.filter((it) => g1<{ status: string }>((it as { stock_lot: unknown }).stock_lot)?.status !== "available").length
+    : 0;
   return (
     <div className="rounded border border-zinc-200 p-3 dark:border-zinc-800">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -44,7 +49,7 @@ function BatchCard({ r, pending }: { r: Record<string, unknown>; pending: boolea
       </div>
       <ul className="mt-2 space-y-0.5 text-xs text-zinc-600 dark:text-zinc-300">
         {items.map((it, i) => {
-          const lot = g1<{ weight_kg: number; cost_price_per_kg: number | null; material: unknown; supplier: unknown }>(
+          const lot = g1<{ status: string; weight_kg: number; cost_price_per_kg: number | null; material: unknown; supplier: unknown }>(
             (it as { stock_lot: unknown }).stock_lot,
           );
           const m = g1<{ name: string }>(lot?.material ?? null);
@@ -53,10 +58,18 @@ function BatchCard({ r, pending }: { r: Record<string, unknown>; pending: boolea
             <li key={i}>
               {m?.name ?? "—"} · {sup?.name ?? "—"} · {Number(lot?.weight_kg ?? 0).toFixed(3)} kg @{" "}
               {lot?.cost_price_per_kg != null ? `${ngn(Number(lot.cost_price_per_kg))}/kg` : "—"}
+              {pending && lot?.status !== "available" && <span className="ml-1 font-semibold text-red-700">· no longer in stock</span>}
             </li>
           );
         })}
       </ul>
+      {stale > 0 && (
+        <p className="mt-2 text-xs font-medium text-red-700">
+          {stale} lot{stale === 1 ? " has" : "s have"} left stock since this batch was formed, so it cannot be
+          approved as it stands. The batch&apos;s author can remove {stale === 1 ? "that lot" : "those lots"} from
+          the cost-price screen, or you can reject it.
+        </p>
+      )}
       {pending && (
         /* ActionForm is the client wrapper that shows what the write did; the
            page itself stays a server component. A batch that another window
@@ -64,12 +77,14 @@ function BatchCard({ r, pending }: { r: Record<string, unknown>; pending: boolea
            refused — and the owner has to be told rather than left reading an
            unchanged Pending list. */
         <div className="mt-3 flex flex-wrap items-end gap-2">
-          <ActionForm action={approveCostBatch}>
-            <input type="hidden" name="run_id" value={r.id as string} />
-            <button type="submit" className="rounded bg-approve px-3 py-1.5 text-xs font-semibold text-white">
-              Approve &amp; remove from stock
-            </button>
-          </ActionForm>
+          {stale === 0 && (
+            <ActionForm action={approveCostBatch}>
+              <input type="hidden" name="run_id" value={r.id as string} />
+              <button type="submit" className="rounded bg-approve px-3 py-1.5 text-xs font-semibold text-white">
+                Approve &amp; remove from stock
+              </button>
+            </ActionForm>
+          )}
           <ActionForm action={rejectCostBatch} className="flex flex-wrap items-end gap-2">
             <input type="hidden" name="run_id" value={r.id as string} />
             <input type="text" name="note" placeholder="Reason (optional)" className="rounded border px-2 py-1 text-xs" />

@@ -6,7 +6,7 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 // recomputes. An approved (sold) batch is locked.
 describe("edit a computed cost price", () => {
   let newSite: string, monazite: string, supplierId: string;
-  let gm: TestUser, siteMgr: TestUser, recv: TestUser, inv: TestUser, otherInv: TestUser;
+  let gm: TestUser, siteMgr: TestUser, recv: TestUser, inv: TestUser, otherInv: TestUser, owner: TestUser;
 
   beforeAll(async () => {
     const { data: sites } = await adminClient().from("sites").select("id, name");
@@ -16,6 +16,7 @@ describe("edit a computed cost price", () => {
     inv = await makeUser({ username: "cpx-inv", role: "inventory", siteId: newSite });
     otherInv = await makeUser({ username: "cpx-inv2", role: "inventory", siteId: sites!.find((s) => s.name !== "New-Site")!.id as string });
     recv = await makeUser({ username: "cpx-recv", role: "receiving", siteId: newSite });
+    owner = await makeUser({ username: "cpx-owner", role: "owner", siteId: null });
     const { data: s } = await adminClient().from("suppliers").insert({ name: `CPX ${Date.now()}` }).select("id").single();
     supplierId = s!.id as string;
     const { data: mz } = await adminClient().from("material_types").select("id").eq("name", "Monazite").single();
@@ -33,6 +34,19 @@ describe("edit a computed cost price", () => {
       .insert({ site_id: newSite, label: `Run ${Date.now()}-${Math.random()}`, approval_status: status, created_by: gm.userId })
       .select("id").single();
     return data!.id as string;
+  }
+  // 0160: nothing is born approved — a batch is approved by the owner, which
+  // sells its lots, so the lot needs stock behind it.
+  async function approvedRun(lotId: string) {
+    const { data: l } = await adminClient().from("stock_lots").select("weight_kg").eq("id", lotId).single();
+    await adminClient().from("stock_movements").insert({
+      site_id: newSite, material_type_id: monazite, weight: Number(l!.weight_kg), direction: "in",
+      recorded_by: recv.userId, reason: "purchase_intake",
+    });
+    const rid = await run("pending");
+    expect((await adminClient().from("cost_price_run_lots").insert({ run_id: rid, stock_lot_id: lotId })).error).toBeNull();
+    expect((await owner.client.from("cost_price_runs").update({ approval_status: "approved" }).eq("id", rid)).error).toBeNull();
+    return rid;
   }
   const avg = async (id: string) => Number((await adminClient().from("cost_price_runs").select("avg_cost_price_per_kg").eq("id", id).single()).data!.avg_cost_price_per_kg);
 
@@ -76,9 +90,8 @@ describe("edit a computed cost price", () => {
   });
 
   it("an APPROVED (sold) batch is locked", async () => {
-    const rid = await run("approved");
     const l = await lot(50, 20);
-    await adminClient().from("cost_price_run_lots").insert({ run_id: rid, stock_lot_id: l });
+    const rid = await approvedRun(l);
 
     // rename blocked
     await gm.client.from("cost_price_runs").update({ label: "nope" }).eq("id", rid);
@@ -129,7 +142,7 @@ describe("edit a computed cost price", () => {
   });
 
   it("inventory cannot touch an APPROVED (sold) batch", async () => {
-    const rid = await run("approved");
+    const rid = await approvedRun(await lot(40, 20));
     await inv.client.from("cost_price_runs").update({ label: "nope" }).eq("id", rid);
     expect((await adminClient().from("cost_price_runs").select("label").eq("id", rid).single()).data!.label).not.toBe("nope");
     await inv.client.from("cost_price_runs").delete().eq("id", rid);

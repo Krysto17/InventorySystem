@@ -35,7 +35,18 @@ describe("delete cost-price run", () => {
   });
 
   it("an approved (sold) batch cannot be deleted", async () => {
-    const { data } = await run("approved");
+    // 0160: nothing is born approved — the owner approves a pending batch, which
+    // sells its lot, so the lot needs stock behind it.
+    const { data: mz } = await adminClient().from("material_types").select("id").eq("name", "Monazite").single();
+    await adminClient().from("stock_movements").insert({
+      site_id: newSite, material_type_id: mz!.id, weight: 25, direction: "in", recorded_by: owner.userId, reason: "purchase_intake",
+    });
+    const { data: lotRow } = await adminClient().from("stock_lots").insert({
+      site_id: newSite, material_type_id: mz!.id, weight_kg: 25, cost_price_per_kg: 10, recorded_by: owner.userId,
+    }).select("id").single();
+    const { data } = await run("pending");
+    expect((await adminClient().from("cost_price_run_lots").insert({ run_id: data!.id, stock_lot_id: lotRow!.id })).error).toBeNull();
+    expect((await owner.client.from("cost_price_runs").update({ approval_status: "approved" }).eq("id", data!.id)).error).toBeNull();
     await gm.client.from("cost_price_runs").delete().eq("id", data!.id);
     expect(await exists(data!.id)).toBe(true);
     // owner can't delete it either

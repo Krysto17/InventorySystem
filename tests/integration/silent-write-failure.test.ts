@@ -324,7 +324,7 @@ describe("silent write failure", () => {
       const admin = adminClient();
       const { data, error } = await admin.from("cost_price_runs").insert({
         site_id: site, label: `${label} ${stamp}`, material_type_id: materialTypeId,
-        approval_status: "pending", sold: true,
+        approval_status: "pending",
       }).select("id").single();
       expect(error, `run fixture: ${error?.message}`).toBeNull();
       await admin.from("cost_price_run_lots")
@@ -373,17 +373,18 @@ describe("silent write failure", () => {
     });
 
     it("approveCostBatch: a lot that already left stock raises, and nothing sells", async () => {
-      // Nothing stops two pending runs sharing a lot — the key is (run, lot).
-      const shared = await lot(20);
-      const first = await run("first claim", [shared]);
-      const second = await run("second claim", [shared]);
-      expect((await rule(first, "approved")).data ?? []).toHaveLength(1);
+      // Since 0160 a pending run reserves its lots, so the lot leaves stock the
+      // other real way while the batch waits: the gate releases it.
+      const L = await lot(20);
+      const pending = await run("stale claim", [L]);
+      const passId = await pass("issued", L, 20);
+      expect((await ack(passId)).error, "the release goes through").toBeNull();
 
-      const res = await rule(second, "approved");
-      expect(res.error, "the second approval must be refused").not.toBeNull();
-      expect(res.error!.message).toMatch(/already left stock/i);
+      const res = await rule(pending, "approved");
+      expect(res.error, "the approval must be refused").not.toBeNull();
+      expect(res.error!.code).toBe("CP002");
       expect(fromWrite(res as never).ok).toBe(false);
-      expect(await statusOfRun(second), "and the batch stays pending").toBe("pending");
+      expect(await statusOfRun(pending), "and the batch stays pending").toBe("pending");
     });
 
     // ── rejectCostBatch ───────────────────────────────────────────────────
