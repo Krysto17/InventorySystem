@@ -147,7 +147,8 @@ export async function closeDressingOnly(_prev: ActionResult, formData: FormData)
 
 // Accountant reverses a paid supply after confirming a supplier refund: rolls
 // the intake out of stock, voids the settlement, and returns the visit to
-// pricing. The RPC blocks it if any material has already left stock.
+// pricing. The RPC blocks it (RS001) if any material has already left stock, or
+// if the intake is backing stock that has already been taken out of the bucket.
 export async function reversePaidSupply(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
   if (!me || !(me.role === "accounting" || me.role === "owner")) return fail("Only accounting can reverse a paid supply.");
@@ -157,6 +158,9 @@ export async function reversePaidSupply(_prev: ActionResult, formData: FormData)
   if (!reason) return fail("Confirm the refund with a reason.");
   const supabase = await createClient();
   const { error } = await supabase.rpc("reverse_paid_supply", { p_visit_id: visitId, p_reason: reason });
+  // 0161: the stock this supply created has been sold, released, mixed, gate-passed,
+  // or is backing stock someone else has already taken out. Nothing was reversed.
+  if (error?.code === "RS001") return fail("This paid supply can no longer be reversed because its stock has already been used.");
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidatePath(`/visits/${visitId}`);
   revalidatePath("/accounting");
@@ -350,7 +354,8 @@ export async function recordDeduction(_prev: ActionResult, formData: FormData): 
 
 // Manager/accounting/owner removes an advance deduction applied by mistake. The
 // supplier's outstanding debt is recomputed automatically. Blocked once the
-// batch is paid (locked).
+// batch is paid (locked), and since 0161 once any settlement for the supplier has
+// frozen the debt figure this recovery reduced.
 export async function removeDeduction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
   if (!me || !["manager", "accounting", "owner"].includes(me.role)) return fail("Not allowed to remove a deduction.");
@@ -365,6 +370,9 @@ export async function removeDeduction(_prev: ActionResult, formData: FormData): 
   }
   const res = await supabase.from("advance_deductions").delete().eq("id", deductionId).select("id");
   if (res.error?.code === "SF004") return fail("This pricing is already approved. Send the settlement back before changing deductions.");
+  // 0161: a settlement for this supplier has already reported the debt this
+  // recovery reduced, so removing it would rewrite finalized accounts.
+  if (res.error?.code === "AD001") return fail("This deduction has already been used in finalized accounts and cannot be deleted.");
   const result = fromWrite(res, "The deduction was not removed — you may not have permission for it.");
   if (!result.ok) return result;
   revalidateSupplierFinance();

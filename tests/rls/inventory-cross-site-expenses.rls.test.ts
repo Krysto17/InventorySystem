@@ -1,9 +1,12 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
 
-// One inventory officer runs expenses for the whole organisation: they log an
-// expense against any site and correct it until the owner has ruled on it.
-describe("inventory runs expenses across every site", () => {
+// One inventory officer REVIEWS expenses for the whole organisation: they read
+// every site's expenses and run their own site's. 0120 also let them write
+// against any site, which let an officer at one site edit and delete another
+// site's expense (F-10); 0161 scopes the writes to their own site and leaves the
+// cross-site read alone.
+describe("inventory reads expenses everywhere, writes only its own site", () => {
   let siteA: string, siteB: string;
   let inv: TestUser, mgrB: TestUser, owner: TestUser;
 
@@ -23,14 +26,23 @@ describe("inventory runs expenses across every site", () => {
     owner = await makeUser({ username: "ix-owner", role: "owner", siteId: null });
   });
 
-  it("logs an expense against another site", async () => {
-    const { data, error } = await inv.client.from("consumables").insert({
+  it("cannot log an expense against another site", async () => {
+    const { error } = await inv.client.from("consumables").insert({
       site_id: siteB, name: "Grease for Old-Site plant", category: "fuel_lubricants",
       amount_naira: 12000, recorded_by: inv.userId,
       account_name: "MJZ Fuel", account_number: "0123456789", bank_name: "Zenith",
     }).select("id, site_id").single();
-    expect(error).toBeNull();
-    expect(data!.site_id).toBe(siteB);
+    expect(error?.code).toBe("42501");
+  });
+
+  it("logs an expense on its own site", async () => {
+    const { data, error } = await inv.client.from("consumables").insert({
+      site_id: siteA, name: "Grease for own plant", category: "fuel_lubricants",
+      amount_naira: 12000, recorded_by: inv.userId,
+      account_name: "MJZ Fuel", account_number: "0123456789", bank_name: "Zenith",
+    }).select("id, site_id").single();
+    expect(error, `${error?.message}`).toBeNull();
+    expect(data!.site_id).toBe(siteA);
   });
 
   it("reads expenses from every site", async () => {
@@ -40,20 +52,27 @@ describe("inventory runs expenses across every site", () => {
     expect(seen).toHaveLength(2);
   });
 
-  it("corrects a pending expense on another site", async () => {
+  it("corrects a pending expense on its own site, but not on another site", async () => {
+    const { data: own } = await expense(siteA);
+    expect((await inv.client.from("consumables").update({ amount_naira: 7500 }).eq("id", own!.id).select("id")).data).toHaveLength(1);
+    expect(Number((await adminClient().from("consumables").select("amount_naira").eq("id", own!.id).single()).data!.amount_naira)).toBe(7500);
+
     const { data: e } = await expense(siteB);
-    const { error } = await inv.client.from("consumables")
-      .update({ amount_naira: 7500 }).eq("id", e!.id);
-    expect(error).toBeNull();
+    const res = await inv.client.from("consumables").update({ amount_naira: 7500 }).eq("id", e!.id).select("id");
+    expect(res.data ?? [], "another site's expense is not theirs to correct").toHaveLength(0);
     const after = (await adminClient().from("consumables").select("amount_naira").eq("id", e!.id).single()).data!;
-    expect(Number(after.amount_naira)).toBe(7500);
+    expect(Number(after.amount_naira)).toBe(5000);
   });
 
-  it("withdraws a pending expense on another site", async () => {
+  it("withdraws a pending expense on its own site, but not on another site", async () => {
+    const { data: own } = await expense(siteA);
+    await inv.client.from("consumables").delete().eq("id", own!.id);
+    expect((await adminClient().from("consumables").select("id").eq("id", own!.id)).data ?? []).toHaveLength(0);
+
     const { data: e } = await expense(siteB);
     await inv.client.from("consumables").delete().eq("id", e!.id);
-    const { data: gone } = await adminClient().from("consumables").select("id").eq("id", e!.id);
-    expect(gone ?? []).toHaveLength(0);
+    const { data: still } = await adminClient().from("consumables").select("id").eq("id", e!.id);
+    expect(still ?? [], "another site's expense stays").toHaveLength(1);
   });
 
   it("cannot touch an expense the owner has already approved", async () => {

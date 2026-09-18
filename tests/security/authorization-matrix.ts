@@ -99,8 +99,8 @@ export const AUTHORIZATION_MATRIX: MatrixCase[] = [
     because: "0154 — inventory mixes stock from every site into cost-price batches (read only)" },
   { role: "inventory", resource: "consumables", action: "read", site: "other", expect: "ALLOW",
     because: "0120 — one inventory officer keeps expenses for the whole organisation" },
-  { role: "inventory", resource: "consumables", action: "write", site: "other", expect: "ALLOW",
-    because: "0120 — inventory logs an expense against whichever site it belongs to" },
+  { role: "inventory", resource: "consumables", action: "write", site: "other", expect: "DENY",
+    because: "0161 (F-10) — inventory WRITES expenses on its own site only; 0120's cross-site write let an Old-Site officer edit a Dong expense. Reading every site stays ALLOW" },
   { role: "site_manager", resource: "consumables", action: "read", site: "other", expect: "DENY",
     because: "a site manager sees their own site's expenses" },
 

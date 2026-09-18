@@ -46,12 +46,21 @@ describe("consumables RLS (categorized log)", () => {
     expect(error).not.toBeNull();
   });
 
-  // One inventory officer keeps expenses for the whole organisation, so they
-  // log against whichever site the expense belongs to.
-  it("inventory at site B logs a consumable for site A", async () => {
+  // 0161 (F-10): inventory WRITES on its own site only. 0120 let one officer log
+  // against any site, which also let them edit and delete another site's expense.
+  it("inventory at site B cannot log a consumable for site A", async () => {
     const { error } = await invB.client.from("consumables").insert({
       site_id: siteAId,
       name: "Diesel-CrossSite",
+      category: "transport",
+    });
+    expect(error?.code).toBe("42501");
+  });
+
+  it("inventory at site B logs a consumable for its own site", async () => {
+    const { error } = await invB.client.from("consumables").insert({
+      site_id: siteBId,
+      name: "Diesel-OwnSite",
       category: "transport",
     });
     expect(error).toBeNull();
