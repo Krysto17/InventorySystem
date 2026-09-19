@@ -59,8 +59,7 @@ describe("settlement payment concurrency", () => {
     const results = await Promise.all(
       Array.from({ length: 5 }, () =>
         inv.client.rpc("record_settlement_payment", {
-          p_settlement_id: id, p_amount: NET, p_method: "cash",
-        })),
+          p_settlement_id: id, p_amount: NET, p_method: "cash", p_request_key: crypto.randomUUID() })),
     );
     expect(results.filter((r) => !r.error)).toHaveLength(1);
     // The assertion that matters: the ledger, not the return values.
@@ -72,8 +71,8 @@ describe("settlement payment concurrency", () => {
     // records a transfer for the same payout.
     const id = await approvedSettlement();
     const [a, b] = await Promise.all([
-      inv.client.rpc("record_settlement_payment", { p_settlement_id: id, p_amount: NET, p_method: "cash" }),
-      acct.client.rpc("record_settlement_payment", { p_settlement_id: id, p_amount: NET, p_method: "transfer" }),
+      inv.client.rpc("record_settlement_payment", { p_settlement_id: id, p_amount: NET, p_method: "cash", p_request_key: crypto.randomUUID() }),
+      acct.client.rpc("record_settlement_payment", { p_settlement_id: id, p_amount: NET, p_method: "transfer", p_request_key: crypto.randomUUID() }),
     ]);
     expect([a.error, b.error].filter(Boolean)).toHaveLength(1);
     expect(await paidTotal(id)).toBe(NET);
@@ -85,8 +84,7 @@ describe("settlement payment concurrency", () => {
     await Promise.all(
       Array.from({ length: 10 }, () =>
         inv.client.rpc("record_settlement_payment", {
-          p_settlement_id: id, p_amount: NET / 10, p_method: "cash",
-        })),
+          p_settlement_id: id, p_amount: NET / 10, p_method: "cash", p_request_key: crypto.randomUUID() })),
     );
     expect(await paidTotal(id)).toBe(NET);
     const { data: st } = await adminClient()
@@ -96,10 +94,8 @@ describe("settlement payment concurrency", () => {
 
   it("an over-payment attempt after the balance is cleared is refused", async () => {
     const id = await approvedSettlement();
-    expect((await inv.client.rpc("record_settlement_payment",
-      { p_settlement_id: id, p_amount: NET, p_method: "cash" })).error).toBeNull();
-    const { error } = await inv.client.rpc("record_settlement_payment",
-      { p_settlement_id: id, p_amount: 1, p_method: "cash" });
+    expect((await inv.client.rpc("record_settlement_payment", { p_settlement_id: id, p_amount: NET, p_method: "cash", p_request_key: crypto.randomUUID() })).error).toBeNull();
+    const { error } = await inv.client.rpc("record_settlement_payment", { p_settlement_id: id, p_amount: 1, p_method: "cash", p_request_key: crypto.randomUUID() });
     expect(error).not.toBeNull();
     expect(await paidTotal(id)).toBe(NET);
   });

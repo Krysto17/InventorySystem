@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
+import { requestKeyPayload } from "@/lib/actions/schema-capability";
 import { accountTrioFromForm } from "@/lib/validation/account";
 import { STALE_MESSAGE } from "@/lib/approvals/stale";
+import { isReplay } from "@/lib/actions/request-key";
 import { CONSUMABLE_CATEGORIES, type ConsumableCategory } from "./categories";
 
 export async function createConsumable(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
@@ -32,10 +34,18 @@ export async function createConsumable(_prev: ActionResult, formData: FormData):
   const siteId = (canChooseSite && chosenSite) || (profile?.site_id as string | null);
   if (!siteId) return fail(canChooseSite ? "Pick the site this expense belongs to." : "No site on your profile.");
 
+  // 0163: two identical expenses can both be real, so what is unique is the
+  // command, not the amount. A resubmit of THIS command is a replay, and the
+  // expense it already created is the right answer.
   const res = await supabase.from("consumables").insert({
     site_id: siteId, name, category, entry_date: entryDate ?? undefined, comment,
     amount_naira: amount, ...acct.value, recorded_by: me.id,
+    ...(await requestKeyPayload(formData)),
   }).select("id");
+  if (isReplay(res.error)) {
+    revalidatePath("/inventory/consumables");
+    return ok("Expense logged.");
+  }
   if (res.error) return fail(res.error.message.replace(/^.*?:\s*/, ""));
   revalidatePath("/inventory/consumables");
   return ok();

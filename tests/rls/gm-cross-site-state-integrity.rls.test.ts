@@ -57,8 +57,7 @@ describe("GM cross-site state integrity (0157)", () => {
     expect((await approvePricingAs(owner.client, visitId)).error).toBeNull();
     const { data: st } = await adminClient().from("batch_settlements").select("id, net_balance").eq("visit_id", visitId).single();
     const pay = await owner.client.rpc("record_settlement_payment", {
-      p_settlement_id: st!.id, p_amount: Number(st!.net_balance), p_method: "transfer",
-    });
+      p_settlement_id: st!.id, p_amount: Number(st!.net_balance), p_method: "transfer", p_request_key: crypto.randomUUID() });
     expect(pay.error).toBeNull();
     return { visitId, lineId, settlementId: st!.id as string };
   }
@@ -353,7 +352,7 @@ describe("GM cross-site state integrity (0157)", () => {
       expect((await approvePricingAs(owner.client, visitId)).error).toBeNull();
       const { data: st } = await adminClient().from("batch_settlements").select("id, net_balance").eq("visit_id", visitId).single();
       const [pay, edit] = await Promise.all([
-        acctDong.client.rpc("record_settlement_payment", { p_settlement_id: st!.id, p_amount: Number(st!.net_balance), p_method: "transfer" }),
+        acctDong.client.rpc("record_settlement_payment", { p_settlement_id: st!.id, p_amount: Number(st!.net_balance), p_method: "transfer", p_request_key: crypto.randomUUID() }),
         gm.client.from("visit_materials").update({ weight_kg: 5 }).eq("id", lineId).select("id"),
       ]);
       expect(pay.error, `round ${i}: payment`).toBeNull();

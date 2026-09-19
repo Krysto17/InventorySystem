@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { isReplay } from "@/lib/actions/request-key";
+import { requestKeyPayload } from "@/lib/actions/schema-capability";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 
@@ -55,8 +57,17 @@ export async function recordPurchaseIntake(
     reason: "purchase_intake",
     recorded_by: me.id,
     ref_visit_id: visitId,
+    // 0163: one intake per command — a resubmit must not stock the batch twice.
+    ...(await requestKeyPayload(formData)),
   });
 
+  // 0163: this command already stocked the batch — a resubmit must not add a
+  // second intake, and the operator should see the success they missed.
+  if (isReplay(error)) {
+    revalidatePath(`/visits/${visitId}`);
+    revalidatePath("/inventory");
+    return {};
+  }
   if (error) return { error: error.message };
 
   revalidatePath(`/visits/${visitId}`);
@@ -94,8 +105,16 @@ export async function recordAdjustment(
     note: notes,
     recorded_by: me.id,
     ref_visit_id: null,
+    // 0163: one movement per command — a resubmit must not move stock twice.
+    ...(await requestKeyPayload(formData)),
   });
 
+  // 0163: this command already moved the stock.
+  if (isReplay(error)) {
+    revalidatePath("/inventory");
+    revalidatePath("/owner");
+    return {};
+  }
   if (error) return { error: error.message };
 
   revalidatePath("/inventory");

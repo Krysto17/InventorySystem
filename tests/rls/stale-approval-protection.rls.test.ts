@@ -259,11 +259,20 @@ describe("stale approval protection (0162)", () => {
         mgr.client.from("advances").update({ amount_naira: 750000 }).eq("id", adv.id).select("id"),
         (async () => { await new Promise((r) => setTimeout(r, 15)); return reviewAdvance(owner, adv.id, adv.revision); })(),
       ]);
-      expect(edit.data, `trial ${t}`).toHaveLength(1);
-      expect(approve.error?.code, `trial ${t}`).toBe(STALE);
-      const after = await readAdvance(adv.id);
-      expect(after.approval_status, `trial ${t}: nothing approved`).toBe("pending");
-      expect(Number(after.amount_naira)).toBe(750000);
+      expect(approve.error?.code, `trial ${t}`).not.toBe(DEADLOCK);
+      if (edit.error) {
+        // The approval got there first: ST002 then freezes the approved amount.
+        expect(approve.error, `trial ${t}: the approval stands`).toBeNull();
+        const after = await readAdvance(adv.id);
+        expect(after.approval_status, `trial ${t}`).toBe("approved");
+        expect(Number(after.amount_naira), `trial ${t}: the reviewed figure`).toBe(9000);
+      } else {
+        expect(edit.data, `trial ${t}`).toHaveLength(1);
+        expect(approve.error?.code, `trial ${t}`).toBe(STALE);
+        const after = await readAdvance(adv.id);
+        expect(after.approval_status, `trial ${t}: nothing approved`).toBe("pending");
+        expect(Number(after.amount_naira)).toBe(750000);
+      }
     }
   });
 

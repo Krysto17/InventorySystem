@@ -48,11 +48,11 @@ describe("settlement payments (part / full, manager cash)", () => {
 
   it("manager cash part payment → partially_paid; full remainder → paid", async () => {
     const { settlementId, visitId } = await approvedSettlement(10000);
-    const p1 = await mgr.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 4000, p_method: "cash" });
+    const p1 = await mgr.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 4000, p_method: "cash", p_request_key: crypto.randomUUID() });
     expect(p1.error).toBeNull();
     expect(await status(settlementId)).toBe("partially_paid");
 
-    const p2 = await acct.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 6000, p_method: "transfer" });
+    const p2 = await acct.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 6000, p_method: "transfer", p_request_key: crypto.randomUUID() });
     expect(p2.error).toBeNull();
     expect(await status(settlementId)).toBe("paid");
 
@@ -65,15 +65,15 @@ describe("settlement payments (part / full, manager cash)", () => {
 
   it("blocks a payment that exceeds the remaining balance", async () => {
     const { settlementId } = await approvedSettlement(10000);
-    await mgr.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 7000, p_method: "cash" });
-    const { error } = await mgr.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 4000, p_method: "cash" });
+    await mgr.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 7000, p_method: "cash", p_request_key: crypto.randomUUID() });
+    const { error } = await mgr.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 4000, p_method: "cash", p_request_key: crypto.randomUUID() });
     expect(error).not.toBeNull();
     expect(await status(settlementId)).toBe("partially_paid");
   });
 
   it("a manager on another site cannot pay this settlement", async () => {
     const { settlementId } = await approvedSettlement();
-    const { error } = await mgrOther.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100, p_method: "cash" });
+    const { error } = await mgrOther.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100, p_method: "cash", p_request_key: crypto.randomUUID() });
     expect(error).not.toBeNull();
   });
 
@@ -82,23 +82,21 @@ describe("settlement payments (part / full, manager cash)", () => {
   // lives in tests/rls/inventory-cash-payout.rls.test.ts.
   it("inventory records cash but not a transfer", async () => {
     const { settlementId } = await approvedSettlement();
-    expect((await inv.client.rpc("record_settlement_payment",
-      { p_settlement_id: settlementId, p_amount: 100, p_method: "cash" })).error).toBeNull();
-    expect((await inv.client.rpc("record_settlement_payment",
-      { p_settlement_id: settlementId, p_amount: 100, p_method: "transfer" })).error).not.toBeNull();
+    expect((await inv.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100, p_method: "cash", p_request_key: crypto.randomUUID() })).error).toBeNull();
+    expect((await inv.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100, p_method: "transfer", p_request_key: crypto.randomUUID() })).error).not.toBeNull();
   });
 
   it("a held settlement takes no payment", async () => {
     const { settlementId } = await approvedSettlement();
     await owner.client.rpc("hold_settlement", { p_id: settlementId });
-    const { error } = await mgr.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100, p_method: "cash" });
+    const { error } = await mgr.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100, p_method: "cash", p_request_key: crypto.randomUUID() });
     expect(error).not.toBeNull();
   });
 
   it("a fully paid settlement takes no further payment", async () => {
     const { settlementId } = await approvedSettlement(5000);
-    await acct.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 5000, p_method: "transfer" });
-    const { error } = await mgr.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 1, p_method: "cash" });
+    await acct.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 5000, p_method: "transfer", p_request_key: crypto.randomUUID() });
+    const { error } = await mgr.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 1, p_method: "cash", p_request_key: crypto.randomUUID() });
     expect(error).not.toBeNull();
   });
 });

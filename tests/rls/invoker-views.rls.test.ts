@@ -38,8 +38,7 @@ describe("the flat views run as the caller", () => {
       submitted_by: recv.userId, status: "approved",
     }).select("id").single();
     await owner.client.rpc("record_settlement_payment", {
-      p_settlement_id: st!.id, p_amount: 7000, p_method: "transfer",
-    });
+      p_settlement_id: st!.id, p_amount: 7000, p_method: "transfer", p_request_key: crypto.randomUUID() });
 
     const { data: lot } = await adminClient().from("stock_lots")
       .select("id").eq("material_type_id", material).eq("status", "available").single();
@@ -108,8 +107,7 @@ describe("the flat views run as the caller", () => {
       submitted_by: recv.userId, status: "approved",
     }).select("id").single();
     await owner.client.rpc("record_settlement_payment", {
-      p_settlement_id: st!.id, p_amount: 600, p_method: "transfer",
-    });
+      p_settlement_id: st!.id, p_amount: 600, p_method: "transfer", p_request_key: crypto.randomUUID() });
 
     const { data: lots } = await adminClient().from("stock_lots")
       .select("batch_paid").eq("ref_visit_material_id",

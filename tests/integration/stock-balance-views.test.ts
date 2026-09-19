@@ -142,8 +142,7 @@ describe("only bought material becomes stock", () => {
     }).select("id").single();
     // Paid through the payment workflow — its stock intake is what stocks the visit.
     expect((await owner.client.rpc("record_settlement_payment", {
-      p_settlement_id: st!.id, p_amount: 5000, p_method: "transfer",
-    })).error).toBeNull();
+      p_settlement_id: st!.id, p_amount: 5000, p_method: "transfer", p_request_key: crypto.randomUUID() })).error).toBeNull();
 
     // Only the 100kg priced+settled line is stock.
     const { data: bal } = await owner.client.from("stock_balances").select("weight_kg").eq("material_type_id", material);

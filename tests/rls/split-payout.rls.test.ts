@@ -42,15 +42,13 @@ describe("split a payout across accounts", () => {
 
     const p1 = await acct.client.rpc("record_settlement_payment", {
       p_settlement_id: id, p_amount: 6000, p_method: "transfer",
-      p_account_name: "Musa Ahmed", p_account_number: "0123456789", p_bank_name: "GTB",
-    });
+      p_account_name: "Musa Ahmed", p_account_number: "0123456789", p_bank_name: "GTB", p_request_key: crypto.randomUUID() });
     expect(p1.error).toBeNull();
     expect((await adminClient().from("batch_settlements").select("status").eq("id", id).single()).data!.status).toBe("partially_paid");
 
     const p2 = await acct.client.rpc("record_settlement_payment", {
       p_settlement_id: id, p_amount: 4000, p_method: "transfer",
-      p_account_name: "Aisha Bello", p_account_number: "0222222222", p_bank_name: "UBA",
-    });
+      p_account_name: "Aisha Bello", p_account_number: "0222222222", p_bank_name: "UBA", p_request_key: crypto.randomUUID() });
     expect(p2.error).toBeNull();
     expect((await adminClient().from("batch_settlements").select("status").eq("id", id).single()).data!.status).toBe("paid");
 
@@ -65,28 +63,24 @@ describe("split a payout across accounts", () => {
     const id = await approvedSettlement(5000);
     await acct.client.rpc("record_settlement_payment", {
       p_settlement_id: id, p_amount: 3000, p_method: "cash",
-      p_account_name: "A One", p_account_number: "0111111111", p_bank_name: "Zenith",
-    });
+      p_account_name: "A One", p_account_number: "0111111111", p_bank_name: "Zenith", p_request_key: crypto.randomUUID() });
     const over = await acct.client.rpc("record_settlement_payment", {
       p_settlement_id: id, p_amount: 2500, p_method: "cash",
-      p_account_name: "B Two", p_account_number: "0333333333", p_bank_name: "Access",
-    });
+      p_account_name: "B Two", p_account_number: "0333333333", p_bank_name: "Access", p_request_key: crypto.randomUUID() });
     expect(over.error).not.toBeNull();
   });
 
   it("a partial account (no bank/number) is rejected", async () => {
     const id = await approvedSettlement(2000);
     const { error } = await acct.client.rpc("record_settlement_payment", {
-      p_settlement_id: id, p_amount: 1000, p_method: "transfer", p_account_name: "Only Name",
-    });
+      p_settlement_id: id, p_amount: 1000, p_method: "transfer", p_account_name: "Only Name", p_request_key: crypto.randomUUID() });
     expect(error).not.toBeNull();
   });
 
   it("account details stay optional (pays to the supplier default)", async () => {
     const id = await approvedSettlement(1500);
     const { error } = await acct.client.rpc("record_settlement_payment", {
-      p_settlement_id: id, p_amount: 1500, p_method: "cash",
-    });
+      p_settlement_id: id, p_amount: 1500, p_method: "cash", p_request_key: crypto.randomUUID() });
     expect(error).toBeNull();
     expect((await adminClient().from("batch_settlements").select("status").eq("id", id).single()).data!.status).toBe("paid");
   });

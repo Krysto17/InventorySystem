@@ -113,8 +113,7 @@ describe("anon cannot reach privileged SECURITY DEFINER RPCs (C1)", () => {
         anon.rpc("release_settlement", { p_id: settlementId } as never),
         anon.rpc("send_settlement_back", { p_id: settlementId, p_reason: "anon" } as never),
         anon.rpc("close_settlement", { p_id: settlementId } as never),
-        anon.rpc("record_settlement_payment",
-          { p_settlement_id: settlementId, p_amount: 40_000, p_method: "cash" } as never),
+        anon.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 40_000, p_method: "cash", p_request_key: crypto.randomUUID() } as never),
       ];
       const errors = await Promise.all(attempts.map(async (a) => (await a).error));
 

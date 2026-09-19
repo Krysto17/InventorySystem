@@ -1256,7 +1256,9 @@ describe("silent write failure", () => {
         // to give a duplicate its own message before falling through to fail().
         // `<name>.error` covers a guarded branch that owns its own result
         // object (the temporary rollout bridge's legacy path does).
-        const guard = body.search(/if \(!\w+\.ok\) return \w+;|if \((?:\w+\.)?error\) return fail|if \((?:\w+\.)?error\) \{|return lineAction\(/);
+        // `isReplay(...)` is also a decision that the write landed — on the
+        // first attempt of this command (0163), which is why it revalidates.
+        const guard = body.search(/if \(!\w+\.ok\) return \w+;|if \((?:\w+\.)?error\) return fail|if \((?:\w+\.)?error\) \{|if \(isReplay\(|return lineAction\(/);
         expect(guard, `${fn} must decide the write landed before revalidating`).toBeGreaterThan(-1);
         expect(guard).toBeLessThan(revalidate);
       });

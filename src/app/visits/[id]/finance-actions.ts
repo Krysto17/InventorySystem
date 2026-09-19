@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 import { accountTrioFromForm } from "@/lib/validation/account";
+import { requestKeyFrom, isReplay } from "@/lib/actions/request-key";
+import { hasRequestKeySupport, isMissingFunction, requestKeyPayload } from "@/lib/actions/schema-capability";
 import { revalidateSupplierFinance } from "@/lib/finance/revalidate";
 
 // Owner / general manager records a price correction on a paid visit (the
@@ -91,13 +93,30 @@ export async function recordSettlementPayment(_prev: ActionResult, formData: For
   const acct = accountTrioFromForm(formData);
   if (!acct.ok) return fail(acct.error);
 
+  // 0163: this payout is one command. A resubmit after a lost response replays
+  // it and the RPC answers with the payment the first attempt created, instead
+  // of handing the supplier a second one.
+  const requestKey = requestKeyFrom(formData);
+  if (!requestKey) return fail("That payment could not be identified. Refresh the page and try again.");
+
   const supabase = await createClient();
-  const { error } = await supabase.rpc("record_settlement_payment", {
+  const base = {
     p_settlement_id: settlementId, p_amount: amount, p_method: method, p_note: note ?? undefined,
     p_account_name: acct.value.account_name ?? undefined,
     p_account_number: acct.value.account_number ?? undefined,
     p_bank_name: acct.value.bank_name ?? undefined,
-  });
+  };
+  // ROLLOUT BRIDGE (temporary): the command-id signature only exists on 0163.
+  // Capability is settled by a read before the payment is attempted, and the
+  // missing-function fallback below is a second guard, never a retry of a
+  // refused payment.
+  const protectedRpc = await hasRequestKeySupport();
+  let { error } = protectedRpc
+    ? await supabase.rpc("record_settlement_payment", { ...base, p_request_key: requestKey })
+    : await supabase.rpc("record_settlement_payment", base as never);
+  if (protectedRpc && isMissingFunction(error)) {
+    ({ error } = await supabase.rpc("record_settlement_payment", base as never));
+  }
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   if (visitId) revalidatePath(`/visits/${visitId}`);
   revalidatePath("/accounting/payouts");
@@ -255,9 +274,16 @@ export async function addUtilityCharge(_prev: ActionResult, formData: FormData):
   if (kind === "other" && !description) return fail("Describe what the deduction is for.");
 
   const supabase = await createClient();
+  // 0163: a visit may legitimately carry several charges of the same kind, so
+  // the command is what must be unique, not (visit, kind, amount).
   const res = await supabase.from("utility_charges").insert({
     visit_id: visitId, kind, description, amount, recorded_by: me.id,
+    ...(await requestKeyPayload(formData)),
   }).select("id");
+  if (isReplay(res.error)) {
+    revalidatePath(`/visits/${visitId}`);
+    return ok("Charge added.");
+  }
   // 0158: charges feed the approved settlement, which is a fixed snapshot.
   if (res.error?.code === "SF003") return fail("This pricing is already approved. Send the settlement back before changing charges.");
   const result = fromWrite(res, "The charge was not added — the batch may be closed to you.");
@@ -343,7 +369,14 @@ export async function recordDeduction(_prev: ActionResult, formData: FormData): 
     notes,
     kind,
     recorded_by: me.id,
+    // 0163: two recoveries of the same amount can both be real; the command id
+    // is what separates a second recovery from a resubmitted one.
+    ...(await requestKeyPayload(formData)),
   }).select("id");
+  if (isReplay(res.error)) {
+    revalidateSupplierFinance();
+    return ok("Deduction recorded.");
+  }
   // 0158: a deduction against this visit feeds its approved settlement.
   if (res.error?.code === "SF004") return fail("This pricing is already approved. Send the settlement back before changing deductions.");
   const result = fromWrite(res, "The deduction was not recorded — you may not have permission for this supplier.");

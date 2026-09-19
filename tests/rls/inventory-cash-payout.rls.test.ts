@@ -49,8 +49,7 @@ describe("inventory issues cash against an approved payout", () => {
     const { id } = await settlement(10000);
 
     const { error } = await inv.client.rpc("record_settlement_payment", {
-      p_settlement_id: id, p_amount: 4000, p_method: "cash", p_note: "part payment at the gate",
-    });
+      p_settlement_id: id, p_amount: 4000, p_method: "cash", p_note: "part payment at the gate", p_request_key: crypto.randomUUID() });
     expect(error).toBeNull();
     expect(await statusOf(id)).toBe("partially_paid");
 
@@ -63,17 +62,15 @@ describe("inventory issues cash against an approved payout", () => {
 
     // Clearing the rest closes the payout.
     expect((await inv.client.rpc("record_settlement_payment", {
-      p_settlement_id: id, p_amount: 6000, p_method: "cash",
-    })).error).toBeNull();
+      p_settlement_id: id, p_amount: 6000, p_method: "cash", p_request_key: crypto.randomUUID() })).error).toBeNull();
     expect(await statusOf(id)).toBe("paid");
   });
 
   it("cannot pay more than the remaining balance", async () => {
     const { id } = await settlement(5000);
-    await inv.client.rpc("record_settlement_payment", { p_settlement_id: id, p_amount: 3000, p_method: "cash" });
+    await inv.client.rpc("record_settlement_payment", { p_settlement_id: id, p_amount: 3000, p_method: "cash", p_request_key: crypto.randomUUID() });
     const { error } = await inv.client.rpc("record_settlement_payment", {
-      p_settlement_id: id, p_amount: 2500, p_method: "cash",
-    });
+      p_settlement_id: id, p_amount: 2500, p_method: "cash", p_request_key: crypto.randomUUID() });
     expect(error).not.toBeNull();
     expect(await statusOf(id)).toBe("partially_paid");
   });
@@ -81,8 +78,7 @@ describe("inventory issues cash against an approved payout", () => {
   it("cannot record a bank transfer — that is accounting's", async () => {
     const { id } = await settlement(5000);
     const { error } = await inv.client.rpc("record_settlement_payment", {
-      p_settlement_id: id, p_amount: 1000, p_method: "transfer",
-    });
+      p_settlement_id: id, p_amount: 1000, p_method: "transfer", p_request_key: crypto.randomUUID() });
     expect(error).not.toBeNull();
     expect((await adminClient().from("settlement_payments").select("id").eq("settlement_id", id)).data ?? []).toHaveLength(0);
   });
@@ -90,8 +86,7 @@ describe("inventory issues cash against an approved payout", () => {
   it("cannot pay a settlement the owner has not approved yet", async () => {
     const { id } = await settlement(5000, "pending");
     const { error } = await inv.client.rpc("record_settlement_payment", {
-      p_settlement_id: id, p_amount: 1000, p_method: "cash",
-    });
+      p_settlement_id: id, p_amount: 1000, p_method: "cash", p_request_key: crypto.randomUUID() });
     expect(error).not.toBeNull();
     expect(await statusOf(id)).toBe("pending");
   });
@@ -99,8 +94,7 @@ describe("inventory issues cash against an approved payout", () => {
   it("cannot pay a settlement on another site", async () => {
     const { id } = await settlement(5000);
     const { error } = await otherInv.client.rpc("record_settlement_payment", {
-      p_settlement_id: id, p_amount: 1000, p_method: "cash",
-    });
+      p_settlement_id: id, p_amount: 1000, p_method: "cash", p_request_key: crypto.randomUUID() });
     expect(error).not.toBeNull();
     expect(await statusOf(id)).toBe("approved");
   });
@@ -113,7 +107,7 @@ describe("inventory issues cash against an approved payout", () => {
 
   it("can read the cash it issued on its own site, but not another site's ledger", async () => {
     const { id } = await settlement(2000);
-    await inv.client.rpc("record_settlement_payment", { p_settlement_id: id, p_amount: 500, p_method: "cash" });
+    await inv.client.rpc("record_settlement_payment", { p_settlement_id: id, p_amount: 500, p_method: "cash", p_request_key: crypto.randomUUID() });
     expect((await inv.client.from("settlement_payments").select("id").eq("settlement_id", id)).data ?? []).toHaveLength(1);
     expect((await otherInv.client.from("settlement_payments").select("id").eq("settlement_id", id)).data ?? []).toHaveLength(0);
   });

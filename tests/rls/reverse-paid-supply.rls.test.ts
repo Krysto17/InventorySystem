@@ -36,7 +36,7 @@ describe("reverse a paid supply", () => {
       advance_deducted: 0, net_balance: 5000, submitted_by: recv.userId,
       status: "approved", approved_by: owner.userId, approved_at: new Date().toISOString(),
     }).select("id").single();
-    await acct.client.rpc("record_settlement_payment", { p_settlement_id: bs!.id, p_amount: 5000, p_method: "transfer" });
+    await acct.client.rpc("record_settlement_payment", { p_settlement_id: bs!.id, p_amount: 5000, p_method: "transfer", p_request_key: crypto.randomUUID() });
     return { visitId: v!.id as string, settlementId: bs!.id as string };
   }
 

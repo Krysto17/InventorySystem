@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
+import { requestKeyPayload } from "@/lib/actions/schema-capability";
+import { isReplay } from "@/lib/actions/request-key";
 import { canUseCostPrice } from "@/lib/auth/require-cost-price";
 import { costPriceRefusal } from "@/lib/cost-price/refusals";
 
@@ -46,9 +48,16 @@ export async function createCostPriceRun(_prev: ActionResult, formData: FormData
       material_type_id: (firstLot?.material_type_id as string | null) ?? null,
       approval_status: sell ? "pending" : null,
       created_by: me.id,
+      // 0163: one draft per command, so a resubmit does not leave a second
+      // half-built batch holding reservations on the same lots.
+      ...(await requestKeyPayload(formData)),
     })
     .select("id")
     .single();
+  if (isReplay(error)) {
+    revalidateCostPages();
+    return ok("Batch saved.");
+  }
   if (error || !run) return fail(error?.message?.replace(/^.*?:\s*/, "") ?? "Couldn't create the batch.");
 
   // Attach lots + extras; roll back the run if either fails so no empty/partial

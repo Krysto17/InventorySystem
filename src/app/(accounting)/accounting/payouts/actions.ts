@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, type ActionResult } from "@/lib/actions/result";
 import { revalidateSupplierFinance } from "@/lib/finance/revalidate";
+import { requestKeyFrom } from "@/lib/actions/request-key";
 
 // Only the accountant executes payment. The DB triggers enforce the
 // approved → paid transition + role; these surface failures (incl. an
@@ -46,8 +47,15 @@ export async function markSettlementPaid(_prev: ActionResult, formData: FormData
   if (!st) return fail("Couldn't load this settlement — check you have access to its site.");
   const remaining = Number(st.net_balance) - Number(paidTotal ?? 0);
   // A ₦0 (fully-covered) balance is closed directly; otherwise pay the rest.
+  // 0163: paying off the remainder is one command; a resubmit replays it.
+  const requestKey = requestKeyFrom(formData);
+  if (remaining > 0.005 && !requestKey) {
+    return fail("That payment could not be identified. Refresh the page and try again.");
+  }
   const { error } = remaining > 0.005
-    ? await supabase.rpc("record_settlement_payment", { p_settlement_id: id, p_amount: remaining, p_method: "transfer" })
+    ? await supabase.rpc("record_settlement_payment", {
+        p_settlement_id: id, p_amount: remaining, p_method: "transfer", p_request_key: requestKey!,
+      })
     : await supabase.rpc("close_settlement", { p_id: id });
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidateSupplierFinance();

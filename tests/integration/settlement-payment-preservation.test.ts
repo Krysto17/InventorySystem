@@ -56,8 +56,7 @@ describe("settlement payment preservation (0156)", () => {
 
   async function pay(settlementId: string, amount: number, who: TestUser = acct) {
     const { error } = await who.client.rpc("record_settlement_payment", {
-      p_settlement_id: settlementId, p_amount: amount, p_method: "transfer",
-    });
+      p_settlement_id: settlementId, p_amount: amount, p_method: "transfer", p_request_key: crypto.randomUUID() });
     if (error) throw error;
   }
 
@@ -212,7 +211,7 @@ describe("settlement payment preservation (0156)", () => {
     for (let i = 0; i < REPEAT; i++) {
       const { visitId, settlementId } = await batch("in_accounting");
       const [payRes, sbRes] = await Promise.all([
-        acct.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 20000, p_method: "transfer" }),
+        acct.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 20000, p_method: "transfer", p_request_key: crypto.randomUUID() }),
         acct2.client.rpc("accountant_send_back_to_owner", { p_visit_id: visitId, p_reason: `race ${i}` }),
       ]);
       const snap = await snapshot(visitId, settlementId);
@@ -241,7 +240,7 @@ describe("settlement payment preservation (0156)", () => {
     for (let i = 0; i < REPEAT; i++) {
       const { visitId, settlementId } = await batch("in_accounting");
       const [payRes, delRes] = await Promise.all([
-        acct.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 20000, p_method: "transfer" }),
+        acct.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 20000, p_method: "transfer", p_request_key: crypto.randomUUID() }),
         owner2.client.rpc("delete_batch", { p_visit_id: visitId }),
       ]);
       const snap = await snapshot(visitId, settlementId);

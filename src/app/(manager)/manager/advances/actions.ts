@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
+import { requestKeyPayload } from "@/lib/actions/schema-capability";
 import { accountTrioFromForm } from "@/lib/validation/account";
 import { STALE_MESSAGE } from "@/lib/approvals/stale";
+import { isReplay } from "@/lib/actions/request-key";
 import { revalidateSupplierFinance } from "@/lib/finance/revalidate";
 
 // Manager records an advance for a supplier (marked to that supplier). Created
@@ -29,10 +31,17 @@ export async function recordAdvance(_prev: ActionResult, formData: FormData): Pr
   const siteId = profile?.site_id as string | null;
   if (!siteId) return fail("Owners record advances from the supplier profile per site.");
 
+  // 0163: two advances of the same amount to the same supplier can both be
+  // real; only the command id tells a second advance from a resubmitted one.
   const res = await supabase.from("advances").insert({
     supplier_id: supplierId, site_id: siteId, purpose, amount_naira: amount,
     comment, ...acct.value, recorded_by: me.id,
+    ...(await requestKeyPayload(formData)),
   }).select("id");
+  if (isReplay(res.error)) {
+    revalidateSupplierFinance();
+    return ok("Advance recorded.");
+  }
   if (res.error) return fail(res.error.message.replace(/^.*?:\s*/, ""));
   revalidateSupplierFinance();
   return ok();

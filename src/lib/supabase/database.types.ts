@@ -46,6 +46,7 @@ export type Database = {
           ref_visit_id: string | null
           site_id: string
           supplier_id: string
+          request_key: string | null
         }
         Insert: {
           amount: number
@@ -58,6 +59,7 @@ export type Database = {
           ref_visit_id?: string | null
           site_id: string
           supplier_id: string
+          request_key?: string | null
         }
         Update: {
           amount?: number
@@ -70,6 +72,7 @@ export type Database = {
           ref_visit_id?: string | null
           site_id?: string
           supplier_id?: string
+          request_key?: string | null
         }
         Relationships: [
           {
@@ -156,6 +159,7 @@ export type Database = {
           supplier_id: string
           updated_at: string
           revision: number
+          request_key: string | null
         }
         Insert: {
           amount_naira: number
@@ -180,6 +184,7 @@ export type Database = {
           supplier_id: string
           updated_at?: string
           revision?: number
+          request_key?: string | null
         }
         Update: {
           amount_naira?: number
@@ -204,6 +209,7 @@ export type Database = {
           supplier_id?: string
           updated_at?: string
           revision?: number
+          request_key?: string | null
         }
         Relationships: [
           {
@@ -559,6 +565,7 @@ export type Database = {
           paid_by: string | null
           settlement_id: string
           site_id: string
+          request_key: string | null
         }
         Insert: {
           amount: number
@@ -572,6 +579,7 @@ export type Database = {
           paid_by?: string | null
           settlement_id: string
           site_id: string
+          request_key?: string | null
         }
         Update: {
           amount?: number
@@ -585,6 +593,7 @@ export type Database = {
           paid_by?: string | null
           settlement_id?: string
           site_id?: string
+          request_key?: string | null
         }
         Relationships: []
       }
@@ -700,6 +709,7 @@ export type Database = {
           recorded_by: string | null
           site_id: string
           revision: number
+          request_key: string | null
         }
         Insert: {
           amount_naira?: number | null
@@ -723,6 +733,7 @@ export type Database = {
           recorded_by?: string | null
           site_id: string
           revision?: number
+          request_key?: string | null
         }
         Update: {
           amount_naira?: number | null
@@ -746,6 +757,7 @@ export type Database = {
           recorded_by?: string | null
           site_id?: string
           revision?: number
+          request_key?: string | null
         }
         Relationships: [
           {
@@ -861,6 +873,7 @@ export type Database = {
           sold_at: string | null
           total_cost_price: number
           total_weight_kg: number
+          request_key: string | null
         }
         Insert: {
           approval_status?: string | null
@@ -879,6 +892,7 @@ export type Database = {
           sold_at?: string | null
           total_cost_price?: number
           total_weight_kg?: number
+          request_key?: string | null
         }
         Update: {
           approval_status?: string | null
@@ -897,6 +911,7 @@ export type Database = {
           sold_at?: string | null
           total_cost_price?: number
           total_weight_kg?: number
+          request_key?: string | null
         }
         Relationships: [
           {
@@ -982,6 +997,7 @@ export type Database = {
           recorded_by: string | null
           site_id: string
           supplier_id: string | null
+          request_key: string | null
         }
         Insert: {
           bags?: number | null
@@ -996,6 +1012,7 @@ export type Database = {
           recorded_by?: string | null
           site_id: string
           supplier_id?: string | null
+          request_key?: string | null
         }
         Update: {
           bags?: number | null
@@ -1010,6 +1027,7 @@ export type Database = {
           recorded_by?: string | null
           site_id?: string
           supplier_id?: string | null
+          request_key?: string | null
         }
         Relationships: [
           {
@@ -1064,6 +1082,7 @@ export type Database = {
           supplier_id: string | null
           visit_material_id: string | null
           weight_kg: number | null
+          request_key: string | null
         }
         Insert: {
           acknowledged_at?: string | null
@@ -1086,6 +1105,7 @@ export type Database = {
           supplier_id?: string | null
           visit_material_id?: string | null
           weight_kg?: number | null
+          request_key?: string | null
         }
         Update: {
           acknowledged_at?: string | null
@@ -1108,6 +1128,7 @@ export type Database = {
           supplier_id?: string | null
           visit_material_id?: string | null
           weight_kg?: number | null
+          request_key?: string | null
         }
         Relationships: [
           {
@@ -1894,6 +1915,7 @@ export type Database = {
           ref_visit_id: string | null
           site_id: string
           weight: number
+          request_key: string | null
         }
         Insert: {
           created_at?: string
@@ -1908,6 +1930,7 @@ export type Database = {
           ref_visit_id?: string | null
           site_id: string
           weight: number
+          request_key?: string | null
         }
         Update: {
           created_at?: string
@@ -1922,6 +1945,7 @@ export type Database = {
           ref_visit_id?: string | null
           site_id?: string
           weight?: number
+          request_key?: string | null
         }
         Relationships: [
           {
@@ -2078,6 +2102,7 @@ export type Database = {
           kind: string
           recorded_by: string | null
           visit_id: string
+          request_key: string | null
         }
         Insert: {
           amount: number
@@ -2087,6 +2112,7 @@ export type Database = {
           kind: string
           recorded_by?: string | null
           visit_id: string
+          request_key?: string | null
         }
         Update: {
           amount?: number
@@ -2097,6 +2123,7 @@ export type Database = {
           kind?: string
           recorded_by?: string | null
           visit_id?: string
+          request_key?: string | null
         }
         Relationships: [
           {
@@ -2138,6 +2165,7 @@ export type Database = {
           updated_at: string
           visit_id: string
           weight_kg: number
+          request_key: string | null
         }
         Insert: {
           created_at?: string
@@ -2161,6 +2189,7 @@ export type Database = {
           updated_at?: string
           visit_id: string
           weight_kg: number
+          request_key?: string | null
         }
         Update: {
           created_at?: string
@@ -2184,6 +2213,7 @@ export type Database = {
           updated_at?: string
           visit_id?: string
           weight_kg?: number
+          request_key?: string | null
         }
         Relationships: [
           {
@@ -2532,7 +2562,7 @@ export type Database = {
       record_debt_repayment: { Args: { p_supplier_id: string; p_amount: number; p_note?: string; p_kind?: string }; Returns: string }
       settlement_totals: { Args: { p_visit_id: string }; Returns: { materials: number; processing_fee: number; other_deductions: number; advances: number; net: number; remaining_debt: number }[] }
       settlement_paid_total: { Args: { p_settlement_id: string }; Returns: number }
-      record_settlement_payment: { Args: { p_settlement_id: string; p_amount: number; p_method: string; p_note?: string; p_account_name?: string; p_account_number?: string; p_bank_name?: string }; Returns: string }
+      record_settlement_payment: { Args: { p_settlement_id: string; p_amount: number; p_method: string; p_note?: string; p_account_name?: string; p_account_number?: string; p_bank_name?: string; p_request_key: string }; Returns: string }
       close_settlement: { Args: { p_id: string }; Returns: undefined }
       hold_settlement: { Args: { p_id: string }; Returns: undefined }
       release_settlement: { Args: { p_id: string }; Returns: undefined }

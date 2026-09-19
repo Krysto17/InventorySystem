@@ -85,7 +85,7 @@ describe("financial and stock integrity guards (0161)", () => {
     const v = await visit(kg, price, supplier);
     expect((await approvePricing(v)).error, "approve").toBeNull();
     const s = await settlementOf(v);
-    const pay = await acct.client.rpc("record_settlement_payment", { p_settlement_id: s!.id, p_amount: kg * price, p_method: "transfer" } as never);
+    const pay = await acct.client.rpc("record_settlement_payment", { p_settlement_id: s!.id, p_amount: kg * price, p_method: "transfer", p_request_key: crypto.randomUUID() } as never);
     expect(pay.error, `payment: ${pay.error?.message}`).toBeNull();
     return v;
   }

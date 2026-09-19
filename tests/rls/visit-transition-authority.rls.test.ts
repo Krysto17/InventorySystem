@@ -88,7 +88,7 @@ describe("visit transition authority (0159)", () => {
 
     it("3. accounting: part-paid in_accounting → pricing, and the protected send-back refuses too", async () => {
       const { visitId, settlementId } = await approvedBatch();
-      expect((await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 30000, p_method: "transfer" })).error).toBeNull();
+      expect((await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 30000, p_method: "transfer", p_request_key: crypto.randomUUID() })).error).toBeNull();
       const direct = await acctDong.client.from("visits").update({ state: "pricing" }).eq("id", visitId).select("id");
       expect(direct.error?.code).toBe("VT001");
       expect((await acctDong.client.rpc("accountant_send_back_to_owner", { p_visit_id: visitId, p_reason: "x" })).error?.code).toBe("SP001");
@@ -259,11 +259,11 @@ describe("visit transition authority (0159)", () => {
 
     it("16. the payment workflow stocks the batch — paid by accounting, or in cash by inventory", async () => {
       const a = await approvedBatch();
-      expect((await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: a.settlementId, p_amount: 100000, p_method: "transfer" })).error).toBeNull();
+      expect((await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: a.settlementId, p_amount: 100000, p_method: "transfer", p_request_key: crypto.randomUUID() })).error).toBeNull();
       expect(await stateOf(a.visitId)).toBe("stocked");
 
       const b = await approvedBatch();
-      expect((await invDong.client.rpc("record_settlement_payment", { p_settlement_id: b.settlementId, p_amount: 100000, p_method: "cash" })).error).toBeNull();
+      expect((await invDong.client.rpc("record_settlement_payment", { p_settlement_id: b.settlementId, p_amount: 100000, p_method: "cash", p_request_key: crypto.randomUUID() })).error).toBeNull();
       expect(await stateOf(b.visitId)).toBe("stocked");
       const { data: lots } = await adminClient().from("stock_lots").select("id, ref_visit_material_id");
       expect((lots ?? []).length).toBeGreaterThan(0);
@@ -301,7 +301,7 @@ describe("visit transition authority (0159)", () => {
       for (let i = 0; i < REPEAT; i++) {
         const { visitId, settlementId } = await approvedBatch();
         const [pay, forced] = await Promise.all([
-          acctDong.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100000, p_method: "transfer" }),
+          acctDong.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100000, p_method: "transfer", p_request_key: crypto.randomUUID() }),
           gateDong.client.from("visits").update({ state: "stocked" }).eq("id", visitId).select("id"),
         ]);
         expect(pay.error, `round ${i}: payment`).toBeNull();
@@ -324,7 +324,7 @@ describe("visit transition authority (0159)", () => {
         const { visitId, settlementId } = await approvedBatch();
         const [back, pay] = await Promise.all([
           acctDong.client.rpc("accountant_send_back_to_owner", { p_visit_id: visitId, p_reason: `race ${i}` }),
-          acctDong2.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100000, p_method: "transfer" }),
+          acctDong2.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100000, p_method: "transfer", p_request_key: crypto.randomUUID() }),
         ]);
         const state = await stateOf(visitId);
         const { data: st } = await adminClient().from("batch_settlements").select("status").eq("visit_id", visitId).maybeSingle();

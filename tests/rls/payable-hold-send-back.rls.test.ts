@@ -92,7 +92,7 @@ describe("payable hold / release / send-back", () => {
 
   it("a settlement with a payment cannot be sent back", async () => {
     const { id } = await approvedSettlement();
-    await mgr.client.rpc("record_settlement_payment", { p_settlement_id: id, p_amount: 1000, p_method: "cash" });
+    await mgr.client.rpc("record_settlement_payment", { p_settlement_id: id, p_amount: 1000, p_method: "cash", p_request_key: crypto.randomUUID() });
     expect((await owner.client.rpc("send_settlement_back", { p_id: id, p_reason: "too late" })).error).not.toBeNull();
   });
 

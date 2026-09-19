@@ -141,9 +141,9 @@ describe("settlement financial immutability (0158)", () => {
       expect(patch.error!.message).toBe("Approved settlement amounts cannot be edited directly.");
       expect((await snapshot(visitId, lineId)).st).toEqual(before.st);
 
-      const overpay = await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 250000, p_method: "transfer" });
+      const overpay = await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 250000, p_method: "transfer", p_request_key: crypto.randomUUID() });
       expect(overpay.error, "250,000 exceeds the approved 100,000").not.toBeNull();
-      const pay = await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100000, p_method: "transfer" });
+      const pay = await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100000, p_method: "transfer", p_request_key: crypto.randomUUID() });
       expect(pay.error).toBeNull();
       const after = await snapshot(visitId, lineId);
       expect(after.st!.status).toBe("paid");
@@ -169,7 +169,7 @@ describe("settlement financial immutability (0158)", () => {
     it("each frozen column is refused on its own, on an approved and on a paid settlement", async () => {
       const approved = await approvedBatch(DONG);
       const paid = await approvedBatch(DONG);
-      await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: paid.settlementId, p_amount: 100000, p_method: "transfer" });
+      await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: paid.settlementId, p_amount: 100000, p_method: "transfer", p_request_key: crypto.randomUUID() });
       const { data: other } = await adminClient().from("visits").insert({
         site_id: DONG, supplier_id: supplierId, declared_material_type_id: material, entry_path: "processed", state: "pricing", created_by: owner.userId,
       }).select("id").single();
@@ -268,7 +268,7 @@ describe("settlement financial immutability (0158)", () => {
 
     it("B. partially paid: send-back refused (0156), lines and settlement both frozen", async () => {
       const { visitId, lineId, settlementId } = await approvedBatch(DONG);
-      await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 30000, p_method: "transfer" });
+      await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 30000, p_method: "transfer", p_request_key: crypto.randomUUID() });
       const before = await snapshot(visitId, lineId);
       expect((await acctDong.client.rpc("accountant_send_back_to_owner", { p_visit_id: visitId, p_reason: "x" })).error?.code).toBe("SP001");
       expect((await owner.client.from("visit_materials").update({ weight_kg: 5 }).eq("id", lineId).select("id")).error?.code).toBe("SF002");
@@ -278,7 +278,7 @@ describe("settlement financial immutability (0158)", () => {
 
     it("C. paid: settlement and lines immutable for the owner; GM sees nothing to edit", async () => {
       const { visitId, lineId, settlementId } = await approvedBatch(DONG);
-      await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100000, p_method: "transfer" });
+      await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100000, p_method: "transfer", p_request_key: crypto.randomUUID() });
       const before = await snapshot(visitId, lineId);
       expect(before.state).toBe("stocked");
       expect((await owner.client.from("visit_materials").update({ unit_price: 1 }).eq("id", lineId).select("id")).error?.code).toBe("SF002");
@@ -328,7 +328,7 @@ describe("settlement financial immutability (0158)", () => {
         const { visitId, lineId, settlementId } = await approvedBatch(DONG);
         const [patch, pay] = await Promise.all([
           acctDong.client.from("batch_settlements").update({ net_balance: 250000 }).eq("id", settlementId).select("id"),
-          acctDong2.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100000, p_method: "transfer" }),
+          acctDong2.client.rpc("record_settlement_payment", { p_settlement_id: settlementId, p_amount: 100000, p_method: "transfer", p_request_key: crypto.randomUUID() }),
         ]);
         expect(patch.error?.code, `round ${i}`).toBe("SF001");
         expect(pay.error, `round ${i}`).toBeNull();
@@ -455,7 +455,7 @@ describe("settlement financial immutability (0158)", () => {
 
     it("29. partially paid: send-back refused, charges and deductions stay frozen", async () => {
       const b = await approvedBatchWithSources(DONG);
-      await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: b.settlementId, p_amount: 10000, p_method: "transfer" });
+      await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: b.settlementId, p_amount: 10000, p_method: "transfer", p_request_key: crypto.randomUUID() });
       const before = await sources(b.visitId);
       expect((await acctDong.client.rpc("accountant_send_back_to_owner", { p_visit_id: b.visitId, p_reason: "x" })).error?.code).toBe("SP001");
       expect((await owner.client.from("utility_charges").update({ amount: 1 }).eq("id", b.lightBillId).select("id")).error?.code).toBe("SF003");
@@ -465,7 +465,7 @@ describe("settlement financial immutability (0158)", () => {
 
     it("30. paid: charges and deductions frozen for the owner and the service role", async () => {
       const b = await approvedBatchWithSources(DONG);
-      await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: b.settlementId, p_amount: 90000, p_method: "transfer" });
+      await acctDong.client.rpc("record_settlement_payment", { p_settlement_id: b.settlementId, p_amount: 90000, p_method: "transfer", p_request_key: crypto.randomUUID() });
       const before = await sources(b.visitId);
       expect(before.st!.status).toBe("paid");
       expect((await owner.client.from("utility_charges").delete().eq("id", b.otherId).select("id")).error?.code).toBe("SF003");

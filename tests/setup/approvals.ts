@@ -53,3 +53,12 @@ export async function approveCostRunAs(client: SupabaseClient, runId: string) {
     p_run_id: runId, p_reviewed_token: (token as string | null) ?? "",
   });
 }
+
+/**
+ * 0163: a payment is a command, and the command carries an id so a retry can be
+ * recognised. Tests that record a payment mint a fresh id per call, which is
+ * what a fresh submission does; replay tests pass their own id explicitly.
+ */
+export function payRpcArgs<T extends Record<string, unknown>>(args: T) {
+  return { ...args, p_request_key: crypto.randomUUID() };
+}
