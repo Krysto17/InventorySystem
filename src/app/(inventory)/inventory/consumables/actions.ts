@@ -6,7 +6,6 @@ import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 import { accountTrioFromForm } from "@/lib/validation/account";
 import { STALE_MESSAGE } from "@/lib/approvals/stale";
-import { isMissingFunction } from "@/lib/approvals/bridge";
 import { CONSUMABLE_CATEGORIES, type ConsumableCategory } from "./categories";
 
 export async function createConsumable(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
@@ -118,16 +117,6 @@ export async function reviewExpense(_prev: ActionResult, formData: FormData): Pr
   const { error } = await supabase.rpc("review_expense", {
     p_id: id, p_reviewed_revision: revision, p_decision: decision,
   });
-  // ROLLOUT BRIDGE (temporary): only when 0162 is not applied yet.
-  if (isMissingFunction(error)) {
-    const res = await supabase.from("consumables")
-      .update({ approval_status: decision }).eq("id", id).select("id");
-    const legacy = fromWrite(res, "That decision was not recorded — the expense may already have been ruled on.");
-    if (!legacy.ok) return legacy;
-    revalidatePath("/inventory/consumables");
-    revalidatePath("/owner/approvals");
-    return ok(decision === "approved" ? "Expense approved." : "Expense rejected.");
-  }
   if (error?.code === "ST001") return fail(STALE_MESSAGE);
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidatePath("/inventory/consumables");

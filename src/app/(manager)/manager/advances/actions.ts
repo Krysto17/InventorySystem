@@ -6,7 +6,6 @@ import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 import { accountTrioFromForm } from "@/lib/validation/account";
 import { STALE_MESSAGE } from "@/lib/approvals/stale";
-import { isMissingFunction } from "@/lib/approvals/bridge";
 import { revalidateSupplierFinance } from "@/lib/finance/revalidate";
 
 // Manager records an advance for a supplier (marked to that supplier). Created
@@ -111,15 +110,6 @@ export async function setAdvanceApproval(_prev: ActionResult, formData: FormData
   const { error } = await supabase.rpc("review_advance", {
     p_id: id, p_reviewed_revision: revision, p_decision: decision,
   });
-  // ROLLOUT BRIDGE (temporary): only when 0162 is not applied yet.
-  if (isMissingFunction(error)) {
-    const res = await supabase.from("advances")
-      .update({ approval_status: decision }).eq("id", id).select("id");
-    const legacy = fromWrite(res, "That decision was not recorded — the advance may already have been ruled on.");
-    if (!legacy.ok) return legacy;
-    revalidateSupplierFinance();
-    return ok(decision === "approved" ? "Advance approved." : "Advance rejected.");
-  }
   if (error?.code === "ST001") return fail(STALE_MESSAGE);
   if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidateSupplierFinance();
