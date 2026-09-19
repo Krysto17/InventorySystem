@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 import { DELETE_BATCH_ROLES, ROLE_HOME } from "@/lib/auth/roles";
+import { STALE_MESSAGE } from "@/lib/approvals/stale";
+import { isMissingFunction } from "@/lib/approvals/bridge";
 
 // Delete an entire batch supply (#4/#5). Four roles have a path to this and the
 // delete_batch RPC (0142) decides which of them may remove THIS batch right now:
@@ -267,8 +269,33 @@ export async function approvePricing(_prev: ActionResult, formData: FormData): P
   if (me.role !== "owner") return fail("Only the owner can approve pricing.");
   const visitId = String(formData.get("visit_id") ?? "");
   if (!visitId) return fail("Missing batch.");
+  // 0162: the decision names the exact pricing the owner reviewed — lines,
+  // utility charges, deductions and the supplier debt the snapshot will freeze.
+  const reviewedToken = String(formData.get("reviewed_token") ?? "").trim();
   const supabase = await createClient();
-  const { error } = await supabase.rpc("approve_pricing", { p_visit_id: visitId });
+  // ROLLOUT BRIDGE (temporary): on 0161 the page cannot have produced a token,
+  // because pricing_review_token does not exist there either.
+  if (!reviewedToken) {
+    const legacy = await supabase.rpc("approve_pricing", { p_visit_id: visitId } as never);
+    if (!isMissingFunction(legacy.error)) {
+      if (legacy.error?.code === "SP001") {
+        return fail("Payments have already been recorded for this settlement. Resolve the payment before repricing it.");
+      }
+      if (legacy.error) return fail(legacy.error.message.replace(/^.*?:\s*/, ""));
+      revalidatePath(`/visits/${visitId}`);
+      revalidatePath("/owner/approvals");
+      revalidatePath("/owner");
+      return ok("Pricing approved.");
+    }
+    // 0162 is live, so a missing token is a missing review.
+    return fail(STALE_MESSAGE);
+  }
+  const { error } = await supabase.rpc("approve_pricing", {
+    p_visit_id: visitId, p_reviewed_token: reviewedToken,
+  });
+  // 0162: a financial input moved while the owner was deciding. No settlement
+  // was created and the batch did not move.
+  if (error?.code === "ST001") return fail(STALE_MESSAGE);
   // 0156: approval replaces the settlement, which must not happen once payments
   // are recorded against it.
   if (error?.code === "SP001") {

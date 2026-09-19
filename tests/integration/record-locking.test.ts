@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approvePricingAs } from "../setup/approvals";
 
 // Phase 10 (D): hybrid edit policy — the author edits until the next stage
 // acts, then manager/owner only. RLS UPDATE denials surface as 0 rows changed.
@@ -87,7 +88,7 @@ describe("hybrid record locking (integration)", () => {
     expect((await owner.client.from("pricing").insert({
       visit_id: visitId, unit_price: 100, agreement_status: "agreed", payment_terms: "immediate", priced_by: owner.userId,
     })).error).toBeNull();
-    expect((await owner.client.rpc("approve_pricing", { p_visit_id: visitId })).error).toBeNull();
+    expect((await approvePricingAs(owner.client, visitId)).error).toBeNull();
     expect((await adminClient().from("visits").select("state").eq("id", visitId).single()).data!.state).toBe("in_accounting");
     await qc.client.from("xrf_records").update({ result: "v4" }).eq("id", x!.id);
     ({ data: row } = await adminClient().from("xrf_records").select("result").eq("id", x!.id).single());

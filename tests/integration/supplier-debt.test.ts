@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { reviewAdvanceAs } from "../setup/approvals";
 
 // Phase 11 (A): approved advances form a supplier debt; deductions recover it
 // partially; outstanding balance is automatic; over-deduction is blocked.
@@ -32,9 +33,13 @@ describe("supplier debt ledger (advances + deductions)", () => {
     expect(await debt()).toBe(0);
 
     // Only PAID advances count toward debt (owner approves → accountant pays).
+    // 0162 version-checks the approval, so the owner rules on the revision they
+    // read; pending → paid directly is still an illegal transition.
     const payAdvance = async (id: string) => {
-      await adminClient().from("advances").update({ approval_status: "approved" }).eq("id", id);
-      await adminClient().from("advances").update({ approval_status: "paid" }).eq("id", id);
+      const approved = await reviewAdvanceAs(owner.client, id);
+      expect(approved.error, "owner approves the advance").toBeNull();
+      const paid = await adminClient().from("advances").update({ approval_status: "paid" }).eq("id", id);
+      expect(paid.error, "accountant pays it").toBeNull();
     };
     const { data: a1 } = await adminClient().from("advances").insert({
       supplier_id: supplierId, site_id: siteAId, purpose: "Float 1", amount_naira: 30000,

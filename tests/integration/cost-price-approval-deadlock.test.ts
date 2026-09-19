@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approveCostRunAs } from "../setup/approvals";
 
 /**
  * Two cost-price approvals must not deadlock against each other.
@@ -62,9 +63,8 @@ describe("cost-price approval lock ordering", () => {
     return r!.id as string;
   }
 
-  const approve = (runId: string) =>
-    owner.client.from("cost_price_runs")
-      .update({ approval_status: "approved" }).eq("id", runId).select("id");
+  // 0162: approval names the run version the owner reviewed.
+  const approve = (runId: string) => approveCostRunAs(owner.client, runId);
 
   beforeAll(async () => {
     const admin = adminClient();

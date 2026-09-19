@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { reviewAdvanceAs, reviewExpenseAs } from "../setup/approvals";
 
 // Owner approves; only the accountant marks paid. Advances and expenses gain a
 // 'paid' step after owner approval.
@@ -23,10 +24,11 @@ describe("paid workflow (owner approves → accountant pays)", () => {
       supplier_id: supplierId, site_id: siteId, purpose: "Float", amount_naira: 40000, recorded_by: mgr.userId,
     }).select("id").single();
 
-    // Manager cannot approve
-    expect((await mgr.client.from("advances").update({ approval_status: "approved" }).eq("id", a!.id)).error).not.toBeNull();
-    // Owner approves
-    expect((await owner.client.from("advances").update({ approval_status: "approved" }).eq("id", a!.id)).error).toBeNull();
+    // Manager cannot approve (0162: through the review RPC, which is the only
+    // way to approve at all — a direct status UPDATE is refused for everyone).
+    expect((await reviewAdvanceAs(mgr.client, a!.id)).error).not.toBeNull();
+    // Owner approves the version they read
+    expect((await reviewAdvanceAs(owner.client, a!.id)).error).toBeNull();
 
     // Manager marks paid — cash payouts are often made by the manager (0101).
     expect((await mgr.client.from("advances").update({ approval_status: "paid" }).eq("id", a!.id)).error).toBeNull();
@@ -47,9 +49,9 @@ describe("paid workflow (owner approves → accountant pays)", () => {
     expect(e!.approval_status).toBe("pending");
 
     // Accountant cannot approve
-    expect((await acct.client.from("consumables").update({ approval_status: "approved" }).eq("id", e!.id)).error).not.toBeNull();
-    // Owner approves
-    expect((await owner.client.from("consumables").update({ approval_status: "approved" }).eq("id", e!.id)).error).toBeNull();
+    expect((await reviewExpenseAs(acct.client, e!.id)).error).not.toBeNull();
+    // Owner approves the version they read
+    expect((await reviewExpenseAs(owner.client, e!.id)).error).toBeNull();
     // Manager marks paid — allowed since Phase-0101 (cash payouts by the manager).
     expect((await mgr.client.from("consumables").update({ approval_status: "paid" }).eq("id", e!.id)).error).toBeNull();
 

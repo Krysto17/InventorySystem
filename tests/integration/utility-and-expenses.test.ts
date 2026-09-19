@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { reviewExpenseAs } from "../setup/approvals";
 
 // Phase 11 (B+E): utility charges per visit + the expense approval flow.
 describe("utility charges + expense approval", () => {
@@ -81,8 +82,8 @@ describe("utility charges + expense approval", () => {
     expect(tryInv.error).not.toBeNull();
 
     // Owner approves; approved_by/at stamped.
-    const ownerOk = await owner.client.from("consumables")
-      .update({ approval_status: "approved" }).eq("id", exp!.id);
+    // 0162: the owner approves the exact version they read.
+    const ownerOk = await reviewExpenseAs(owner.client, exp!.id);
     expect(ownerOk.error).toBeNull();
     const { data: after } = await adminClient().from("consumables")
       .select("approval_status, approved_by, approved_at").eq("id", exp!.id).single();

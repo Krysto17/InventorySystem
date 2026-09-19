@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approvePricingAs } from "../setup/approvals";
 
 // 0156 (3F-T1): once a payment is recorded against a settlement, nothing deletes
 // that settlement — not the accountant's send-back, not the owner's re-approval,
@@ -127,7 +128,7 @@ describe("settlement payment preservation (0156)", () => {
     const { visitId, settlementId } = await batch("awaiting_price_approval");
     await pay(settlementId, 25000);
     const before = await snapshot(visitId, settlementId);
-    const { error } = await owner.client.rpc("approve_pricing", { p_visit_id: visitId });
+    const { error } = await approvePricingAs(owner.client, visitId);
     expect(error?.code).toBe("SP001");
     expect(await snapshot(visitId, settlementId)).toEqual(before);
     const { data: all } = await adminClient().from("batch_settlements").select("id").eq("visit_id", visitId);
@@ -136,7 +137,7 @@ describe("settlement payment preservation (0156)", () => {
 
   it("5. zero-payment repricing still replaces the settlement", async () => {
     const { visitId, settlementId } = await batch("awaiting_price_approval");
-    const { error } = await owner.client.rpc("approve_pricing", { p_visit_id: visitId });
+    const { error } = await approvePricingAs(owner.client, visitId);
     expect(error).toBeNull();
     const { data: all } = await adminClient().from("batch_settlements").select("id, status").eq("visit_id", visitId);
     expect(all ?? []).toHaveLength(1);

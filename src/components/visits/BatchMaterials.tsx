@@ -73,6 +73,16 @@ export async function BatchMaterials({
   // Nothing to show for legacy single-material visits with no batch lines.
   if (lines.length === 0 && visitState !== "in_receiving") return null;
 
+  // 0162: the owner approves the pricing version they are looking at. Read the
+  // fingerprint of every financial source the settlement will freeze; if any of
+  // them moves before the click, the approval is refused rather than snapshotting
+  // figures nobody reviewed.
+  let pricingToken: string | null = null;
+  if (viewerRole === "owner" && visitState === "awaiting_price_approval") {
+    const { data } = await supabase.rpc("pricing_review_token", { p_visit_id: visitId });
+    pricingToken = (data as string | null) ?? null;
+  }
+
   // Once the manager submits the priced batch to the owner, the supply invoice
   // is generated (agreed prices − deductions). Available from that point on to
   // manager/owner (and accounting downstream).
@@ -455,6 +465,8 @@ export async function BatchMaterials({
             <span className="text-xs text-ink-2">Priced batch awaiting your approval:</span>
             <ActionForm action={approvePricing}>
               <input type="hidden" name="visit_id" value={visitId} />
+              {/* 0162: the exact pricing being reviewed right now. */}
+              <input type="hidden" name="reviewed_token" value={pricingToken ?? ""} />
               <SubmitButton pendingText="Approving…" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white disabled:opacity-50">Approve &amp; finalize</SubmitButton>
             </ActionForm>
             <ActionForm action={rejectPricing}>

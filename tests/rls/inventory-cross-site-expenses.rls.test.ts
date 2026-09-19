@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { reviewExpenseAs } from "../setup/approvals";
 
 // One inventory officer REVIEWS expenses for the whole organisation: they read
 // every site's expenses and run their own site's. 0120 also let them write
@@ -90,7 +91,7 @@ describe("inventory reads expenses everywhere, writes only its own site", () => 
       .update({ approval_status: "approved" }).eq("id", e!.id);
     expect(error).not.toBeNull();
 
-    expect((await owner.client.from("consumables").update({ approval_status: "approved" }).eq("id", e!.id)).error).toBeNull();
+    expect((await reviewExpenseAs(owner.client, e!.id)).error).toBeNull();
   });
 
   it("a site manager still sees only their own site", async () => {

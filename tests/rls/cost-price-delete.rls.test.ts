@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approveCostRunAs } from "../setup/approvals";
 
 // The general manager (or owner) can delete an unapproved cost-price run; an
 // approved (sold) one is locked; a site manager can't delete at all.
@@ -46,7 +47,7 @@ describe("delete cost-price run", () => {
     }).select("id").single();
     const { data } = await run("pending");
     expect((await adminClient().from("cost_price_run_lots").insert({ run_id: data!.id, stock_lot_id: lotRow!.id })).error).toBeNull();
-    expect((await owner.client.from("cost_price_runs").update({ approval_status: "approved" }).eq("id", data!.id)).error).toBeNull();
+    expect((await approveCostRunAs(owner.client, data!.id as string)).error).toBeNull();
     await gm.client.from("cost_price_runs").delete().eq("id", data!.id);
     expect(await exists(data!.id)).toBe(true);
     // owner can't delete it either

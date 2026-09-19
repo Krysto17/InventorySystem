@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approvePricingAs } from "../setup/approvals";
 
 // The owner's price approval auto-creates an APPROVED settlement (net after
 // deductions) and sends the visit to accounting — no manual submit step.
@@ -33,7 +34,7 @@ describe("approve_pricing auto-creates the settlement", () => {
       visit_id: visitId, kind: "light_bill", description: "Processing fee", amount: 500, recorded_by: recv.userId,
     });
 
-    const { error } = await owner.client.rpc("approve_pricing", { p_visit_id: visitId });
+    const { error } = await approvePricingAs(owner.client, visitId);
     expect(error).toBeNull();
 
     const { data: vs } = await adminClient().from("visits").select("state").eq("id", visitId).single();

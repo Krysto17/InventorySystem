@@ -40,12 +40,11 @@ describe("batch settlement (integration + RLS)", () => {
   });
 
   it("paid advances build a supplier debt; partial deduction leaves a remainder", async () => {
-    const { data: a } = await adminClient().from("advances")
-      .insert({ supplier_id: supplierId, site_id: siteId, purpose: "Float", amount_naira: 50000 })
-      .select("id").single();
-    // Only paid advances count: owner approves → accountant pays.
-    await adminClient().from("advances").update({ approval_status: "approved" }).eq("id", a!.id);
-    await adminClient().from("advances").update({ approval_status: "paid" }).eq("id", a!.id);
+    // Only paid advances count toward debt. 0162 version-checks the approval
+    // step, so this fixture inserts the advance already paid.
+    await adminClient().from("advances")
+      .insert({ supplier_id: supplierId, site_id: siteId, purpose: "Float", amount_naira: 50000,
+                approval_status: "paid" });
 
     // Manager deducts 20,000 of the 50,000 debt against a batch
     const v = await newVisit();

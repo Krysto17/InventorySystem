@@ -48,7 +48,7 @@ export default async function ConsumablesPage({ searchParams }: {
   let expenseQuery = supabase
     .from("consumables")
     .select(`
-      id, name, category, entry_date, comment, created_at, amount_naira, approval_status, site_id,
+      id, name, category, entry_date, comment, created_at, amount_naira, approval_status, site_id, revision,
       account_name, account_number, bank_name,
       recorded_by_profile:profiles!consumables_recorded_by_fkey(full_name)
     `)
@@ -172,11 +172,14 @@ export default async function ConsumablesPage({ searchParams }: {
                                 the row that failed. */}
                             <ActionForm action={reviewExpense} className="inline-block">
                               <input type="hidden" name="consumable_id" value={c.id as string} />
+                              {/* 0162: approve exactly the version on screen. */}
+                              <input type="hidden" name="reviewed_revision" value={String(c.revision)} />
                               <input type="hidden" name="decision" value="approved" />
                               <button type="submit" className="rounded bg-green-700 px-1.5 py-0.5 text-[10px] text-white">✓</button>
                             </ActionForm>
                             <ActionForm action={reviewExpense} className="inline-block">
                               <input type="hidden" name="consumable_id" value={c.id as string} />
+                              <input type="hidden" name="reviewed_revision" value={String(c.revision)} />
                               <input type="hidden" name="decision" value="rejected" />
                               <button type="submit" className="rounded border px-1.5 py-0.5 text-[10px]">✗</button>
                             </ActionForm>

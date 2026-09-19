@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approvePricingAs } from "../setup/approvals";
 
 describe("pricing RLS + transition + purchase_amount", () => {
   let siteAId: string;
@@ -56,7 +57,7 @@ describe("pricing RLS + transition + purchase_amount", () => {
     let { data: v } = await adminClient().from("visits").select("state").eq("id", vid).single();
     expect(v?.state).toBe("awaiting_price_approval"); // owner gate (#1/#5)
 
-    const { error: aErr } = await owner.client.rpc("approve_pricing", { p_visit_id: vid });
+    const { error: aErr } = await approvePricingAs(owner.client, vid);
     expect(aErr).toBeNull();
     ({ data: v } = await adminClient().from("visits").select("state").eq("id", vid).single());
     expect(v?.state).toBe("in_accounting");

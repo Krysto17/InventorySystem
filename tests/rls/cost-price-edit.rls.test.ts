@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approveCostRunAs } from "../setup/approvals";
 
 // A computed cost price stays editable until the batch is sold: drop a lot,
 // add/edit/remove an external material, rename it — and the weighted cost
@@ -45,7 +46,7 @@ describe("edit a computed cost price", () => {
     });
     const rid = await run("pending");
     expect((await adminClient().from("cost_price_run_lots").insert({ run_id: rid, stock_lot_id: lotId })).error).toBeNull();
-    expect((await owner.client.from("cost_price_runs").update({ approval_status: "approved" }).eq("id", rid)).error).toBeNull();
+    expect((await approveCostRunAs(owner.client, rid)).error).toBeNull();
     return rid;
   }
   const avg = async (id: string) => Number((await adminClient().from("cost_price_runs").select("avg_cost_price_per_kg").eq("id", id).single()).data!.avg_cost_price_per_kg);

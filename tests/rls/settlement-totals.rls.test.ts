@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approvePricingAs } from "../setup/approvals";
 
 // settlement_totals is the single source; approve_pricing snapshots a
 // self-reconciling row (materials − fee − other − advances = net).
@@ -41,7 +42,7 @@ describe("settlement_totals single source", () => {
     expect(Number(t.advances)).toBe(400);
     expect(Number(t.net)).toBe(3800);
 
-    const { error } = await owner.client.rpc("approve_pricing", { p_visit_id: visitId });
+    const { error } = await approvePricingAs(owner.client, visitId);
     expect(error).toBeNull();
     const { data: bs } = await adminClient().from("batch_settlements")
       .select("materials_total, light_bill_total, other_deductions_total, advance_deducted, net_balance").eq("visit_id", visitId).single();

@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 import { accountTrioFromForm } from "@/lib/validation/account";
+import { STALE_MESSAGE } from "@/lib/approvals/stale";
+import { isMissingFunction } from "@/lib/approvals/bridge";
 import { revalidateSupplierFinance } from "@/lib/finance/revalidate";
 
 // Manager records an advance for a supplier (marked to that supplier). Created
@@ -91,18 +93,35 @@ export async function deleteAdvance(_prev: ActionResult, formData: FormData): Pr
 // pending → approved/rejected is illegal. Since the decision is what moves the
 // supplier's debt, a refusal the owner never sees means a balance they believe
 // they changed.
+// 0162: the decision names the revision the owner actually reviewed. The RPC
+// locks the advance, re-checks it is still pending, and refuses (ST001) if the
+// amount or account details moved while the owner was deciding — so a revised
+// advance can never become supplier debt on the strength of an older review.
 export async function setAdvanceApproval(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
   if (!me || me.role !== "owner") return fail("Not authorized.");
   const id = String(formData.get("advance_id") ?? "");
   const decision = String(formData.get("decision") ?? "");
+  const revisionRaw = String(formData.get("reviewed_revision") ?? "").trim();
+  const revision = Number(revisionRaw);
   if (!id) return fail("Missing advance.");
   if (!["approved", "rejected"].includes(decision)) return fail("Choose approve or reject.");
+  if (!revisionRaw || !Number.isInteger(revision)) return fail(STALE_MESSAGE);
   const supabase = await createClient();
-  const res = await supabase.from("advances")
-    .update({ approval_status: decision }).eq("id", id).select("id");
-  const result = fromWrite(res, "That decision was not recorded — the advance may already have been ruled on.");
-  if (!result.ok) return result;
+  const { error } = await supabase.rpc("review_advance", {
+    p_id: id, p_reviewed_revision: revision, p_decision: decision,
+  });
+  // ROLLOUT BRIDGE (temporary): only when 0162 is not applied yet.
+  if (isMissingFunction(error)) {
+    const res = await supabase.from("advances")
+      .update({ approval_status: decision }).eq("id", id).select("id");
+    const legacy = fromWrite(res, "That decision was not recorded — the advance may already have been ruled on.");
+    if (!legacy.ok) return legacy;
+    revalidateSupplierFinance();
+    return ok(decision === "approved" ? "Advance approved." : "Advance rejected.");
+  }
+  if (error?.code === "ST001") return fail(STALE_MESSAGE);
+  if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidateSupplierFinance();
   return ok(decision === "approved" ? "Advance approved." : "Advance rejected.");
 }

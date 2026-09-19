@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 import { accountTrioFromForm } from "@/lib/validation/account";
+import { STALE_MESSAGE } from "@/lib/approvals/stale";
+import { isMissingFunction } from "@/lib/approvals/bridge";
 import { CONSUMABLE_CATEGORIES, type ConsumableCategory } from "./categories";
 
 export async function createConsumable(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
@@ -96,20 +98,39 @@ export async function deleteConsumable(_prev: ActionResult, formData: FormData):
 // has already been paid, and rejects any status move other than pending →
 // approved/rejected. Approval is what makes an expense payable, so a refusal
 // the owner cannot see is an expense they believe they cleared.
+// 0162: the decision names the revision the owner actually reviewed. The RPC
+// locks the row, re-checks it is still pending, and refuses (ST001) if the
+// expense moved while the owner was deciding — so an edit made behind the
+// approval screen can never be approved unseen.
 export async function reviewExpense(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const me = await getProfile();
   if (!me || me.role !== "owner") return fail("Not authorized.");
 
   const id = String(formData.get("consumable_id") ?? "");
   const decision = String(formData.get("decision") ?? "");
+  const revisionRaw = String(formData.get("reviewed_revision") ?? "").trim();
+  const revision = Number(revisionRaw);
   if (!id) return fail("Missing expense.");
   if (!["approved", "rejected"].includes(decision)) return fail("Choose approve or reject.");
+  if (!revisionRaw || !Number.isInteger(revision)) return fail(STALE_MESSAGE);
 
   const supabase = await createClient();
-  const res = await supabase.from("consumables")
-    .update({ approval_status: decision }).eq("id", id).select("id");
-  const result = fromWrite(res, "That decision was not recorded — the expense may already have been ruled on.");
-  if (!result.ok) return result;
+  const { error } = await supabase.rpc("review_expense", {
+    p_id: id, p_reviewed_revision: revision, p_decision: decision,
+  });
+  // ROLLOUT BRIDGE (temporary): only when 0162 is not applied yet.
+  if (isMissingFunction(error)) {
+    const res = await supabase.from("consumables")
+      .update({ approval_status: decision }).eq("id", id).select("id");
+    const legacy = fromWrite(res, "That decision was not recorded — the expense may already have been ruled on.");
+    if (!legacy.ok) return legacy;
+    revalidatePath("/inventory/consumables");
+    revalidatePath("/owner/approvals");
+    return ok(decision === "approved" ? "Expense approved." : "Expense rejected.");
+  }
+  if (error?.code === "ST001") return fail(STALE_MESSAGE);
+  if (error) return fail(error.message.replace(/^.*?:\s*/, ""));
   revalidatePath("/inventory/consumables");
+  revalidatePath("/owner/approvals");
   return ok(decision === "approved" ? "Expense approved." : "Expense rejected.");
 }

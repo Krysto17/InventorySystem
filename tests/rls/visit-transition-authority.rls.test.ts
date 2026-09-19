@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approvePricingAs } from "../setup/approvals";
 
 // 0159 (3F-T4): a visit transition is valid only when the pair exists, the actor's
 // role owns it, the actor has site authority, and its prerequisites hold. Audit 3F
@@ -58,7 +59,7 @@ describe("visit transition authority (0159)", () => {
   async function approvedBatch(site = DONG) {
     const v = await visit("awaiting_price_approval", site);
     await line(v);
-    expect((await owner.client.rpc("approve_pricing", { p_visit_id: v })).error).toBeNull();
+    expect((await approvePricingAs(owner.client, v)).error).toBeNull();
     const { data: st } = await adminClient().from("batch_settlements").select("id").eq("visit_id", v).single();
     return { visitId: v, settlementId: st!.id as string };
   }
@@ -107,7 +108,7 @@ describe("visit transition authority (0159)", () => {
     it("5. manager: no owner / accounting transition", async () => {
       const v = await visit("awaiting_price_approval");
       await line(v);
-      expect((await mgrDong.client.rpc("approve_pricing", { p_visit_id: v })).error).not.toBeNull();
+      expect((await approvePricingAs(mgrDong.client, v)).error).not.toBeNull();
       expect(rows(await mgrDong.client.from("visits").update({ state: "in_accounting" }).eq("id", v).select("id"))).toBe(0);
       const { visitId } = await approvedBatch();
       expect((await mgrDong.client.rpc("accountant_send_back_to_owner", { p_visit_id: visitId, p_reason: "x" })).error).not.toBeNull();

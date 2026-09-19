@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approvePricingAs } from "../setup/approvals";
 
 // End-to-end: one supplier brings TWO materials in one batch → receiving weighs
 // each line → QC records an XRF per line → submitting all lines advances to
@@ -83,7 +84,7 @@ describe("multi-material batch → QC → pricing (integration)", () => {
     // 8. agreement parks at the owner approval gate; owner approves → accounting (#1/#5)
     ({ data: st } = await adminClient().from("visits").select("state").eq("id", visitId).single());
     expect(st!.state).toBe("awaiting_price_approval");
-    await owner.client.rpc("approve_pricing", { p_visit_id: visitId });
+    await approvePricingAs(owner.client, visitId);
     ({ data: st } = await adminClient().from("visits").select("state").eq("id", visitId).single());
     expect(st!.state).toBe("in_accounting");
   });

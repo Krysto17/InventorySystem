@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approvePricingAs, approveCostRunAs } from "../setup/approvals";
 
 /**
  * 0161 — Phase 3F-T6: F-07 deduction delete, F-08 reverse_paid_supply, F-10
@@ -75,7 +76,8 @@ describe("financial and stock integrity guards (0161)", () => {
     })).error).toBeNull();
     return v!.id as string;
   }
-  const approvePricing = (visitId: string) => owner.client.rpc("approve_pricing", { p_visit_id: visitId } as never);
+  // 0162: approval names the pricing version reviewed.
+  const approvePricing = (visitId: string) => approvePricingAs(owner.client, visitId);
   const settlementOf = async (visitId: string) =>
     (await adminClient().from("batch_settlements").select("id, status, remaining_debt").eq("visit_id", visitId).maybeSingle()).data;
   // A paid supply: priced → approved → paid → lots + purchase_intake movement.
@@ -197,9 +199,7 @@ describe("financial and stock integrity guards (0161)", () => {
       approval_status: "pending", created_by: invDong.userId,
     }).select("id").single();
     expect((await invDong.client.from("cost_price_run_lots").insert({ run_id: run!.id, stock_lot_id: lot.id })).error).toBeNull();
-    expect((await owner.client.from("cost_price_runs").update({
-      approval_status: "approved", approved_by: owner.userId, approved_at: new Date().toISOString(), sold: true, sold_at: new Date().toISOString(),
-    }).eq("id", run!.id).select("id")).error).toBeNull();
+    expect((await approveCostRunAs(owner.client, run!.id as string)).error).toBeNull();
 
     const before = await supplySnapshot(v);
     const res = await reverse(v);
@@ -261,9 +261,7 @@ describe("financial and stock integrity guards (0161)", () => {
       approval_status: "pending", created_by: invDong.userId,
     }).select("id").single();
     await invDong.client.from("cost_price_run_lots").insert({ run_id: run!.id, stock_lot_id: otherLot.id });
-    expect((await owner.client.from("cost_price_runs").update({
-      approval_status: "approved", approved_by: owner.userId, approved_at: new Date().toISOString(), sold: true, sold_at: new Date().toISOString(),
-    }).eq("id", run!.id).select("id")).error).toBeNull();
+    expect((await approveCostRunAs(owner.client, run!.id as string)).error).toBeNull();
     // and a bulk sale takes 90 kg more — backed by the first supply's intake
     expect((await adminClient().from("stock_movements").insert({
       site_id: dong, material_type_id: mat, weight: 90, direction: "out", recorded_by: owner.userId, reason: "bulk_sale",
@@ -293,16 +291,21 @@ describe("financial and stock integrity guards (0161)", () => {
 
       const [rev, sale] = await Promise.all([
         reverse(v),
-        owner.client.from("cost_price_runs").update({
-          approval_status: "approved", approved_by: owner.userId, approved_at: new Date().toISOString(), sold: true, sold_at: new Date().toISOString(),
-        }).eq("id", run!.id).eq("approval_status", "pending").select("id"),
+        approveCostRunAs(owner.client, run!.id as string),
       ]);
       expect(rev.error?.code, `iteration ${i}`).not.toBe(DEADLOCK);
       expect(sale.error?.code, `iteration ${i}`).not.toBe(DEADLOCK);
       // The lot is reserved by a pending run either way, so the reversal is refused.
       expect(rev.error?.code, `iteration ${i}: reversal refused`).toBe("RS001");
-      expect(sale.error, `iteration ${i}: the sale stands`).toBeNull();
-      expect((await lotsOf(v))[0].status).toBe("sold");
+      // 0162: the sale either lands on the run the owner read, or is refused
+      // because the reversal touched the lot in between. Both are correct; what
+      // must never happen is a sale of a run nobody reviewed.
+      if (sale.error) {
+        expect(sale.error.code, `iteration ${i}: only staleness may refuse the sale`).toBe("ST001");
+        expect((await lotsOf(v))[0].status, `iteration ${i}`).toBe("available");
+      } else {
+        expect((await lotsOf(v))[0].status).toBe("sold");
+      }
       expect(await bucket(), `iteration ${i}`).toBeGreaterThanOrEqual(0);
     }
   }, 120_000);

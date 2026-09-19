@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approveCostRunAs } from "../setup/approvals";
 
 /**
  * 0155 — a lot-linked gate pass releases its lot once, and only once.
@@ -104,10 +105,8 @@ describe("lot-linked gate passes release a lot once (0155)", () => {
     await admin.from("cost_price_run_lots").insert(lotIds.map((id) => ({ run_id: data!.id, stock_lot_id: id })));
     return data!.id as string;
   };
-  const approve = (runId: string) =>
-    owner.client.from("cost_price_runs").update({
-      approval_status: "approved", approved_by: owner.userId, sold: true, sold_at: new Date().toISOString(),
-    }).eq("id", runId).select("id");
+  // 0162: approval names the run version the owner reviewed.
+  const approve = (runId: string) => approveCostRunAs(owner.client, runId);
 
   // ── One live pass per lot ─────────────────────────────────────────────────
   it("1. the first lot-linked pass is accepted", async () => {
@@ -335,10 +334,15 @@ describe("lot-linked gate passes release a lot once (0155)", () => {
     const sale = src("app/(owner)/owner/cost-batches/actions.ts");
     const body = sale.slice(sale.indexOf("export async function approveCostBatch("), sale.indexOf("export async function rejectCostBatch("));
     const safe = "One or more selected lots are no longer available. Refresh the run before approving it.";
-    const mapping = body.indexOf("costPriceRefusal(res.error?.code)");
+    const mapping = body.indexOf("costPriceRefusal(error?.code)");
     expect(mapping, "the known refusal is mapped").toBeGreaterThan(-1);
     expect(src("lib/cost-price/refusals.ts")).toContain(`CP002: "${safe}"`);
-    expect(mapping, "before the raw database message could reach fromWrite").toBeLessThan(body.indexOf("fromWrite(res"));
+    // 0162: approval is an RPC now, so the raw pass-through it must precede is
+    // the error fallback rather than fromWrite.
+    const rawFallback = body.search(/\(error\.message[^)]*\)?\)?\.replace|error\.message\.replace/);
+    expect(rawFallback, "there is a raw fallback to precede").toBeGreaterThan(-1);
+    expect(mapping, "before the raw database message could reach the operator")
+      .toBeLessThan(rawFallback);
     expect(safe, "no lot id").not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/i);
     // "can no longer be sold" is fine; asserting the lot WAS sold is not.
     expect(safe, "does not claim the lot was sold").not.toMatch(/sold elsewhere|was sold|been sold/i);
@@ -382,11 +386,13 @@ describe("lot-linked gate passes release a lot once (0155)", () => {
       expect(a.error?.code, `iteration ${i}`).not.toBe(DEADLOCK);
       expect(s.error?.code, `iteration ${i}`).not.toBe(DEADLOCK);
       expect(a.error, `iteration ${i}: the release goes through`).toBeNull();
-      // Which refusal the sale meets depends on commit order, and both are right:
-      // it saw the live pass (GP007), or the release had already committed and
-      // the lot was no longer available (the approval's own CP002 check, 0160).
+      // Which refusal the sale meets depends on commit order, and all three are
+      // right: it saw the live pass (GP007), the release had already committed
+      // and the lot was no longer available (0160's CP002), or — since 0162 —
+      // the release moved the lot after the owner read the run, so the run they
+      // reviewed no longer exists (ST001).
       expect(s.error, `iteration ${i}: the sale is refused`).not.toBeNull();
-      expect(["GP007", "CP002"], `iteration ${i}: refused by ${s.error?.code}`).toContain(s.error!.code);
+      expect(["GP007", "CP002", "ST001"], `iteration ${i}: refused by ${s.error?.code}`).toContain(s.error!.code);
       expect(await releasesFor(data!.id as string)).toHaveLength(1);
       expect(await outs("mixed_batch"), `iteration ${i}: no second deduction`).toBe(mb);
       expect(await lotStatus(L)).toBe("released");
@@ -403,7 +409,9 @@ describe("lot-linked gate passes release a lot once (0155)", () => {
       const passWon = !p.error, saleWon = !s.error;
       expect(passWon !== saleWon, `iteration ${i}: exactly one of issue / sale wins`).toBe(true);
       if (passWon) {
-        expect(s.error!.code).toBe("GP007");
+        // GP007 from the live pass, or ST001 when the pass landed after the
+        // owner read the run (0162). Either way nothing was sold.
+        expect(["GP007", "ST001"], `iteration ${i}: ${s.error?.code}`).toContain(s.error!.code);
         expect(await lotStatus(L)).toBe("available");
         expect(await livePasses(L)).toBe(1);
       } else {
@@ -520,7 +528,7 @@ describe("lot-linked gate passes release a lot once (0155)", () => {
     expect(ackBody).toContain('return ok("This gate pass has already been acknowledged.")');
 
     const saleBody = src("app/(owner)/owner/cost-batches/actions.ts");
-    expect(saleBody).toContain('if (res.error?.code === "GP007") return fail("Lot is on a live gate pass — cancel the pass first.")');
+    expect(saleBody).toContain('if (error?.code === "GP007") return fail("Lot is on a live gate pass — cancel the pass first.")');
 
     const page = src("app/(manager)/manager/gate-passes/page.tsx");
     const lotQuery = page.slice(page.indexOf('from("stock_lots")'), page.indexOf(".limit(200)", page.indexOf('from("stock_lots")')));

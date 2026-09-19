@@ -52,7 +52,7 @@ export default async function ManagerAdvancesPage({ searchParams }: {
   let listQuery = supabase
     .from("advance_list")
     .select(`
-      id, purpose, amount_naira, approval_status, created_at, comment,
+      id, purpose, amount_naira, approval_status, created_at, comment, revision,
       account_number, account_name, bank_name, supplier_name, supplier_code
     `)
     .order("created_at", { ascending: false })
@@ -139,11 +139,14 @@ export default async function ManagerAdvancesPage({ searchParams }: {
                               revalidating back as though it had landed. */}
                           <ActionForm action={setAdvanceApproval}>
                             <input type="hidden" name="advance_id" value={a.id as string} />
+                            {/* 0162: approve exactly the version on screen. */}
+                            <input type="hidden" name="reviewed_revision" value={String(a.revision)} />
                             <input type="hidden" name="decision" value="approved" />
                             <button type="submit" className="rounded bg-approve px-2.5 py-0.5 text-xs text-white">Approve</button>
                           </ActionForm>
                           <ActionForm action={setAdvanceApproval}>
                             <input type="hidden" name="advance_id" value={a.id as string} />
+                            <input type="hidden" name="reviewed_revision" value={String(a.revision)} />
                             <input type="hidden" name="decision" value="rejected" />
                             <button type="submit" className="rounded border px-2.5 py-0.5 text-xs">Reject</button>
                           </ActionForm>

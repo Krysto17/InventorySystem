@@ -24,7 +24,7 @@ export default async function OwnerApprovalsPage() {
   const [{ data: balances }, { data: pendingAdvances }, figures] = await Promise.all([
     supabase.from("stock_balances").select("material_name, weight_kg"),
     supabase.from("advances")
-      .select("id, purpose, amount_naira, created_at, supplier:suppliers(name, supplier_code)")
+      .select("id, purpose, amount_naira, created_at, revision, supplier:suppliers(name, supplier_code)")
       .eq("approval_status", "pending").order("created_at", { ascending: true }),
     fetchFinanceFigures(),
   ]);
@@ -43,7 +43,7 @@ export default async function OwnerApprovalsPage() {
 
   const { data: pendingExpenses } = await supabase
     .from("consumables")
-    .select("id, name, category, amount_naira, entry_date, site:sites(name)")
+    .select("id, name, category, amount_naira, entry_date, revision, site:sites(name)")
     .eq("approval_status", "pending")
     .order("entry_date", { ascending: true });
 
@@ -53,6 +53,15 @@ export default async function OwnerApprovalsPage() {
     .select("id, created_at, supplier:suppliers(name), declared_material_type:material_types(name), site:sites(name), pricing:pricing(purchase_amount), materials:visit_materials(weight_kg, unit_price, purchase_amount, magnetic_analysis, material:material_types(name), xrf:xrf_records(result, weight_kg, submitted))")
     .eq("state", "awaiting_price_approval")
     .order("created_at", { ascending: true });
+
+  // 0162: each pending batch carries the fingerprint of the pricing on screen,
+  // so an approval that arrives after a reprice is refused instead of freezing
+  // a figure the owner never saw.
+  const pricingTokens = new Map<string, string>();
+  await Promise.all((pendingPrices ?? []).map(async (v) => {
+    const { data } = await supabase.rpc("pricing_review_token", { p_visit_id: v.id as string });
+    if (data) pricingTokens.set(v.id as string, data as string);
+  }));
 
   // Overview: materials on hand (ledger balance, aggregated in SQL — see 0121),
   // light bills deducted, advances out. Per-site buckets roll up per material.
@@ -184,6 +193,8 @@ export default async function OwnerApprovalsPage() {
                             server component and just hands it the action. */}
                         <ActionForm action={approvePricing}>
                           <input type="hidden" name="visit_id" value={v.id as string} />
+                          {/* 0162: the pricing version this row is showing. */}
+                          <input type="hidden" name="reviewed_token" value={pricingTokens.get(v.id as string) ?? ""} />
                           <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve &amp; finalize</button>
                         </ActionForm>
                         <ActionForm action={rejectPricing}>
@@ -257,11 +268,14 @@ export default async function OwnerApprovalsPage() {
                           on the row and the button that caused it. */}
                       <ActionForm action={setAdvanceApproval}>
                         <input type="hidden" name="advance_id" value={a.id as string} />
+                        {/* 0162: the row carries the version the owner is looking at. */}
+                        <input type="hidden" name="reviewed_revision" value={String(a.revision)} />
                         <input type="hidden" name="decision" value="approved" />
                         <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve</button>
                       </ActionForm>
                       <ActionForm action={setAdvanceApproval}>
                         <input type="hidden" name="advance_id" value={a.id as string} />
+                        <input type="hidden" name="reviewed_revision" value={String(a.revision)} />
                         <input type="hidden" name="decision" value="rejected" />
                         <button type="submit" className="rounded border px-3 py-1 text-xs">Reject</button>
                       </ActionForm>
@@ -299,11 +313,13 @@ export default async function OwnerApprovalsPage() {
                       <span className="font-medium">{e.amount_naira != null ? ngn(Number(e.amount_naira)) : "—"}</span>
                       <ActionForm action={reviewExpense}>
                         <input type="hidden" name="consumable_id" value={e.id as string} />
+                        <input type="hidden" name="reviewed_revision" value={String(e.revision)} />
                         <input type="hidden" name="decision" value="approved" />
                         <button type="submit" className="rounded bg-approve px-3 py-1 text-xs font-semibold text-white">Approve</button>
                       </ActionForm>
                       <ActionForm action={reviewExpense}>
                         <input type="hidden" name="consumable_id" value={e.id as string} />
+                        <input type="hidden" name="reviewed_revision" value={String(e.revision)} />
                         <input type="hidden" name="decision" value="rejected" />
                         <button type="submit" className="rounded border px-3 py-1 text-xs">Reject</button>
                       </ActionForm>

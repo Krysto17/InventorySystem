@@ -155,6 +155,7 @@ export type Database = {
           site_id: string
           supplier_id: string
           updated_at: string
+          revision: number
         }
         Insert: {
           amount_naira: number
@@ -178,6 +179,7 @@ export type Database = {
           site_id: string
           supplier_id: string
           updated_at?: string
+          revision?: number
         }
         Update: {
           amount_naira?: number
@@ -201,6 +203,7 @@ export type Database = {
           site_id?: string
           supplier_id?: string
           updated_at?: string
+          revision?: number
         }
         Relationships: [
           {
@@ -696,6 +699,7 @@ export type Database = {
           paid_by: string | null
           recorded_by: string | null
           site_id: string
+          revision: number
         }
         Insert: {
           amount_naira?: number | null
@@ -718,6 +722,7 @@ export type Database = {
           paid_by?: string | null
           recorded_by?: string | null
           site_id: string
+          revision?: number
         }
         Update: {
           amount_naira?: number | null
@@ -740,6 +745,7 @@ export type Database = {
           paid_by?: string | null
           recorded_by?: string | null
           site_id?: string
+          revision?: number
         }
         Relationships: [
           {
@@ -2440,6 +2446,7 @@ export type Database = {
           account_number: string | null
           bank_name: string | null
           created_at: string
+          revision: number
         }
         Relationships: []
       }
@@ -2482,7 +2489,12 @@ export type Database = {
     Functions: {
       submit_visit_to_manager: { Args: { p_visit_id: string }; Returns: undefined }
       manager_skip_to_pricing: { Args: { p_visit_id: string }; Returns: undefined }
-      approve_pricing: { Args: { p_visit_id: string }; Returns: undefined }
+      approve_pricing: { Args: { p_visit_id: string; p_reviewed_token: string }; Returns: undefined }
+      pricing_review_token: { Args: { p_visit_id: string }; Returns: string }
+      cost_price_review_token: { Args: { p_run_id: string }; Returns: string }
+      approve_cost_price_run: { Args: { p_run_id: string; p_reviewed_token: string }; Returns: undefined }
+      review_expense: { Args: { p_id: string; p_reviewed_revision: number; p_decision: string }; Returns: undefined }
+      review_advance: { Args: { p_id: string; p_reviewed_revision: number; p_decision: string }; Returns: undefined }
       reject_pricing: { Args: { p_visit_id: string }; Returns: undefined }
       auth_throttle_check: { Args: { p_buckets: string[] }; Returns: number }
       auth_throttle_fail: { Args: { p_buckets: string[] }; Returns: undefined }

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approvePricingAs } from "../setup/approvals";
 
 // 0158 (3F-T3): pricing approval writes the settlement as a snapshot of the
 // batch. Audit 3F (F-04) reproduced an accountant raising net_balance
@@ -40,11 +41,12 @@ describe("settlement financial immutability (0158)", () => {
     supplierId = s!.id as string;
     // A large paid advance, so a deduction is always within debt on its own merits and
     // only the snapshot rule decides.
-    const { data: adv } = await adminClient().from("advances").insert({
-      supplier_id: supplierId, site_id: DONG, purpose: "sfi debt", amount_naira: 10_000_000, approval_status: "pending", recorded_by: owner.userId,
-    }).select("id").single();
-    await adminClient().from("advances").update({ approval_status: "approved" }).eq("id", adv!.id);
-    await adminClient().from("advances").update({ approval_status: "paid" }).eq("id", adv!.id);
+    // 0162 version-checks the approval step, so a fixture that only needs a PAID
+    // advance inserts one rather than transitioning into it.
+    await adminClient().from("advances").insert({
+      supplier_id: supplierId, site_id: DONG,
+      purpose: "sfi debt", amount_naira: 10_000_000, approval_status: "paid", recorded_by: owner.userId,
+    });
     const { data: mts } = await adminClient().from("material_types").select("id").limit(2);
     material = mts![0].id as string;
     material2 = mts![1].id as string;
@@ -68,7 +70,7 @@ describe("settlement financial immutability (0158)", () => {
   }
   async function approvedBatch(site = DONG) {
     const b = await pricedBatch(site);
-    expect((await owner.client.rpc("approve_pricing", { p_visit_id: b.visitId })).error).toBeNull();
+    expect((await approvePricingAs(owner.client, b.visitId)).error).toBeNull();
     const { data: st } = await adminClient().from("batch_settlements").select("id").eq("visit_id", b.visitId).single();
     return { ...b, settlementId: st!.id as string };
   }
@@ -100,7 +102,7 @@ describe("settlement financial immutability (0158)", () => {
   }
   async function approvedBatchWithSources(site = DONG) {
     const b = await pricedBatchWithSources(site);
-    expect((await owner.client.rpc("approve_pricing", { p_visit_id: b.visitId })).error).toBeNull();
+    expect((await approvePricingAs(owner.client, b.visitId)).error).toBeNull();
     const { data: st } = await adminClient().from("batch_settlements").select("id").eq("visit_id", b.visitId).single();
     return { ...b, settlementId: st!.id as string };
   }
@@ -258,7 +260,7 @@ describe("settlement financial immutability (0158)", () => {
       expect(reopened.st).toBeNull();
       expect(reopened.state).toBe("awaiting_price_approval");
       expect(rows(await mgrDong.client.from("visit_materials").update({ weight_kg: 800 }).eq("id", lineId).select("id")), "editable once the settlement is gone").toBe(1);
-      expect((await owner.client.rpc("approve_pricing", { p_visit_id: visitId })).error).toBeNull();
+      expect((await approvePricingAs(owner.client, visitId)).error).toBeNull();
       const again = await snapshot(visitId, lineId);
       expect(Number(again.st!.materials_total)).toBe(80000);
       expect(Number(again.st!.net_balance)).toBe(80000);
@@ -289,14 +291,22 @@ describe("settlement financial immutability (0158)", () => {
   // ── concurrency ────────────────────────────────────────────────────────────
   describe("concurrency", () => {
     it("C1. line edit vs approve_pricing: the settlement always equals the committed lines", async () => {
-      const seen = { editFirst: 0, approvalFirst: 0 };
+      const seen = { editFirst: 0, approvalFirst: 0, staleApproval: 0 };
       for (let i = 0; i < REPEAT; i++) {
         const { visitId, lineId } = await pricedBatch(DONG);
         const [approval, edit] = await Promise.all([
-          owner.client.rpc("approve_pricing", { p_visit_id: visitId }),
+          approvePricingAs(owner.client, visitId),
           mgrDong.client.from("visit_materials").update({ weight_kg: 700 }).eq("id", lineId).select("id"),
         ]);
-        expect(approval.error, `round ${i}: approval`).toBeNull();
+        // 0162: an edit that commits after the owner read the pricing makes the
+        // approval stale. Nothing is snapshotted from a version nobody reviewed.
+        if (approval.error) {
+          expect(approval.error.code, `round ${i}: only staleness may refuse`).toBe("ST001");
+          expect((await adminClient().from("batch_settlements").select("id").eq("visit_id", visitId)).data ?? [],
+            `round ${i}: no settlement from a stale approval`).toHaveLength(0);
+          seen.staleApproval++;
+          continue;
+        }
         const s = await snapshot(visitId, lineId);
         const live = await liveTotals(visitId);
         expect(Number(s.st!.materials_total), `round ${i}: snapshot = committed lines`).toBe(Number(live.materials));
@@ -310,7 +320,7 @@ describe("settlement financial immutability (0158)", () => {
           seen.editFirst++;
         }
       }
-      expect(seen.editFirst + seen.approvalFirst).toBe(REPEAT);
+      expect(seen.editFirst + seen.approvalFirst + seen.staleApproval).toBe(REPEAT);
     });
 
     it("C2. direct net_balance patch vs payment: the patch never lands, the payment uses the approved figure", async () => {
@@ -435,7 +445,7 @@ describe("settlement financial immutability (0158)", () => {
       expect(rows(await mgrDong.client.from("utility_charges").update({ amount: 4000 }).eq("id", b.lightBillId).select("id")), "charge editable after send-back").toBe(1);
       expect(rows(await gm.client.from("advance_deductions").update({ amount: 6000 }).eq("id", b.deductionId).select("id")), "deduction editable after send-back").toBe(1);
 
-      expect((await owner.client.rpc("approve_pricing", { p_visit_id: b.visitId })).error).toBeNull();
+      expect((await approvePricingAs(owner.client, b.visitId)).error).toBeNull();
       const again = await sources(b.visitId);
       expect(Number(again.st!.light_bill_total), "revised charge snapshotted").toBe(4000);
       expect(Number(again.st!.advance_deducted), "revised deduction snapshotted").toBe(6000);
@@ -468,7 +478,7 @@ describe("settlement financial immutability (0158)", () => {
     it("delete_batch still removes a zero-payment approved batch whose charges cascade with it", async () => {
       const b = await pricedBatch(DONG);
       await adminClient().from("utility_charges").insert({ visit_id: b.visitId, kind: "light_bill", description: "fee", amount: 5000 });
-      expect((await owner.client.rpc("approve_pricing", { p_visit_id: b.visitId })).error).toBeNull();
+      expect((await approvePricingAs(owner.client, b.visitId)).error).toBeNull();
       expect((await owner.client.rpc("delete_batch", { p_visit_id: b.visitId })).error).toBeNull();
       expect((await adminClient().from("utility_charges").select("id").eq("visit_id", b.visitId)).data ?? []).toHaveLength(0);
     });
@@ -484,10 +494,18 @@ describe("settlement financial immutability (0158)", () => {
           op === "insert" ? mgrDong.client.from("utility_charges").insert({ visit_id: b.visitId, kind: "other", description: "race", amount: 700, recorded_by: mgrDong.userId }).select("id")
           : op === "update" ? mgrDong.client.from("utility_charges").update({ amount: 6500 }).eq("id", b.lightBillId).select("id")
           : mgrDong.client.from("utility_charges").delete().eq("id", b.otherId).select("id");
-        const [approval, mut] = await Promise.all([owner.client.rpc("approve_pricing", { p_visit_id: b.visitId }), mutation]);
-        expect(approval.error, `round ${i} ${op}: approval`).toBeNull();
-        if (mut.error) expect(mut.error.code, `round ${i} ${op}`).toBe("SF003");
-        await expectSnapshotMatchesSources(b.visitId, `round ${i} ${op}`);
+        const [approval, mut] = await Promise.all([approvePricingAs(owner.client, b.visitId), mutation]);
+        // 0162 strengthens this: the approval either lands on the version the
+        // owner reviewed, or it refuses as stale — it never snapshots a charge
+        // that arrived after the review.
+        if (approval.error) {
+          expect(approval.error.code, `round ${i} ${op}: only staleness may refuse`).toBe("ST001");
+          expect((await adminClient().from("batch_settlements").select("id").eq("visit_id", b.visitId)).data ?? [],
+            `round ${i} ${op}: a stale refusal creates no settlement`).toHaveLength(0);
+        } else {
+          if (mut.error) expect(mut.error.code, `round ${i} ${op}`).toBe("SF003");
+          await expectSnapshotMatchesSources(b.visitId, `round ${i} ${op}`);
+        }
       }
     });
 
@@ -500,10 +518,15 @@ describe("settlement financial immutability (0158)", () => {
           op === "insert" ? mgrDong.client.from("advance_deductions").insert({ supplier_id: supplierId, site_id: DONG, ref_visit_id: b.visitId, amount: 400, kind: "advance", recorded_by: mgrDong.userId }).select("id")
           : op === "update" ? gm.client.from("advance_deductions").update({ amount: 4500 }).eq("id", b.deductionId).select("id")
           : mgrDong.client.from("advance_deductions").delete().eq("id", b.deductionId).select("id");
-        const [approval, mut] = await Promise.all([owner.client.rpc("approve_pricing", { p_visit_id: b.visitId }), mutation]);
-        expect(approval.error, `round ${i} ${op}: approval`).toBeNull();
-        if (mut.error) expect(mut.error.code, `round ${i} ${op}`).toBe("SF004");
-        await expectSnapshotMatchesSources(b.visitId, `round ${i} ${op}`);
+        const [approval, mut] = await Promise.all([approvePricingAs(owner.client, b.visitId), mutation]);
+        if (approval.error) {
+          expect(approval.error.code, `round ${i} ${op}: only staleness may refuse`).toBe("ST001");
+          expect((await adminClient().from("batch_settlements").select("id").eq("visit_id", b.visitId)).data ?? [],
+            `round ${i} ${op}: a stale refusal creates no settlement`).toHaveLength(0);
+        } else {
+          if (mut.error) expect(mut.error.code, `round ${i} ${op}`).toBe("SF004");
+          await expectSnapshotMatchesSources(b.visitId, `round ${i} ${op}`);
+        }
       }
     });
   });
@@ -539,7 +562,7 @@ describe("settlement financial immutability (0158)", () => {
 
     it("PF 1–5. approved settlement: the correction is refused and NOTHING changes — usage, charge, settlement, record, events", async () => {
       const b = await processedBatch();
-      expect((await owner.client.rpc("approve_pricing", { p_visit_id: b.visitId })).error).toBeNull();
+      expect((await approvePricingAs(owner.client, b.visitId)).error).toBeNull();
       const before = await feeState(b.visitId, b.recordId);
       expect(before.usage!.map((u) => [Number(u.measurement), Number(u.rate_snapshot)])).toEqual([[100, 10]]);
       expect(Number(before.st!.light_bill_total)).toBe(1000);
@@ -553,7 +576,7 @@ describe("settlement financial immutability (0158)", () => {
 
     it("PF 6. zero payments: sent back → the correction works again and re-approval snapshots the corrected fee", async () => {
       const b = await processedBatch();
-      expect((await owner.client.rpc("approve_pricing", { p_visit_id: b.visitId })).error).toBeNull();
+      expect((await approvePricingAs(owner.client, b.visitId)).error).toBeNull();
       expect((await procDong.client.rpc("resave_processing_fee", { p_visit_id: b.visitId, p_usage: newUsage(b.dryer) })).error?.code).toBe("SF003");
       expect((await acctDong.client.rpc("accountant_send_back_to_owner", { p_visit_id: b.visitId, p_reason: "fee was wrong" })).error).toBeNull();
 
@@ -564,7 +587,7 @@ describe("settlement financial immutability (0158)", () => {
       expect(after.charges!.filter((c) => c.kind === "light_bill").map((c) => Number(c.amount))).toEqual([10000]);
       expect(after.rec!.fee_reopened).toBe(false);
 
-      expect((await owner.client.rpc("approve_pricing", { p_visit_id: b.visitId })).error).toBeNull();
+      expect((await approvePricingAs(owner.client, b.visitId)).error).toBeNull();
       const snap = await feeState(b.visitId, b.recordId);
       expect(Number(snap.st!.light_bill_total)).toBe(10000);
       await expectSnapshotMatchesSources(b.visitId, "re-approved after fee correction");
@@ -581,15 +604,25 @@ describe("settlement financial immutability (0158)", () => {
     });
 
     it("PF 7/8. correction racing approval: either the corrected fee is in the snapshot, or the correction wrote nothing", async () => {
-      const seen = { correctionFirst: 0, approvalFirst: 0 };
+      const seen = { correctionFirst: 0, approvalFirst: 0, staleApproval: 0 };
       for (let i = 0; i < REPEAT; i++) {
         const b = await processedBatch();
         const before = await feeState(b.visitId, b.recordId);
         const [approval, correction] = await Promise.all([
-          owner.client.rpc("approve_pricing", { p_visit_id: b.visitId }),
+          approvePricingAs(owner.client, b.visitId),
           procDong.client.rpc("resave_processing_fee", { p_visit_id: b.visitId, p_usage: newUsage(b.dryer) }),
         ]);
-        expect(approval.error, `round ${i}: approval`).toBeNull();
+        // 0162: if the correction committed after the owner read the pricing,
+        // the approval is stale and refuses — the corrected fee is never
+        // snapshotted on the strength of a review taken before it existed.
+        if (approval.error) {
+          expect(approval.error.code, `round ${i}: only staleness may refuse`).toBe("ST001");
+          expect(correction.error, `round ${i}: the correction is what changed`).toBeNull();
+          expect((await adminClient().from("batch_settlements").select("id").eq("visit_id", b.visitId)).data ?? [],
+            `round ${i}: no settlement from a stale approval`).toHaveLength(0);
+          seen.staleApproval++;
+          continue;
+        }
         const after = await feeState(b.visitId, b.recordId);
         if (correction.error) {
           expect(correction.error.code, `round ${i}`).toBe("SF003");
@@ -604,7 +637,7 @@ describe("settlement financial immutability (0158)", () => {
         }
         await expectSnapshotMatchesSources(b.visitId, `round ${i}`);
       }
-      expect(seen.correctionFirst + seen.approvalFirst).toBe(REPEAT);
+      expect(seen.correctionFirst + seen.approvalFirst + seen.staleApproval).toBe(REPEAT);
     });
   });
 

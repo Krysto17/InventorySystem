@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { reviewAdvanceAs } from "../setup/approvals";
 
 describe("advances RLS", () => {
   let siteAId: string, siteBId: string;
@@ -122,10 +123,8 @@ describe("advances RLS", () => {
       .eq("id", id);
     expect(acctTry.error).not.toBeNull();
 
-    const { error } = await owner.client
-      .from("advances")
-      .update({ approval_status: "approved" })
-      .eq("id", id);
+    // 0162: approval names the revision the owner reviewed.
+    const { error } = await reviewAdvanceAs(owner.client, id);
     expect(error).toBeNull();
     const { data } = await adminClient()
       .from("advances")

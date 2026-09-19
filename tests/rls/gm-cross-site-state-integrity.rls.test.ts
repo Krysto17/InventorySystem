@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approvePricingAs } from "../setup/approvals";
 
 // 0157 (3F-T2): the general manager (the New-Site manager) keeps cross-site
 // authority but gets the normal workflow's state rules. Audit 3F reproduced the
@@ -53,7 +54,7 @@ describe("GM cross-site state integrity (0157)", () => {
   async function stockedPaidBatch(site: string) {
     const visitId = await visit(site, "awaiting_price_approval");
     const lineId = await line(visitId);
-    expect((await owner.client.rpc("approve_pricing", { p_visit_id: visitId })).error).toBeNull();
+    expect((await approvePricingAs(owner.client, visitId)).error).toBeNull();
     const { data: st } = await adminClient().from("batch_settlements").select("id, net_balance").eq("visit_id", visitId).single();
     const pay = await owner.client.rpc("record_settlement_payment", {
       p_settlement_id: st!.id, p_amount: Number(st!.net_balance), p_method: "transfer",
@@ -88,12 +89,12 @@ describe("GM cross-site state integrity (0157)", () => {
   async function advance(site: string, status: "pending" | "approved" | "paid", amount = 50000, supplier = supplierId) {
     const admin = adminClient();
     const { data, error } = await admin.from("advances").insert({
-      supplier_id: supplier, site_id: site, purpose: "gmsi", amount_naira: amount, approval_status: "pending", recorded_by: owner.userId,
+      // 0162: pending → approved is version-checked, so a fixture that wants an
+      // advance to START approved or paid inserts it that way.
+      supplier_id: supplier, site_id: site, purpose: "gmsi", amount_naira: amount, approval_status: status, recorded_by: owner.userId,
     }).select("id").single();
     if (error) throw error;
     const id = data!.id as string;
-    if (status !== "pending") await admin.from("advances").update({ approval_status: "approved" }).eq("id", id);
-    if (status === "paid") await admin.from("advances").update({ approval_status: "paid" }).eq("id", id);
     return id;
   }
   // A refusal by RLS is zero rows with NO error; an error would be a different
@@ -349,7 +350,7 @@ describe("GM cross-site state integrity (0157)", () => {
     for (let i = 0; i < REPEAT; i++) {
       const visitId = await visit(DONG, "awaiting_price_approval");
       const lineId = await line(visitId);
-      expect((await owner.client.rpc("approve_pricing", { p_visit_id: visitId })).error).toBeNull();
+      expect((await approvePricingAs(owner.client, visitId)).error).toBeNull();
       const { data: st } = await adminClient().from("batch_settlements").select("id, net_balance").eq("visit_id", visitId).single();
       const [pay, edit] = await Promise.all([
         acctDong.client.rpc("record_settlement_payment", { p_settlement_id: st!.id, p_amount: Number(st!.net_balance), p_method: "transfer" }),

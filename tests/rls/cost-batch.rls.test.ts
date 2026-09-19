@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approveCostRunAs } from "../setup/approvals";
 
 // Manager-formed mixing batches: the manager submits a PENDING batch (lots stay
 // in stock), the OWNER approves to remove each lot (flip to sold + 'mixed_batch'
@@ -68,16 +69,13 @@ describe("cost-price mixing batch sells stock on owner approval", () => {
     const runId = await pendingBatch([lot1, lot2]);
 
     // Manager cannot approve their own batch.
-    const mgrTry = await mgr.client.from("cost_price_runs")
-      .update({ approval_status: "approved" }).eq("id", runId);
+    const mgrTry = await approveCostRunAs(mgr.client, runId);
     const { data: stillPending } = await adminClient()
       .from("cost_price_runs").select("approval_status").eq("id", runId).single();
     expect(stillPending!.approval_status).toBe("pending");
     void mgrTry;
 
-    const { error } = await owner.client.from("cost_price_runs")
-      .update({ approval_status: "approved", approved_by: owner.userId, sold: true, sold_at: new Date().toISOString() })
-      .eq("id", runId);
+    const { error } = await approveCostRunAs(owner.client, runId);
     expect(error).toBeNull();
 
     const { data: lots } = await adminClient().from("stock_lots").select("status").in("id", [lot1, lot2]);
@@ -132,16 +130,13 @@ describe("cost-price mixing batch sells stock on owner approval", () => {
     expect((lots ?? []).every((l) => l.status === "available")).toBe(true);
 
     // Inventory cannot approve (and so cannot sell) its own batch.
-    await inv.client.from("cost_price_runs")
-      .update({ approval_status: "approved", sold: true }).eq("id", run!.id);
+    await approveCostRunAs(inv.client, run!.id as string);
     const { data: still } = await adminClient()
       .from("cost_price_runs").select("approval_status").eq("id", run!.id).single();
     expect(still!.approval_status).toBe("pending");
 
     // The owner can — and that removes the lots from stock.
-    const { error: apprErr } = await owner.client.from("cost_price_runs")
-      .update({ approval_status: "approved", approved_by: owner.userId, sold: true, sold_at: new Date().toISOString() })
-      .eq("id", run!.id);
+    const { error: apprErr } = await approveCostRunAs(owner.client, run!.id as string);
     expect(apprErr).toBeNull();
     const { data: after } = await adminClient().from("stock_lots").select("status").in("id", [lot1, lot2]);
     expect((after ?? []).every((l) => l.status === "sold")).toBe(true);

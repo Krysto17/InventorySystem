@@ -20,7 +20,7 @@ const SELECT = `
   )
 `;
 
-function BatchCard({ r, pending }: { r: Record<string, unknown>; pending: boolean }) {
+function BatchCard({ r, pending, token }: { r: Record<string, unknown>; pending: boolean; token?: string }) {
   const items = (r.items as unknown[]) ?? [];
   const site = g1<{ name: string }>(r.site);
   const mat = g1<{ name: string }>(r.material);
@@ -80,6 +80,8 @@ function BatchCard({ r, pending }: { r: Record<string, unknown>; pending: boolea
           {stale === 0 && (
             <ActionForm action={approveCostBatch}>
               <input type="hidden" name="run_id" value={r.id as string} />
+              {/* 0162: the run version on screen — membership, lots, extras. */}
+              <input type="hidden" name="reviewed_token" value={token ?? ""} />
               <button type="submit" className="rounded bg-approve px-3 py-1.5 text-xs font-semibold text-white">
                 Approve &amp; remove from stock
               </button>
@@ -107,6 +109,16 @@ export default async function OwnerCostBatchesPage() {
       .eq("approval_status", "approved").order("sold_at", { ascending: false }).limit(100),
   ]);
 
+  // 0162: each pending batch carries the fingerprint of what is on screen —
+  // membership, each lot's weight and cost, and the extras. A lot attached
+  // after the owner opened the page invalidates the approval rather than
+  // quietly selling a different batch.
+  const runTokens = new Map<string, string>();
+  await Promise.all((pending ?? []).map(async (r) => {
+    const { data } = await supabase.rpc("cost_price_review_token", { p_run_id: r.id as string });
+    if (data) runTokens.set(r.id as string, data as string);
+  }));
+
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex items-center gap-4">
@@ -125,7 +137,7 @@ export default async function OwnerCostBatchesPage() {
           {(pending?.length ?? 0) === 0 ? (
             <p className="text-sm text-zinc-500">No batches awaiting approval.</p>
           ) : (
-            (pending ?? []).map((r) => <BatchCard key={r.id as string} r={r as Record<string, unknown>} pending />)
+            (pending ?? []).map((r) => <BatchCard key={r.id as string} r={r as Record<string, unknown>} pending token={runTokens.get(r.id as string)} />)
           )}
         </CardContent>
       </Card>

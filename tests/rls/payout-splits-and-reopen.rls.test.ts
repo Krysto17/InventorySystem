@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approvePricingAs } from "../setup/approvals";
 
 // A: the manager plans a payout split per account; the accountant reads it.
 // B: processing/receiving delete their own in-stage visit.
@@ -116,7 +117,7 @@ describe("payout splits, visit delete, receiving reopen", () => {
 
     // …and the plan survives the owner's approval (which recreates the settlement).
     await adminClient().from("visits").update({ state: "awaiting_price_approval" }).eq("id", v);
-    await owner.client.rpc("approve_pricing", { p_visit_id: v });
+    await approvePricingAs(owner.client, v);
     const { data: still } = await adminClient().from("settlement_payout_splits").select("amount").eq("visit_id", v);
     expect(still!.length).toBe(1);
     expect(Number(still![0].amount)).toBe(4000);

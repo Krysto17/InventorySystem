@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approveCostRunAs } from "../setup/approvals";
 import { fromWrite } from "../../src/lib/actions/result";
 
 /**
@@ -83,11 +84,11 @@ const ACTIONS: { file: string; fn: string; kind: "table" | "rpc" | "delegate" | 
   // 3E-6D: the approval / release tier. Each sits at the end of an approval
   // chain, so the refusal it used to swallow is the one that decides whether
   // stock left, money moved, or a payout changed hands.
-  { file: "actions.ts", fn: "approveCostBatch", kind: "table", dir: "(owner)/owner/cost-batches" },
+  { file: "actions.ts", fn: "approveCostBatch", kind: "rpc", dir: "(owner)/owner/cost-batches" },
   { file: "actions.ts", fn: "rejectCostBatch", kind: "table", dir: "(owner)/owner/cost-batches" },
   { file: "actions.ts", fn: "acknowledgeGatePass", kind: "table", dir: "(gate)/gate" },
-  { file: "actions.ts", fn: "setAdvanceApproval", kind: "table", dir: "(manager)/manager/advances" },
-  { file: "actions.ts", fn: "reviewExpense", kind: "table", dir: "(inventory)/inventory/consumables" },
+  { file: "actions.ts", fn: "setAdvanceApproval", kind: "rpc", dir: "(manager)/manager/advances" },
+  { file: "actions.ts", fn: "reviewExpense", kind: "rpc", dir: "(inventory)/inventory/consumables" },
   { file: "actions.ts", fn: "confirmLot", kind: "rpc", dir: "stocked-materials" },
   { file: "actions.ts", fn: "switchSupplierAccount", kind: "table", dir: "suppliers" },
   // 3E-6F tranche 1: the money/stock deletes and the sample price. All five
@@ -332,11 +333,14 @@ describe("silent write failure", () => {
       return data!.id as string;
     }
 
-    // Exactly what approveCostBatch / rejectCostBatch send.
+    // Exactly what approveCostBatch / rejectCostBatch send. 0162: approval goes
+    // through the review RPC (rejection is still a table write).
     const rule = (runId: string, decision: "approved" | "rejected") =>
-      owner.client.from("cost_price_runs")
-        .update({ approval_status: decision, approved_by: owner.userId, approved_at: new Date().toISOString() })
-        .eq("id", runId).eq("approval_status", "pending").select("id");
+      decision === "approved"
+        ? approveCostRunAs(owner.client, runId)
+        : owner.client.from("cost_price_runs")
+            .update({ approval_status: decision, approved_by: owner.userId, approved_at: new Date().toISOString() })
+            .eq("id", runId).eq("approval_status", "pending").select("id");
 
     const statusOfRun = async (id: string) => {
       const { data } = await adminClient()
@@ -361,15 +365,17 @@ describe("silent write failure", () => {
     });
 
     // ── approveCostBatch ──────────────────────────────────────────────────
-    it("approveCostBatch: a batch already ruled on matches no rows", async () => {
+    it("approveCostBatch: a batch already ruled on is refused, not silently ignored", async () => {
       const runId = await run("already ruled", [await lot(10)]);
-      expect((await rule(runId, "approved")).data ?? [], "the first approval lands").toHaveLength(1);
+      expect((await rule(runId, "approved")).error, "the first approval lands").toBeNull();
+      expect(await statusOfRun(runId)).toBe("approved");
 
+      // The shape that once fooled the UI was `error: null, data: []`. Since
+      // 0162 the second decision raises: the run it reviewed is already ruled on.
       const res = await rule(runId, "approved");
-      expect(res.error, "the shape that fooled the UI: no error").toBeNull();
-      expect(res.data ?? [], "and no rows — nothing was approved twice").toHaveLength(0);
-      expect(fromWrite(res as never).ok, "which fromWrite must call a failure").toBe(false);
-      expect(fromWrite(res as never).error, "and must explain").toBeTruthy();
+      expect(res.error, "a second approval must be refused").not.toBeNull();
+      expect(res.error!.code).toBe("ST001");
+      expect(await statusOfRun(runId), "nothing was approved twice").toBe("approved");
     });
 
     it("approveCostBatch: a lot that already left stock raises, and nothing sells", async () => {
@@ -1248,7 +1254,9 @@ describe("silent write failure", () => {
         if (revalidate === -1) return; // nothing to order
         // `if (error) {` covers the insert actions, which branch on error.code
         // to give a duplicate its own message before falling through to fail().
-        const guard = body.search(/if \(!\w+\.ok\) return \w+;|if \(error\) return fail|if \(error\) \{|return lineAction\(/);
+        // `<name>.error` covers a guarded branch that owns its own result
+        // object (the temporary rollout bridge's legacy path does).
+        const guard = body.search(/if \(!\w+\.ok\) return \w+;|if \((?:\w+\.)?error\) return fail|if \((?:\w+\.)?error\) \{|return lineAction\(/);
         expect(guard, `${fn} must decide the write landed before revalidating`).toBeGreaterThan(-1);
         expect(guard).toBeLessThan(revalidate);
       });

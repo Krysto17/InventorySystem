@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
+import { approveCostRunAs } from "../setup/approvals";
 import { costPriceRefusal } from "@/lib/cost-price/refusals";
 
 /**
@@ -62,12 +63,9 @@ describe("cost-price run lifecycle integrity (0160)", () => {
     }
     return run!.id as string;
   }
-  // Exactly what approveCostBatch sends.
-  const approve = (runId: string, who: TestUser = owner) =>
-    who.client.from("cost_price_runs").update({
-      approval_status: "approved", approved_by: who.userId, approved_at: new Date().toISOString(),
-      sold: true, sold_at: new Date().toISOString(),
-    }).eq("id", runId).eq("approval_status", "pending").select("id");
+  // Exactly what approveCostBatch sends. 0162: approval names the run version
+  // the owner reviewed; a direct table UPDATE can no longer approve at all.
+  const approve = (runId: string, who: TestUser = owner) => approveCostRunAs(who.client, runId);
   const reject = (runId: string) =>
     owner.client.from("cost_price_runs").update({ approval_status: "rejected", approved_by: owner.userId })
       .eq("id", runId).eq("approval_status", "pending").select("id");
@@ -75,7 +73,9 @@ describe("cost-price run lifecycle integrity (0160)", () => {
     const runId = await draft(inv, [await lot(100, 50), await lot(200, 80)], [{ kg: 100, cost: 20 }]);
     const res = await approve(runId);
     expect(res.error, `approve: ${res.error?.message}`).toBeNull();
-    expect(res.data).toHaveLength(1);
+    // 0162: approval is an RPC now, so the proof is the run's own state.
+    expect((await adminClient().from("cost_price_runs").select("approval_status")
+      .eq("id", runId).single()).data!.approval_status).toBe("approved");
     return runId;
   }
   // Everything an approved run's history is made of, as one comparable value.
@@ -532,10 +532,22 @@ describe("cost-price run lifecycle integrity (0160)", () => {
       inventory: await approve(empty, inv),
       serviceRole: await adminClient().from("cost_price_runs").update({ approval_status: "approved" }).eq("id", empty).select("id"),
     };
+    // Approval is the owner's (RLS: "cost_price_runs: owner approves"), and since
+    // 0162 it runs through a review RPC that says so before it gets as far as the
+    // empty-sale rule. GM and inventory previously reached CP005 only because a
+    // BEFORE trigger fires ahead of the WITH CHECK that would have refused them;
+    // the effective authority is unchanged.
     for (const [who, r] of Object.entries(attempts)) {
-      // The empty-sale refusal fires before any policy check on the new row.
-      expect(r.error?.code, `${who}: ${r.error?.message}`).toBe("CP005");
-      expect(r.error!.message).toBe("A batch needs at least one stock lot before it can be approved.");
+      expect(r.error, `${who} must be refused`).not.toBeNull();
+      if (who === "owner") {
+        expect(r.error?.code, `${who}: ${r.error?.message}`).toBe("CP005");
+        expect(r.error!.message).toBe("A batch needs at least one stock lot before it can be approved.");
+      } else if (who === "serviceRole") {
+        // A direct table UPDATE names no reviewed version, so since 0162 it is
+        // refused before CP005 is even reached — there is no longer any
+        // approval path that does not say what it reviewed.
+        expect(r.error?.code, `${who}: ${r.error?.message}`).toBe("ST001");
+      }
     }
     expect(JSON.stringify(await runRow(empty)), "nothing on the run changed").toBe(rowBefore);
     expect(JSON.stringify((await adminClient().from("cost_price_run_extras").select("*").eq("run_id", empty)).data)).toBe(extrasBefore);
@@ -548,7 +560,7 @@ describe("cost-price run lifecycle integrity (0160)", () => {
     const withLot = await draft(inv, [await lot(10, 10)]);
     for (const who of [gm, inv]) {
       const r = await approve(withLot, who);
-      expect(r.error !== null || (r.data ?? []).length === 0, `${who.userId}`).toBe(true);
+      expect(r.error, `${who.userId} cannot approve`).not.toBeNull();
     }
     expect((await runRow(withLot)).approval_status).toBe("pending");
   });
@@ -574,7 +586,9 @@ describe("cost-price run lifecycle integrity (0160)", () => {
       expect(a.error?.code, `iteration ${i}`).not.toBe(DEADLOCK);
       // The pass was live when both started, so the sale is refused either way.
       expect(a.error, `iteration ${i}: release ${a.error?.message}`).toBeNull();
-      expect(["GP007", "CP002"], `iteration ${i}: ${s.error?.code}`).toContain(s.error?.code);
+      // 0162 adds a third correct refusal: the release moved the lot after the
+      // owner read the run, so the run they reviewed no longer exists.
+      expect(["GP007", "CP002", "ST001"], `iteration ${i}: ${s.error?.code}`).toContain(s.error?.code);
       expect(await lotStatus(L)).toBe("released");
       expect(await mixedOuts(), `iteration ${i}: no sale deduction`).toBe(outs);
       expect((await runRow(runId)).approval_status).toBe("pending");
@@ -588,9 +602,14 @@ describe("cost-price run lifecycle integrity (0160)", () => {
         approve(runId),
         inv.client.from("cost_price_run_extras").insert({ run_id: runId, material_name: "race", weight_kg: 100, cost_price_per_kg: 30 }),
       ]);
-      expect(s.error, `iteration ${i}: ${s.error?.message}`).toBeNull();
       const row = await runRow(runId);
-      if (e.error) {
+      if (s.error) {
+        // 0162: the extra landed after the owner read the run, so the approval is
+        // refused rather than silently approving a more expensive batch.
+        expect(s.error.code, `iteration ${i}: ${s.error.message}`).toBe("ST001");
+        expect(e.error, `iteration ${i}: the extra is what changed`).toBeNull();
+        expect(row.approval_status, `iteration ${i}: still pending`).toBe("pending");
+      } else if (e.error) {
         expect(e.error.code, `iteration ${i}`).toBe("CP001");
         expect(Number(row.total_cost_price)).toBe(1000);
       } else {
@@ -622,10 +641,12 @@ describe("cost-price run lifecycle integrity (0160)", () => {
       const runId = await draft(inv, [L]);
       const outs = await mixedOuts();
       const [x, y] = await Promise.all([approve(runId), approve(runId)]);
-      for (const r of [x, y]) {
-        expect(r.error, `iteration ${i}: ${r.error?.message}`).toBeNull();
-      }
-      expect([...(x.data ?? []), ...(y.data ?? [])], `iteration ${i}: exactly one approval`).toHaveLength(1);
+      // 0162: the loser no longer returns zero rows silently — it is refused
+      // ST001 because the run it reviewed has already been ruled on.
+      expect([x.error, y.error].filter((e) => e === null),
+        `iteration ${i}: exactly one approval`).toHaveLength(1);
+      expect([x.error, y.error].filter((e) => e?.code === "ST001"),
+        `iteration ${i}: the loser is refused as stale`).toHaveLength(1);
       expect(await mixedOuts()).toBe(outs + 1);
       expect(await lotStatus(L)).toBe("sold");
     }

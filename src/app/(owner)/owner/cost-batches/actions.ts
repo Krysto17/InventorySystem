@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
 import { costPriceRefusal } from "@/lib/cost-price/refusals";
+import { STALE_MESSAGE } from "@/lib/approvals/stale";
+import { isMissingFunction } from "@/lib/approvals/bridge";
 
 // Owner approves a pending mixing batch → the approval trigger removes every
 // attached lot from stock (flip to sold + 'mixed_batch' ledger 'out').
@@ -20,27 +22,39 @@ export async function approveCostBatch(_prev: ActionResult, formData: FormData):
   const id = String(formData.get("run_id") ?? "");
   if (!id) return fail("Missing batch.");
 
+  // 0162: approval names the run the owner reviewed — its membership, each
+  // lot's weight and cost, and the extras. A direct table UPDATE cannot approve.
+  const reviewedToken = String(formData.get("reviewed_token") ?? "").trim();
   const supabase = await createClient();
-  const res = await supabase
-    .from("cost_price_runs")
-    .update({
-      approval_status: "approved",
-      approved_by: me.id,
-      approved_at: new Date().toISOString(),
-      sold: true,
-      sold_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .eq("approval_status", "pending")
-    .select("id");
+  // ROLLOUT BRIDGE (temporary): only when 0162 is not applied yet.
+  const probe: { error: { code?: string | null; message?: string } | null } = reviewedToken
+    ? await supabase.rpc("approve_cost_price_run", { p_run_id: id, p_reviewed_token: reviewedToken })
+    : { error: { code: "PGRST202" } };
+  if (isMissingFunction(probe.error)) {
+    const legacy = await supabase.from("cost_price_runs").update({
+      approval_status: "approved", approved_by: me.id, approved_at: new Date().toISOString(),
+      sold: true, sold_at: new Date().toISOString(),
+    }).eq("id", id).eq("approval_status", "pending").select("id");
+    if (legacy.error?.code === "GP007") return fail("Lot is on a live gate pass — cancel the pass first.");
+    const legacyRefusal = costPriceRefusal(legacy.error?.code);
+    if (legacyRefusal) return fail(legacyRefusal);
+    const settled = fromWrite(legacy, "This batch was not approved — it may already have been approved or rejected.");
+    if (!settled.ok) return settled;
+    revalidatePath("/owner/cost-batches");
+    revalidatePath("/manager/cost-price");
+    return ok("Batch approved — its lots have left stock.");
+  }
+  const { error } = probe;
+  // 0162: the run changed while the owner was deciding. Nothing was sold.
+  if (error?.code === "ST001") return fail(STALE_MESSAGE);
   // 0155: a lot on a live gate pass is being released from stock, not sold.
-  if (res.error?.code === "GP007") return fail("Lot is on a live gate pass — cancel the pass first.");
+  if (error?.code === "GP007") return fail("Lot is on a live gate pass — cancel the pass first.");
   // 0160: a lot that left stock (sold or released) while the batch waited, a
   // batch with no lot left, or one no longer pending. The run stays as it was.
-  const refusal = costPriceRefusal(res.error?.code);
+  const refusal = costPriceRefusal(error?.code);
   if (refusal) return fail(refusal);
-  const result = fromWrite(res, "This batch was not approved — it may already have been approved or rejected.");
-  if (!result.ok) return result;
+  // The RPC raises instead of returning rows, so the error is the whole signal.
+  if (error) return fail((error.message ?? "").replace(/^.*?:\s*/, ""));
   revalidatePath("/owner/cost-batches");
   revalidatePath("/manager/cost-price");
   return ok("Batch approved — its lots have left stock.");
