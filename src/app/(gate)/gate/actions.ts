@@ -4,8 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
-import { requestKeyPayload } from "@/lib/actions/schema-capability";
-import { isReplay } from "@/lib/actions/request-key";
+import { requestKeyFrom, isReplay } from "@/lib/actions/request-key";
 
 async function mySiteId(): Promise<string | null> {
   const me = await getProfile();
@@ -44,7 +43,7 @@ export async function recordGateLog(_prev: ActionResult, formData: FormData): Pr
     gate_pass_id: gatePassId,
     recorded_by: me.id,
     // 0163: one logged movement per command, however often it is submitted.
-    ...(await requestKeyPayload(formData)),
+    request_key: requestKeyFrom(formData) ?? undefined,
   });
   // 0163: this command already logged the movement; say so as a success rather
   // than showing the operator a constraint.

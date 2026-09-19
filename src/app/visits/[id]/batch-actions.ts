@@ -5,8 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, fromWrite, ok, type ActionResult } from "@/lib/actions/result";
-import { requestKeyPayload } from "@/lib/actions/schema-capability";
-import { isReplay } from "@/lib/actions/request-key";
+import { requestKeyFrom, isReplay } from "@/lib/actions/request-key";
 import { DELETE_BATCH_ROLES, ROLE_HOME } from "@/lib/auth/roles";
 import { STALE_MESSAGE } from "@/lib/approvals/stale";
 
@@ -73,7 +72,7 @@ export async function addMaterialLine(_prev: ActionResult, formData: FormData): 
     // 0163: a batch may legitimately carry two lines of the same material at
     // the same weight, so only the command id can tell a resubmit from a
     // genuine second line.
-    ...(await requestKeyPayload(formData)),
+    request_key: requestKeyFrom(formData) ?? undefined,
   }).select("id");
   if (isReplay(res.error)) {
     revalidatePath(`/visits/${visitId}`);

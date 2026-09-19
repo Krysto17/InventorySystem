@@ -1,8 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { isReplay } from "@/lib/actions/request-key";
-import { requestKeyPayload } from "@/lib/actions/schema-capability";
+import { requestKeyFrom, isReplay } from "@/lib/actions/request-key";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 
@@ -58,7 +57,7 @@ export async function recordPurchaseIntake(
     recorded_by: me.id,
     ref_visit_id: visitId,
     // 0163: one intake per command — a resubmit must not stock the batch twice.
-    ...(await requestKeyPayload(formData)),
+    request_key: requestKeyFrom(formData) ?? undefined,
   });
 
   // 0163: this command already stocked the batch — a resubmit must not add a
@@ -106,7 +105,7 @@ export async function recordAdjustment(
     recorded_by: me.id,
     ref_visit_id: null,
     // 0163: one movement per command — a resubmit must not move stock twice.
-    ...(await requestKeyPayload(formData)),
+    request_key: requestKeyFrom(formData) ?? undefined,
   });
 
   // 0163: this command already moved the stock.

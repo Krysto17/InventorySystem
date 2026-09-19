@@ -4,8 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { fail, ok, type ActionResult } from "@/lib/actions/result";
-import { requestKeyPayload } from "@/lib/actions/schema-capability";
-import { isReplay } from "@/lib/actions/request-key";
+import { requestKeyFrom, isReplay } from "@/lib/actions/request-key";
 
 // Manager (or owner) issues a gate pass authorising outgoing material; the gate
 // acknowledges it before release. A pass can be tied to an available stock lot
@@ -75,7 +74,7 @@ export async function issueGatePass(_prev: ActionResult, formData: FormData): Pr
     reason,
     issued_by: me.id,
     // 0163: one pass per command (0155 already caps live passes per lot).
-    ...(await requestKeyPayload(formData)),
+    request_key: requestKeyFrom(formData) ?? undefined,
     ...(isRequest
       ? { status: "pending", requested_by: me.id }
       : { status: "issued", authorized_by: me.id, authorized_at: new Date().toISOString() }),
