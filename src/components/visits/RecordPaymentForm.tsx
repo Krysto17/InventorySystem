@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { useCommandId } from "@/components/ui/use-command-id";
 import { recordSettlementPayment } from "@/app/visits/[id]/finance-actions";
 import { AccountFields } from "@/components/accounts/AccountFields";
 import type { KnownAccount } from "@/lib/accounts/known-accounts";
@@ -33,9 +34,12 @@ export function RecordPaymentForm({
   cashOnly?: boolean;
 }) {
   const [state, action, pending] = useActionState(recordSettlementPayment, init);
+  // 0163: one payout is one command; a resubmit replays it rather than paying
+  // the supplier twice.
+  const submit = useCommandId(state)(action);
 
   return (
-    <form action={action} className="space-y-2 border-t border-line pt-3" data-confirm="Confirm this payment has actually been made to the supplier.">
+    <form action={submit} className="space-y-2 border-t border-line pt-3" data-confirm="Confirm this payment has actually been made to the supplier.">
       <input type="hidden" name="visit_id" value={visitId} />
       <input type="hidden" name="settlement_id" value={settlementId} />
       <div className="text-xs font-medium text-ink-2">

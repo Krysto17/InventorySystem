@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useRef } from "react";
-import { REQUEST_KEY_FIELD } from "@/lib/actions/request-key";
+import { useActionState } from "react";
+import { useCommandId } from "./use-command-id";
 import type { ActionResult } from "@/lib/actions/result";
 
 const INITIAL: ActionResult = { ok: false };
@@ -32,25 +32,10 @@ export function ActionForm({
 }) {
   const [state, formAction] = useActionState(action, INITIAL);
 
-  // 0163: one intended action is one command. The id is minted on the client at
-  // submit time (not at render, which would make every form on a page share one
-  // id) and kept until that action SUCCEEDS, so a resubmit after a lost or slow
-  // response replays the same command instead of creating a second effect. Once
-  // it lands, the next submission is a new intent and gets a new id — which is
-  // what lets someone legitimately log the same expense twice.
-  const commandId = useRef<string | null>(null);
-
-  function submit(formData: FormData) {
-    // `state` is the previous submission's result. If that one succeeded, this
-    // is a fresh intent and needs its own id — which is what lets someone
-    // legitimately log the same expense twice. If it failed, or never came
-    // back, this is the same intent again and keeps the same id, so the server
-    // recognises it as a replay instead of doing the work twice.
-    if (state.ok) commandId.current = null;
-    commandId.current ??= crypto.randomUUID();
-    formData.set(REQUEST_KEY_FIELD, commandId.current);
-    return formAction(formData);
-  }
+  // 0163: every submission carries the id of the command it belongs to. The
+  // minting lives in a shared hook because ActionForm is not the only door —
+  // the payment screens are hand-rolled forms and were left without one.
+  const submit = useCommandId(state)(formAction);
 
   return (
     <form {...props} action={submit} className={className}>

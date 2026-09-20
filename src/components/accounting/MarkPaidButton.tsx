@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { useCommandId } from "@/components/ui/use-command-id";
 import type { ActionResult } from "@/lib/actions/result";
 
 type Action = (prev: ActionResult, formData: FormData) => Promise<ActionResult>;
@@ -19,8 +20,11 @@ export function MarkPaidButton({
   label?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, { ok: false });
+  // 0163: this form pays money, so it must say which command it is. Without the
+  // id the payment action cannot tell a retry from a second payout and refuses.
+  const submit = useCommandId(state)(formAction);
   return (
-    <form action={formAction} className="mt-2" data-confirm="Confirm you have already paid this. It will be recorded as paid.">
+    <form action={submit} className="mt-2" data-confirm="Confirm you have already paid this. It will be recorded as paid.">
       <input type="hidden" name={inputName} value={id} />
       <button
         type="submit"

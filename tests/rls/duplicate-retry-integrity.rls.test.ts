@@ -307,10 +307,23 @@ describe("duplicate / retry integrity (0163)", () => {
   // ── the app carries a command id ──────────────────────────────────────────
 
   it("13. every idempotent action reads the command id, and the form mints one", () => {
-    const form = readFileSync("src/components/ui/ActionForm.tsx", "utf8");
-    expect(form, "the form mints a command id").toContain("REQUEST_KEY_FIELD");
-    expect(form, "minted per submit, not per render").toContain("crypto.randomUUID()");
-    expect(form, "and cleared only once the action succeeded").toContain("commandId.current = null");
+    // The minting lives in one hook, because ActionForm is not the only door:
+    // the payment screens are hand-rolled forms, and when they were left
+    // without a command id every payment in production was refused.
+    const hook = readFileSync("src/components/ui/use-command-id.ts", "utf8");
+    expect(hook, "the hook mints a command id").toContain("REQUEST_KEY_FIELD");
+    expect(hook, "minted per submit, not per render").toContain("crypto.randomUUID()");
+    expect(hook, "and cleared only once the action succeeded").toContain("commandId.current = null");
+
+    // Every form that moves money must use it.
+    for (const f of [
+      "components/ui/ActionForm.tsx",
+      "components/accounting/MarkPaidButton.tsx",
+      "components/visits/RecordPaymentForm.tsx",
+    ]) {
+      expect(readFileSync(`src/${f}`, "utf8"), `${f} must mint a command id`)
+        .toContain("useCommandId");
+    }
 
     for (const [file, fn] of [
       ["app/visits/[id]/finance-actions.ts", "recordSettlementPayment"],
