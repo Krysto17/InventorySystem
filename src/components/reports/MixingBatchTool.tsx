@@ -37,7 +37,11 @@ export function MixingBatchTool({ lots }: { lots: Lot[] }) {
   const [magQuery, setMagQuery] = useState("");
   const [text, setText] = useState("");
   const [sort, setSort] = useState<SortKey>("cost_asc");
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+  // The picked lots themselves, not just their ids. A lot stays in the batch
+  // once chosen even if it later drops out of the visible list — filtered away,
+  // or pushed past the page window by newer lots arriving. Keying off the ids
+  // alone silently lost those from both the total AND the submission.
+  const [picked, setPicked] = useState<Map<string, Lot>>(new Map());
   const [sell, setSell] = useState(true);
   // External (non-stock) materials mixed in — counted in the cost, never removed
   // from stock.
@@ -85,7 +89,7 @@ export function MixingBatchTool({ lots }: { lots: Lot[] }) {
     return rows;
   }, [lots, material, magQuery, text, sort]);
 
-  const selected = lots.filter((l) => picked.has(l.id));
+  const selected = [...picked.values()];
   const totalWeight = selected.reduce((s, l) => s + l.weight, 0) + extraWeight;
   const totalCost = selected.reduce((s, l) => s + l.weight * (l.cost ?? 0), 0) + extraCost;
   const avgCost = totalWeight > 0 ? totalCost / totalWeight : 0;
@@ -94,9 +98,13 @@ export function MixingBatchTool({ lots }: { lots: Lot[] }) {
   const materialsInBatch = new Set(selected.map((l) => l.material_name));
   const mixedMaterials = materialsInBatch.size > 1;
 
-  const toggle = (id: string) =>
-    setPicked((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
-  const clearPicked = () => setPicked(new Set());
+  const toggle = (lot: Lot) =>
+    setPicked((prev) => {
+      const next = new Map(prev);
+      if (next.has(lot.id)) next.delete(lot.id); else next.set(lot.id, lot);
+      return next;
+    });
+  const clearPicked = () => setPicked(new Map());
 
   return (
     <form action={action} className="space-y-4">
@@ -139,7 +147,7 @@ export function MixingBatchTool({ lots }: { lots: Lot[] }) {
           ) : (
             visible.map((l) => (
               <label key={l.id} className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                <input type="checkbox" name="lot_ids" value={l.id} checked={picked.has(l.id)} onChange={() => toggle(l.id)} />
+                <input type="checkbox" checked={picked.has(l.id)} onChange={() => toggle(l)} />
                 <span className="flex-1">
                   <span className="font-medium">{l.material_name}</span>
                   {l.magnetic ? <span className="ml-2 text-ore">mag {l.magnetic}</span> : null}
@@ -169,6 +177,15 @@ export function MixingBatchTool({ lots }: { lots: Lot[] }) {
             className="rounded border border-line px-3 py-1.5 text-sm font-semibold hover:bg-paper disabled:opacity-40">Add</button>
         </div>
       </div>
+
+      {/* The lots submit from `picked`, never from the rendered checkboxes: an
+          unrendered checkbox posts nothing, so filtering or searching after
+          choosing used to drop those lots from the batch while the computed
+          total above still counted them — a batch lighter than the one the
+          operator built and approved. */}
+      {selected.map((l) => (
+        <input key={`lot-${l.id}`} type="hidden" name="lot_ids" value={l.id} readOnly />
+      ))}
 
       {/* Hidden inputs so the extras submit with the form */}
       {extras.map((e, i) => (
@@ -207,7 +224,9 @@ export function MixingBatchTool({ lots }: { lots: Lot[] }) {
                     <td className="px-3 py-2 text-right tabular-nums">{kg(l.weight)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{l.cost != null ? ngn(l.cost) : <span className="text-reject">—</span>}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{ngn(l.weight * (l.cost ?? 0))}</td>
-                    <td className="px-3 py-2"></td>
+                    {/* A picked lot stays in the batch even when a filter hides
+                        its checkbox, so it needs a way out from here too. */}
+                    <td className="px-3 py-2 text-right"><button type="button" onClick={() => toggle(l)} className="text-reject hover:underline" title="Remove">✕</button></td>
                   </tr>
                 ))}
                 {extraRows.map((e, i) => (
