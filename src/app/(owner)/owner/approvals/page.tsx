@@ -17,6 +17,103 @@ import { one as g1 } from "@/lib/db/relation";
 export const dynamic = "force-dynamic";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
+type LogEntry = {
+  type: string;
+  at: string;
+  who: string | null;
+  diff: Record<string, { old: unknown; new: unknown }> | null;
+};
+
+const FIELD_LABELS: Record<string, string> = {
+  amount_naira: "Amount", amount: "Amount", purpose: "Purpose", name: "Name",
+  category: "Category", comment: "Comment", entry_date: "Date",
+  account_name: "Account name", account_number: "Account number", bank_name: "Bank",
+  site_id: "Site", supplier_id: "Supplier", approval_status: "Status",
+};
+// Bookkeeping columns the operator never set; showing them as "changes" would
+// bury the one line that matters.
+const NOISE = new Set(["revision", "request_key", "updated_at", "approved_at", "approved_by"]);
+
+function fmt(v: unknown) {
+  if (v === null || v === undefined || v === "") return "—";
+  if (typeof v === "number") return v.toLocaleString();
+  return String(v);
+}
+
+/** What was submitted, who submitted it, and everything that happened since. */
+function DetailPanel({
+  rows, log, accounts,
+}: {
+  rows: Array<[string, React.ReactNode]>;
+  log: LogEntry[];
+  accounts?: { name: unknown; number: unknown; bank: unknown };
+}) {
+  const edits = log.filter((l) => l.type === "record_edited" && l.diff
+    && Object.keys(l.diff).some((k) => !NOISE.has(k)));
+  const created = log.find((l) => l.type === "record_created");
+  return (
+    <details className="mt-2 w-full">
+      <summary className="cursor-pointer text-xs font-medium text-ink-2 hover:underline">
+        Details{edits.length > 0 ? ` · edited ${edits.length}×` : ""}
+      </summary>
+      <div className="mt-2 space-y-3 rounded border border-line bg-paper px-3 py-2">
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
+          {rows.map(([k, v]) => (
+            <div key={k} className="flex justify-between gap-3">
+              <dt className="text-ink-2">{k}</dt>
+              <dd className="text-right font-medium">{v}</dd>
+            </div>
+          ))}
+        </dl>
+
+        {accounts && Boolean(accounts.name || accounts.number || accounts.bank) && (
+          <div className="text-xs">
+            <div className="mb-1 font-semibold text-ink-2">Payment account</div>
+            <div className="text-ink-2">
+              {fmt(accounts.name)} · {fmt(accounts.number)} · {fmt(accounts.bank)}
+            </div>
+          </div>
+        )}
+
+        <div className="text-xs">
+          <div className="mb-1 font-semibold text-ink-2">History</div>
+          {log.length === 0 ? (
+            <p className="text-ink-2">No recorded activity.</p>
+          ) : (
+            <ul className="space-y-1">
+              {created && (
+                <li className="text-ink-2">
+                  Submitted {formatTimestamp(created.at)}
+                  {created.who ? ` by ${created.who}` : ""}
+                </li>
+              )}
+              {edits.map((e, i) => (
+                <li key={i} className="text-ink-2">
+                  <span>Edited {formatTimestamp(e.at)}{e.who ? ` by ${e.who}` : ""}</span>
+                  <ul className="ml-4 list-disc">
+                    {Object.entries(e.diff ?? {})
+                      .filter(([k]) => !NOISE.has(k))
+                      .map(([k, v]) => (
+                        <li key={k}>
+                          {FIELD_LABELS[k] ?? k.replace(/_/g, " ")}:{" "}
+                          <span className="text-reject line-through">{fmt(v.old)}</span>{" → "}
+                          <span className="font-medium text-ink">{fmt(v.new)}</span>
+                        </li>
+                      ))}
+                  </ul>
+                </li>
+              ))}
+              {edits.length === 0 && created && (
+                <li className="text-ink-2">Unchanged since it was submitted.</li>
+              )}
+            </ul>
+          )}
+        </div>
+      </div>
+    </details>
+  );
+}
+
 export default async function OwnerApprovalsPage() {
   const supabase = await createClient();
 
@@ -24,7 +121,14 @@ export default async function OwnerApprovalsPage() {
   const [{ data: balances }, { data: pendingAdvances }, figures] = await Promise.all([
     supabase.from("stock_balances").select("material_name, weight_kg"),
     supabase.from("advances")
-      .select("id, purpose, amount_naira, created_at, revision, supplier:suppliers(name, supplier_code)")
+      .select(`
+        id, purpose, amount_naira, created_at, revision, comment,
+        account_name, account_number, bank_name,
+        supplier:suppliers(name, supplier_code),
+        site:sites(name),
+        recorded_by_profile:profiles!advances_recorded_by_fkey(full_name),
+        shares:advance_shares(amount, note, supplier:suppliers(name))
+      `)
       .eq("approval_status", "pending").order("created_at", { ascending: true }),
     fetchFinanceFigures(),
   ]);
@@ -43,7 +147,12 @@ export default async function OwnerApprovalsPage() {
 
   const { data: pendingExpenses } = await supabase
     .from("consumables")
-    .select("id, name, category, amount_naira, entry_date, revision, site:sites(name)")
+    .select(`
+      id, name, category, amount_naira, entry_date, revision, comment, created_at,
+      account_name, account_number, bank_name,
+      site:sites(name),
+      recorded_by_profile:profiles!consumables_recorded_by_fkey(full_name)
+    `)
     .eq("approval_status", "pending")
     .order("entry_date", { ascending: true });
 
@@ -62,6 +171,33 @@ export default async function OwnerApprovalsPage() {
     const { data } = await supabase.rpc("pricing_review_token", { p_visit_id: v.id as string });
     if (data) pricingTokens.set(v.id as string, data as string);
   }));
+
+  // The history behind each pending item. The owner approves an exact revision
+  // (0162), so what they most need before ruling is whether the figure moved
+  // after it was submitted — an expense edited from ₦9,000 to ₦15,000 reads
+  // very differently from one that never changed.
+  const pendingIds = [
+    ...(pendingAdvances ?? []).map((a) => a.id as string),
+    ...(pendingExpenses ?? []).map((e) => e.id as string),
+  ];
+  const logs = new Map<string, LogEntry[]>();
+  if (pendingIds.length) {
+    const { data: events } = await supabase
+      .from("transaction_events")
+      .select("entity_id, event_type, created_at, payload, actor:profiles!transaction_events_actor_id_fkey(full_name)")
+      .in("entity_id", pendingIds)
+      .order("created_at", { ascending: true });
+    for (const ev of events ?? []) {
+      const key = ev.entity_id as string;
+      const actor = g1<{ full_name: string }>((ev as { actor: unknown }).actor);
+      logs.set(key, [...(logs.get(key) ?? []), {
+        type: ev.event_type as string,
+        at: ev.created_at as string,
+        who: actor?.full_name ?? null,
+        diff: ((ev.payload as { diff?: Record<string, { old: unknown; new: unknown }> })?.diff) ?? null,
+      }]);
+    }
+  }
 
   // Overview: materials on hand (ledger balance, aggregated in SQL — see 0121),
   // light bills deducted, advances out. Per-site buckets roll up per material.
@@ -255,6 +391,11 @@ export default async function OwnerApprovalsPage() {
             <ul className="divide-y divide-line">
               {(pendingAdvances ?? []).map((a) => {
                 const sup = g1<{ name: string; supplier_code: string | null }>((a as { supplier: unknown }).supplier);
+                const site = g1<{ name: string }>((a as { site: unknown }).site);
+                const by = g1<{ full_name: string }>((a as { recorded_by_profile: unknown }).recorded_by_profile);
+                // database.types.ts declares no relationships, so embedded rows are
+                // read through a cast here, as the rest of this page does.
+                const shares = ((a as unknown as { shares?: Array<{ amount: number; note: string | null; supplier: unknown }> }).shares) ?? [];
                 return (
                   <li key={a.id as string} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
                     <div className="flex items-center gap-2">
@@ -280,6 +421,25 @@ export default async function OwnerApprovalsPage() {
                         <button type="submit" className="rounded border px-3 py-1 text-xs">Reject</button>
                       </ActionForm>
                     </div>
+                    <DetailPanel
+                      rows={[
+                        ["Supplier", sup?.name ?? "—"],
+                        ["Purpose", (a.purpose as string) ?? "—"],
+                        ["Amount", ngn(Number(a.amount_naira))],
+                        ["Site", site?.name ?? "—"],
+                        ["Submitted by", by?.full_name ?? "—"],
+                        ["Submitted", formatTimestamp(a.created_at as string)],
+                        ["Note", (a.comment as string) || "—"],
+                        ...(shares.length
+                          ? [["Shared with", shares.map((sh) => {
+                              const shSup = g1<{ name: string }>(sh.supplier);
+                              return `${shSup?.name ?? "—"} ${ngn(Number(sh.amount))}`;
+                            }).join(", ")] as [string, React.ReactNode]]
+                          : []),
+                      ]}
+                      accounts={{ name: a.account_name, number: a.account_number, bank: a.bank_name }}
+                      log={logs.get(a.id as string) ?? []}
+                    />
                   </li>
                 );
               })}
@@ -303,6 +463,7 @@ export default async function OwnerApprovalsPage() {
             <ul className="divide-y divide-line">
               {(pendingExpenses ?? []).map((e) => {
                 const site = g1<{ name: string }>((e as { site: unknown }).site);
+                const by = g1<{ full_name: string }>((e as { recorded_by_profile: unknown }).recorded_by_profile);
                 return (
                   <li key={e.id as string} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
                     <div>
@@ -324,6 +485,20 @@ export default async function OwnerApprovalsPage() {
                         <button type="submit" className="rounded border px-3 py-1 text-xs">Reject</button>
                       </ActionForm>
                     </div>
+                    <DetailPanel
+                      rows={[
+                        ["Expense", (e.name as string) ?? "—"],
+                        ["Category", String(e.category).replace(/_/g, " ")],
+                        ["Amount", e.amount_naira != null ? ngn(Number(e.amount_naira)) : "—"],
+                        ["Site", site?.name ?? "—"],
+                        ["Date of spend", (e.entry_date as string) ?? "—"],
+                        ["Submitted by", by?.full_name ?? "—"],
+                        ["Submitted", formatTimestamp(e.created_at as string)],
+                        ["Note", (e.comment as string) || "—"],
+                      ]}
+                      accounts={{ name: e.account_name, number: e.account_number, bank: e.bank_name }}
+                      log={logs.get(e.id as string) ?? []}
+                    />
                   </li>
                 );
               })}
