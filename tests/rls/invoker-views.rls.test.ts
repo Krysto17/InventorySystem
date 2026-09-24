@@ -51,8 +51,16 @@ describe("the flat views run as the caller", () => {
     expect(data).toHaveLength(1);
     expect(data![0].is_paid).toBe(true);      // the whole store check depends on this
     expect(data![0].material_name).toBeTruthy();
-    // Supplier stays out of reach — bank details live on that table.
-    expect(data![0].supplier_name).toBeNull();
+    // 0164: the supplier's NAME is back — a count sheet has to say whose sacks
+    // these are. The table itself, where the bank details live, stays out of
+    // reach; the name and code arrive through the three-column
+    // `supplier_labels` view instead.
+    expect(data![0].supplier_name).toBeTruthy();
+  });
+
+  it("but the suppliers table itself is still closed to the keeper", async () => {
+    expect((await keeper.client.from("suppliers").select("id").limit(1)).data ?? [],
+      "the 0126 wall is what keeps bank details away from a stock count").toHaveLength(0);
   });
 
   it("and can still count it", async () => {
@@ -61,7 +69,7 @@ describe("the flat views run as the caller", () => {
     })).error).toBeNull();
   });
 
-  it("the owner sees the supplier name the keeper cannot", async () => {
+  it("the owner reads the same log unchanged", async () => {
     const { data } = await owner.client.from("stocked_materials")
       .select("supplier_name, is_paid").eq("id", lotId).single();
     expect(data!.supplier_name).toBeTruthy();

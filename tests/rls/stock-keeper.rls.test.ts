@@ -4,7 +4,7 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 // The store keeper counts their own store: tick what is on the shelf, dispute
 // what is missing or short. They see nothing but stock.
 describe("store keeper confirms and disputes stock", () => {
-  let siteA: string, siteB: string, material: string, supplierId: string;
+  let siteA: string, siteB: string, material: string, supplierId: string, supplierName: string;
   let keeper: TestUser, keeperB: TestUser, owner: TestUser, mgrA: TestUser, recv: TestUser;
 
   const lot = async (siteId: string, weight = 100) => {
@@ -26,7 +26,9 @@ describe("store keeper confirms and disputes stock", () => {
     owner = await makeUser({ username: "sk-owner", role: "owner", siteId: null });
     mgrA = await makeUser({ username: "sk-mgr", role: "manager", siteId: siteA });
     recv = await makeUser({ username: "sk-recv", role: "receiving", siteId: siteA });
-    const { data: s } = await adminClient().from("suppliers").insert({ name: `SK ${Date.now()}` }).select("id").single();
+    supplierName = `SK ${Date.now()}`;
+    const { data: s } = await adminClient().from("suppliers")
+      .insert({ name: supplierName, phone: "08030000000" }).select("id").single();
     supplierId = s!.id as string;
     const { data: mt } = await adminClient().from("material_types")
       .insert({ name: `Store-Ore ${Date.now()}` }).select("id").single();
@@ -190,15 +192,36 @@ describe("store keeper confirms and disputes stock", () => {
     expect(data).toHaveLength(1);
     expect(data![0].check_status).toBe("confirmed");
     expect(data![0].site_id).toBe(siteA);
-    // The log runs as the caller now (0141), so the supplier — whose row also
-    // carries bank details — is filtered out for the keeper rather than being
-    // handed over by a view running with its owner's rights.
-    expect(data![0].supplier_name).toBeNull();
+    // 0164: the count sheet names its supplier again. 0141 made this view run
+    // as the caller, which correctly hid `suppliers` — the row carries bank
+    // details — but it hid the NAME with them, and a keeper counting sacks
+    // could not say whose they were. The name and code now come from
+    // `supplier_labels`, a three-column view; the table itself stays walled.
+    expect(data![0].supplier_name).toBe(supplierName);
 
     // Another store's lots stay invisible.
     const otherLot = await lot(siteB);
     expect((await keeper.client.from("stocked_materials").select("id").eq("id", otherLot)).data ?? [])
       .toHaveLength(0);
+  });
+
+  it("sees the supplier's name and code, and nothing else about them", async () => {
+    // The name is what a count sheet needs. The bank details on the same row
+    // are what the wall is for, so the fix exposes three columns and no more.
+    const { data: label } = await keeper.client.from("supplier_labels")
+      .select("id, name, supplier_code").eq("id", supplierId).single();
+    expect(label!.name).toBe(supplierName);
+
+    // The table behind it stays unreachable.
+    expect((await keeper.client.from("suppliers").select("id").eq("id", supplierId)).data ?? [],
+      "the store-keeper wall on suppliers still holds").toHaveLength(0);
+
+    // And the label view cannot hand over anything sensitive, because it does
+    // not select it.
+    for (const col of ["phone", "notes", "account_name", "account_number", "bank_name", "former_accounts"]) {
+      const res = await keeper.client.from("supplier_labels").select(col).limit(1);
+      expect(res.error, `supplier_labels must not expose ${col}`).not.toBeNull();
+    }
   });
 
   it("keeps the keeper out of the rest of the business", async () => {
