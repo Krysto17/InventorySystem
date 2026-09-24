@@ -38,6 +38,14 @@ comment on view public.supplier_labels is
   'Owner rights on purpose: it exists so a stock count can name its supplier '
   'without exposing phone, notes or bank details. Do not add columns to it.';
 
+-- Supabase's default privileges hand every new object in `public` to anon,
+-- authenticated and service_role. For an INVOKER view that is harmless, because
+-- RLS still answers — but this view runs with owner rights, so an anon grant
+-- would publish all 362 supplier names to unauthenticated callers. That is the
+-- 3B-1 disclosure 0147 already closed once, so it is revoked explicitly here
+-- and only `authenticated` is granted back.
+revoke all on public.supplier_labels from anon;
+revoke all on public.supplier_labels from public;
 grant select on public.supplier_labels to authenticated;
 
 -- Re-emitted from the 0154 body. The only change is the supplier join, which
