@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { formatTimestamp } from "@/lib/visits/format";
 import { PayablesReview } from "@/components/payables/PayablesReview";
 import { one as g1 } from "@/lib/db/relation";
-import { PaymentBreakdown, type PaymentRow } from "@/components/payments/PaymentBreakdown";
+import { PaymentBreakdown } from "@/components/payments/PaymentBreakdown";
+import { fetchPaymentsBySettlement } from "@/lib/payments/breakdown";
 
 
 // Financial figures must never be served from cache — a stale balance reads as
@@ -26,32 +27,7 @@ export default async function OwnerPaymentsPage() {
   // A settled payout is often several payments into several accounts. The total
   // alone cannot answer "which account received what", which is the question
   // behind every payment query a supplier raises.
-  const paidIds = (paid ?? []).map((p) => p.id as string);
-  const { data: paymentRows } = paidIds.length
-    ? await supabase.from("settlement_payments")
-        .select(`
-          id, settlement_id, amount, method, note, created_at,
-          account_name, account_number, bank_name,
-          payer:profiles!settlement_payments_paid_by_fkey(full_name)
-        `)
-        .in("settlement_id", paidIds)
-        .order("created_at", { ascending: true })
-    : { data: [] as Array<Record<string, unknown>> };
-  const paymentsBy = new Map<string, PaymentRow[]>();
-  for (const p of paymentRows ?? []) {
-    const sid = p.settlement_id as string;
-    paymentsBy.set(sid, [...(paymentsBy.get(sid) ?? []), {
-      id: p.id as string,
-      amount: Number(p.amount),
-      method: (p.method as string | null) ?? null,
-      note: (p.note as string | null) ?? null,
-      created_at: (p.created_at as string | null) ?? null,
-      account_name: (p.account_name as string | null) ?? null,
-      account_number: (p.account_number as string | null) ?? null,
-      bank_name: (p.bank_name as string | null) ?? null,
-      payer_name: g1<{ full_name?: string }>((p as { payer: unknown }).payer)?.full_name ?? null,
-    }]);
-  }
+  const paymentsBy = await fetchPaymentsBySettlement(supabase, (paid ?? []).map((p) => p.id as string));
 
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">

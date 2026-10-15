@@ -4,12 +4,17 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatTimestamp } from "@/lib/visits/format";
 import { one as g1 } from "@/lib/db/relation";
+import { PaymentBreakdown, type PaymentRow } from "@/components/payments/PaymentBreakdown";
+import { fetchPaymentsBySettlement } from "@/lib/payments/breakdown";
 
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 type Entry = {
   key: string; at: string; label: string; kind: "advance" | "deduction" | "payout" | "correction" | "lightbill" | "overpayment";
   amount: number; dir: string; href?: string; note?: string | null;
+  // Only a payout carries these: the individual payments that made it up, so a
+  // split payout can say which account each part went into.
+  payments?: PaymentRow[];
 };
 const KIND_LABEL: Record<Entry["kind"], string> = {
   advance: "Advance", deduction: "Advance recovered", payout: "Supply payout", correction: "Price correction",
@@ -34,6 +39,14 @@ export async function SupplierStatement({ supplierId }: { supplierId: string }) 
       .eq("kind", "light_bill").eq("carried", true).eq("visits.supplier_id", supplierId),
   ]);
 
+  // A payout is often split across several accounts, and this statement is the
+  // place a manager or the owner goes to answer a supplier's "where did my money
+  // go?" long after the settlement was closed. Carry the parts, not just the sum.
+  const paymentsBy = await fetchPaymentsBySettlement(
+    supabase,
+    (settlements ?? []).map((s) => s.id as string),
+  );
+
   const entries: Entry[] = [
     ...(advances ?? []).map((a): Entry => {
       const overpay = (a.purpose as string)?.startsWith("Overpayment");
@@ -55,6 +68,7 @@ export async function SupplierStatement({ supplierId }: { supplierId: string }) 
         key: `s-${s.id}`, at: (s.paid_at as string) ?? "", kind: "payout",
         label: "Supply paid", amount: Number(s.net_balance), dir: "to supplier",
         href: vid ? `/visits/${vid}` : undefined,
+        payments: paymentsBy.get(s.id as string) ?? [],
       };
     }),
     ...(corrections ?? []).map((c): Entry => ({
@@ -95,9 +109,24 @@ export async function SupplierStatement({ supplierId }: { supplierId: string }) 
                   <span className="font-semibold">{ngn(e.amount)}</span>
                 </div>
               );
+              const parts = e.payments ?? [];
               return (
                 <li key={e.key}>
                   {e.href ? <Link href={e.href} className="block hover:bg-gray-50">{inner}</Link> : inner}
+                  {/* Outside the link on purpose — a <details> nested in an
+                      anchor gets swallowed by the navigation on click. */}
+                  {parts.length > 0 && (
+                    <details className="px-4 pb-2.5">
+                      <summary className="cursor-pointer text-xs text-ink-2 hover:underline">
+                        {parts.length > 1
+                          ? `Split across ${parts.length} payments — which account(s) it went into`
+                          : "Which account it went into"}
+                      </summary>
+                      <div className="mt-1.5 rounded border border-line">
+                        <PaymentBreakdown payments={parts} />
+                      </div>
+                    </details>
+                  )}
                 </li>
               );
             })}
