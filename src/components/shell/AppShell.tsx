@@ -100,8 +100,11 @@ export function AppShell({ profile, notificationItems, children }: Props) {
 
     const channel = supabase.channel("role-notifications");
     for (const table of tables) {
-      channel.on("postgres_changes", { event: "INSERT", schema: "public", table }, refresh);
-      channel.on("postgres_changes", { event: "UPDATE", schema: "public", table }, refresh);
+      // One listener per table, not one per event. Realtime evaluates RLS once
+      // per subscription entry per change, so registering INSERT and UPDATE
+      // separately doubled that work for every watched table and every open
+      // tab — and both of them only ever called the same debounced refresh.
+      channel.on("postgres_changes", { event: "*", schema: "public", table }, refresh);
     }
     channel.subscribe();
 
