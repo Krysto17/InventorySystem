@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatTimestamp } from "@/lib/visits/format";
 import { one as g1 } from "@/lib/db/relation";
 import { PaymentBreakdown } from "@/components/payments/PaymentBreakdown";
-import { fetchPaymentsBySettlement } from "@/lib/payments/breakdown";
+import { fetchPaymentsBySettlement, fetchPayoutPlansByVisit } from "@/lib/payments/breakdown";
 
 
 // Financial figures must never be served from cache — a stale balance reads as
@@ -33,7 +33,10 @@ export default async function AccountingClosedPage() {
   // A closed settlement is exactly where "which account did this go into?" gets
   // asked — weeks later, when the supplier queries a payment. The total alone
   // cannot answer it for a payout that was split across several accounts.
-  const paymentsBy = await fetchPaymentsBySettlement(supabase, closed.map((r) => r.id as string));
+  const [paymentsBy, plansBy] = await Promise.all([
+    fetchPaymentsBySettlement(supabase, closed.map((r) => r.id as string)),
+    fetchPayoutPlansByVisit(supabase, closed.map((r) => r.visit_id as string)),
+  ]);
 
   return (
     <main className="p-6 max-w-3xl mx-auto space-y-6">
@@ -59,6 +62,7 @@ export default async function AccountingClosedPage() {
                 const name = g1<{ name: string }>(g1<{ supplier: unknown }>((r as { visit: unknown }).visit)?.supplier)?.name ?? "—";
                 const site = g1<{ name: string }>((r as { site: unknown }).site)?.name ?? "—";
                 const parts = paymentsBy.get(r.id as string) ?? [];
+                const plan = plansBy.get(r.visit_id as string) ?? [];
                 return (
                   <li key={r.id as string} className="px-4 py-3 text-sm">
                     <div className="flex items-center justify-between gap-3">
@@ -68,7 +72,7 @@ export default async function AccountingClosedPage() {
                       </span>
                       <span className="text-xs text-ink-2">Paid {r.paid_at ? formatTimestamp(r.paid_at as string) : "—"}</span>
                     </div>
-                    {parts.length > 0 && (
+                    {(parts.length > 0 || plan.length > 0) && (
                       <details className="mt-1.5">
                         <summary className="cursor-pointer text-xs text-ink-2 hover:underline">
                           {parts.length > 1
@@ -76,7 +80,7 @@ export default async function AccountingClosedPage() {
                             : "Which account it went into"}
                         </summary>
                         <div className="mt-1.5 rounded border border-line">
-                          <PaymentBreakdown payments={parts} />
+                          <PaymentBreakdown payments={parts} plan={plan} />
                         </div>
                       </details>
                     )}

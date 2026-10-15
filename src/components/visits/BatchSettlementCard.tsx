@@ -13,6 +13,7 @@ import type { Role } from "@/lib/auth/roles";
 
 import { one as g1 } from "@/lib/db/relation";
 import { PaymentBreakdown } from "@/components/payments/PaymentBreakdown";
+import { fetchPaymentsBySettlement, fetchPayoutPlansByVisit } from "@/lib/payments/breakdown";
 import { ActionForm } from "@/components/ui/ActionForm";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
@@ -63,11 +64,16 @@ export async function BatchSettlementCard({
 
   // Payment ledger against this settlement (part / full; cash by manager, etc.).
   const settlementId = (settlement?.id as string | undefined) ?? null;
-  const { data: payments } = settlementId
-    ? await supabase.from("settlement_payments")
-        .select("id, amount, method, note, created_at, account_name, account_number, bank_name, payer:profiles!settlement_payments_paid_by_fkey(full_name)")
-        .eq("settlement_id", settlementId).order("created_at", { ascending: true })
-    : { data: null };
+  const paymentsBy = await fetchPaymentsBySettlement(supabase, settlementId ? [settlementId] : []);
+  const payments = settlementId ? paymentsBy.get(settlementId) ?? [] : [];
+
+  // Only for a CLOSED payout: the manager's plan, so a settlement paid before
+  // splits were recorded account by account can still say where the money was
+  // meant to go. While the payout is open PayoutSplitPlan renders the plan
+  // itself, and showing it twice would read as two different claims.
+  const paidPlan = settlement?.status === "paid"
+    ? (await fetchPayoutPlansByVisit(supabase, [visitId])).get(visitId) ?? []
+    : [];
 
   // Totals come from a single source: the stored snapshot once a settlement
   // exists (authoritative + reconciles), otherwise the live settlement_totals
@@ -280,26 +286,16 @@ export async function BatchSettlementCard({
               <span>Payments</span>
               <span>{ngn(paidTotal)} of {ngn(net)} paid{remaining > 0.005 ? ` · ${ngn(remaining)} left` : ""}</span>
             </div>
-            {(payments ?? []).length === 0 ? (
+            {payments.length === 0 && paidPlan.length === 0 ? (
               <p className="text-xs text-ink-2">No payments recorded yet.</p>
             ) : (
               /* One table for every screen that answers "which account got
                  what", so a split payout reads the same here as on the
-                 payables console. */
+                 payables console. `paidPlan` is empty unless this payout was
+                 closed before splits were recorded per account — while it is
+                 still open, PayoutSplitPlan above is already showing the plan. */
               <div className="rounded border border-line">
-                <PaymentBreakdown
-                  payments={(payments ?? []).map((p) => ({
-                    id: p.id as string,
-                    amount: Number(p.amount),
-                    method: (p.method as string | null) ?? null,
-                    note: (p.note as string | null) ?? null,
-                    created_at: (p.created_at as string | null) ?? null,
-                    account_name: (p.account_name as string | null) ?? null,
-                    account_number: (p.account_number as string | null) ?? null,
-                    bank_name: (p.bank_name as string | null) ?? null,
-                    payer_name: g1<{ full_name?: string }>((p as { payer: unknown }).payer)?.full_name ?? null,
-                  }))}
-                />
+                <PaymentBreakdown payments={payments} plan={paidPlan} />
               </div>
             )}
           </div>

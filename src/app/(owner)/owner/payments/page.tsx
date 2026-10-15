@@ -6,7 +6,7 @@ import { formatTimestamp } from "@/lib/visits/format";
 import { PayablesReview } from "@/components/payables/PayablesReview";
 import { one as g1 } from "@/lib/db/relation";
 import { PaymentBreakdown } from "@/components/payments/PaymentBreakdown";
-import { fetchPaymentsBySettlement } from "@/lib/payments/breakdown";
+import { fetchPaymentsBySettlement, fetchPayoutPlansByVisit } from "@/lib/payments/breakdown";
 
 
 // Financial figures must never be served from cache — a stale balance reads as
@@ -27,7 +27,10 @@ export default async function OwnerPaymentsPage() {
   // A settled payout is often several payments into several accounts. The total
   // alone cannot answer "which account received what", which is the question
   // behind every payment query a supplier raises.
-  const paymentsBy = await fetchPaymentsBySettlement(supabase, (paid ?? []).map((p) => p.id as string));
+  const [paymentsBy, plansBy] = await Promise.all([
+    fetchPaymentsBySettlement(supabase, (paid ?? []).map((p) => p.id as string)),
+    fetchPayoutPlansByVisit(supabase, (paid ?? []).map((p) => p.visit_id as string)),
+  ]);
 
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
@@ -53,6 +56,8 @@ export default async function OwnerPaymentsPage() {
               {(paid ?? []).map((p) => {
                 const name = g1<{ name: string }>(g1<{ supplier: unknown }>((p as { visit: unknown }).visit)?.supplier)?.name ?? "—";
                 const site = g1<{ name: string }>((p as { site: unknown }).site)?.name ?? "—";
+                const parts = paymentsBy.get(p.id as string) ?? [];
+                const plan = plansBy.get(p.visit_id as string) ?? [];
                 return (
                   <li key={p.id as string} className="px-4 py-3 text-sm">
                     <div className="flex items-center justify-between gap-3">
@@ -62,13 +67,13 @@ export default async function OwnerPaymentsPage() {
                       </span>
                       <span className="text-xs text-ink-2">Paid {p.paid_at ? formatTimestamp(p.paid_at as string) : "—"}</span>
                     </div>
-                    {(paymentsBy.get(p.id as string)?.length ?? 0) > 0 && (
+                    {(parts.length > 0 || plan.length > 0) && (
                       <details className="mt-1">
                         <summary className="cursor-pointer text-xs font-semibold text-ink-2 hover:underline">
-                          Which account{paymentsBy.get(p.id as string)!.length > 1 ? "s" : ""} it went into
+                          Which account{Math.max(parts.length, plan.length) > 1 ? "s" : ""} it went into
                         </summary>
                         <div className="mt-1 rounded border border-line">
-                          <PaymentBreakdown payments={paymentsBy.get(p.id as string)!} />
+                          <PaymentBreakdown payments={parts} plan={plan} />
                         </div>
                       </details>
                     )}

@@ -1,5 +1,5 @@
 import { one as g1 } from "@/lib/db/relation";
-import type { PaymentRow } from "@/components/payments/PaymentBreakdown";
+import type { PaymentRow, PlanRow } from "@/components/payments/PaymentBreakdown";
 import type { createClient } from "@/lib/supabase/server";
 
 // The server client as the callers already hold it. Spelling the shape out
@@ -55,6 +55,42 @@ export async function fetchPaymentsBySettlement(
       account_number: (row.account_number as string | null) ?? null,
       bank_name: (row.bank_name as string | null) ?? null,
       payer_name: g1<{ full_name?: string }>(row.payer)?.full_name ?? null,
+    }]);
+  }
+  return by;
+}
+
+/**
+ * The manager's payout plan for each of `visitIds`, grouped by visit.
+ *
+ * Keyed by visit, not settlement: 0117 re-keyed `settlement_payout_splits` to
+ * `visit_id`. Paired with the payments above so a screen can show where a
+ * payout was *meant* to go when the ledger never recorded it account by
+ * account. See the `plan` prop on PaymentBreakdown for when that applies.
+ */
+export async function fetchPayoutPlansByVisit(
+  supabase: ServerClient,
+  visitIds: string[],
+): Promise<Map<string, PlanRow[]>> {
+  const by = new Map<string, PlanRow[]>();
+  const ids = visitIds.filter(Boolean);
+  if (ids.length === 0) return by;
+
+  const { data } = await supabase
+    .from("settlement_payout_splits")
+    .select("id, visit_id, amount, account_name, account_number, bank_name, note")
+    .in("visit_id", ids)
+    .order("created_at", { ascending: true });
+
+  for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+    const vid = row.visit_id as string;
+    by.set(vid, [...(by.get(vid) ?? []), {
+      id: row.id as string,
+      amount: Number(row.amount),
+      account_name: (row.account_name as string | null) ?? null,
+      account_number: (row.account_number as string | null) ?? null,
+      bank_name: (row.bank_name as string | null) ?? null,
+      note: (row.note as string | null) ?? null,
     }]);
   }
   return by;
