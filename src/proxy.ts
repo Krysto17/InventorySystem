@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import type { JWK } from "@supabase/supabase-js";
 
 // Role → landing route. Intentionally INLINED rather than imported from
 // src/lib/auth/roles.ts: Vercel's Edge bundler won't pull a local module into
@@ -57,6 +58,43 @@ function redirectWithSession(req: NextRequest, res: NextResponse, to: string): N
   return redirected;
 }
 
+// The published JWKS for this project, cached for the life of the server
+// instance.
+//
+// `getClaims()` caches the key set on the CLIENT, but this proxy builds a fresh
+// client per request, so that cache would never be warm and every request would
+// fetch the JWKS instead — trading a GoTrue call for a JWKS call and saving
+// only the auth queries. Holding it at module scope means a warm instance
+// verifies tokens with no network at all. The key set is public, so there is
+// nothing secret to keep here.
+//
+// `getClaims` is given this set and only falls back to fetching if the token's
+// `kid` is absent from it, which is what makes a key rotation self-healing: the
+// first token signed by a new key misses this cache, the library fetches, and
+// the TTL brings this copy up to date.
+const JWKS_TTL_MS = 10 * 60 * 1000;
+let jwksCache: { keys: JWK[] } | null = null;
+let jwksCachedAt = 0;
+
+async function cachedJwks(): Promise<{ keys: JWK[] } | undefined> {
+  if (jwksCache && Date.now() - jwksCachedAt < JWKS_TTL_MS) return jwksCache;
+  try {
+    const r = await fetch(
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/.well-known/jwks.json`,
+      { headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! } },
+    );
+    if (!r.ok) return undefined;
+    const body = (await r.json()) as { keys?: JWK[] };
+    if (!body.keys?.length) return undefined;
+    jwksCache = { keys: body.keys };
+    jwksCachedAt = Date.now();
+    return jwksCache;
+  } catch {
+    // Let the library fetch it itself rather than failing the request.
+    return undefined;
+  }
+}
+
 export async function proxy(req: NextRequest) {
   const res = NextResponse.next();
   const supabase = createServerClient(
@@ -71,10 +109,52 @@ export async function proxy(req: NextRequest) {
     },
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // Verify the session WITHOUT calling the Auth server.
+  //
+  // `getUser()` makes an HTTP round trip to GoTrue on every request, and GoTrue
+  // answers it with five queries (users, sessions, mfa_amr_claims, mfa_factors,
+  // identities). This proxy runs ~10,400 times a day — nine times more often
+  // than a page actually renders, because every <Link> prefetch passes through
+  // here too — so that was ~58,000 auth queries and ~10,400 Auth-server calls a
+  // day, each one logged by the Auth service and the gateway. It was the single
+  // largest driver of this project's log ingestion, which is over the plan
+  // allowance (measured in pg_stat_statements over a 114-day window).
+  //
+  // This project signs its JWTs with an asymmetric ES256 key, so `getClaims()`
+  // verifies the signature locally with WebCrypto against the published JWKS,
+  // which it caches. No Auth-server call, no auth queries. It still refreshes
+  // the session when the access token is near expiry, so `redirectWithSession`
+  // keeps carrying the new cookies.
+  //
+  // What local verification does NOT see is a session revoked before its token
+  // expires. That is covered immediately below: the `status` check on `profiles`
+  // still runs on every request, so a deactivated account is signed out on its
+  // next navigation exactly as before. Identity is also re-verified against the
+  // Auth server once per rendered page by getProfile()'s `getUser()`.
   const path = req.nextUrl.pathname;
 
-  if (!user) {
+  // No Supabase cookie means no session to verify, so skip the auth work
+  // entirely. This is the login screen and the PWA's own fetches, which used to
+  // pay for a full getUser() round trip to be told what the absent cookie
+  // already said.
+  let userId: string | undefined;
+  if (req.cookies.getAll().some((c) => c.name.startsWith("sb-"))) {
+    const jwks = await cachedJwks();
+    const { data: claims } = await supabase.auth.getClaims(undefined, jwks ? { jwks } : undefined);
+    userId = claims?.claims?.sub;
+
+    // Fail safe, not fail shut. If local verification cannot produce a subject
+    // for any reason — a key rotation mid-flight, a JWKS that will not parse,
+    // WebCrypto missing — ask the Auth server the old way before concluding the
+    // caller is a stranger. Without this, one unexpected failure here would sign
+    // out every user at once.
+    if (!userId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      userId = user?.id;
+    }
+  }
+
+  if (!userId) {
     if (PUBLIC_PATHS.includes(path)) return res;
     return redirectWithSession(req, res, "/login");
   }
@@ -82,7 +162,7 @@ export async function proxy(req: NextRequest) {
   const { data: profile } = await supabase
     .from("profiles")
     .select("role, must_change_password, status")
-    .eq("id", user.id)
+    .eq("id", userId)
     .single();
 
   if (!profile) return redirectWithSession(req, res, "/login");
