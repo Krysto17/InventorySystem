@@ -30,6 +30,9 @@ const C1: { fn: string; args: Record<string, unknown> }[] = [
   { fn: "close_dressing_only", args: { p_visit_id: NOWHERE, p_carry: false } },
   { fn: "close_settlement", args: { p_id: NOWHERE } },
   { fn: "delete_supplier", args: { p_supplier_id: NOWHERE } },
+  // 0165: these read past the store-keeper wall, so anon must not reach them.
+  { fn: "supplier_name_of", args: { p_supplier_id: NOWHERE } },
+  { fn: "supplier_code_of", args: { p_supplier_id: NOWHERE } },
   { fn: "hold_advance", args: { p_id: NOWHERE } },
   { fn: "hold_expense", args: { p_id: NOWHERE } },
   { fn: "hold_settlement", args: { p_id: NOWHERE } },

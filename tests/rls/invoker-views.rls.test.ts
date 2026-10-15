@@ -54,7 +54,7 @@ describe("the flat views run as the caller", () => {
     // 0164: the supplier's NAME is back — a count sheet has to say whose sacks
     // these are. The table itself, where the bank details live, stays out of
     // reach; the name and code arrive through the three-column
-    // `supplier_labels` view instead.
+    // `supplier_name_of` / `supplier_code_of` functions instead (0165).
     expect(data![0].supplier_name).toBeTruthy();
   });
 

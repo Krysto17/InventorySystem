@@ -22,10 +22,6 @@ const MUST_BE_EMPTY = [
   "processing_records", "batch_comments", "gate_passes",
   // trade partners and the trail
   "suppliers", "bank_accounts", "transaction_events",
-  // Owner-rights views need their own guard: RLS cannot answer for them, so a
-  // stray default-privilege grant publishes their contents outright.
-  // `supplier_labels` (0164) is exactly that shape.
-  "supplier_labels",
 ];
 
 describe("anonymous access", () => {

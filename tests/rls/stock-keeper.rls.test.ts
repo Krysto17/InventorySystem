@@ -196,7 +196,7 @@ describe("store keeper confirms and disputes stock", () => {
     // as the caller, which correctly hid `suppliers` — the row carries bank
     // details — but it hid the NAME with them, and a keeper counting sacks
     // could not say whose they were. The name and code now come from
-    // `supplier_labels`, a three-column view; the table itself stays walled.
+    // two single-column functions (0165); the table itself stays walled.
     expect(data![0].supplier_name).toBe(supplierName);
 
     // Another store's lots stay invisible.
@@ -208,20 +208,19 @@ describe("store keeper confirms and disputes stock", () => {
   it("sees the supplier's name and code, and nothing else about them", async () => {
     // The name is what a count sheet needs. The bank details on the same row
     // are what the wall is for, so the fix exposes three columns and no more.
-    const { data: label } = await keeper.client.from("supplier_labels")
-      .select("id, name, supplier_code").eq("id", supplierId).single();
-    expect(label!.name).toBe(supplierName);
+    const { data: name } = await keeper.client.rpc("supplier_name_of", { p_supplier_id: supplierId });
+    expect(name).toBe(supplierName);
 
     // The table behind it stays unreachable.
     expect((await keeper.client.from("suppliers").select("id").eq("id", supplierId)).data ?? [],
       "the store-keeper wall on suppliers still holds").toHaveLength(0);
 
-    // And the label view cannot hand over anything sensitive, because it does
-    // not select it.
-    for (const col of ["phone", "notes", "account_name", "account_number", "bank_name", "former_accounts"]) {
-      const res = await keeper.client.from("supplier_labels").select(col).limit(1);
-      expect(res.error, `supplier_labels must not expose ${col}`).not.toBeNull();
-    }
+    // 0165: the label comes from two single-column functions, so there is no
+    // wider door to walk through — and no definer VIEW for the advisor to flag.
+    const { data: code } = await keeper.client.rpc("supplier_code_of", { p_supplier_id: supplierId });
+    expect(code).toBeTruthy();
+    expect((await keeper.client.from("supplier_labels" as never).select("*").limit(1)).error,
+      "the definer view is gone").not.toBeNull();
   });
 
   it("keeps the keeper out of the rest of the business", async () => {
