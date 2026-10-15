@@ -9,10 +9,10 @@ import { fetchKnownAccounts } from "@/lib/accounts/known-accounts";
 import { RecordPaymentForm } from "@/components/visits/RecordPaymentForm";
 import { PayoutSplitPlan } from "@/components/visits/PayoutSplitPlan";
 import { CloseSettlementButton } from "@/components/visits/CloseSettlementButton";
-import { formatTimestamp } from "@/lib/visits/format";
 import type { Role } from "@/lib/auth/roles";
 
 import { one as g1 } from "@/lib/db/relation";
+import { PaymentBreakdown } from "@/components/payments/PaymentBreakdown";
 import { ActionForm } from "@/components/ui/ActionForm";
 const ngn = (n: number) => `₦${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
@@ -23,7 +23,6 @@ const STATUS_LABEL: Record<string, string> = {
   pending: "pending", approved: "approved", on_hold: "on hold",
   partially_paid: "part-paid", paid: "paid", rejected: "rejected",
 };
-const METHOD_LABEL: Record<string, string> = { cash: "Cash", transfer: "Bank transfer", other: "Other" };
 
 // One consolidated batch-supply settlement: all materials (kg + price),
 // the light bill (processing fee), advance deducted, remaining debt, and the
@@ -284,20 +283,24 @@ export async function BatchSettlementCard({
             {(payments ?? []).length === 0 ? (
               <p className="text-xs text-ink-2">No payments recorded yet.</p>
             ) : (
-              <ul className="divide-y divide-line">
-                {(payments ?? []).map((p) => (
-                  <li key={p.id as string} className="flex items-center justify-between py-1 text-xs">
-                    <span className="text-ink-2">
-                      {METHOD_LABEL[p.method as string] ?? p.method as string}
-                      {p.note ? ` · ${p.note as string}` : ""}
-                      {p.account_name ? ` · → ${p.account_name as string}${p.bank_name ? ` (${p.bank_name as string})` : ""}` : ""}
-                      {" · "}{g1<{ full_name?: string }>((p as { payer: unknown }).payer)?.full_name ?? "—"}
-                      {" · "}{formatTimestamp(p.created_at as string)}
-                    </span>
-                    <span className="font-medium">{ngn(Number(p.amount))}</span>
-                  </li>
-                ))}
-              </ul>
+              /* One table for every screen that answers "which account got
+                 what", so a split payout reads the same here as on the
+                 payables console. */
+              <div className="rounded border border-line">
+                <PaymentBreakdown
+                  payments={(payments ?? []).map((p) => ({
+                    id: p.id as string,
+                    amount: Number(p.amount),
+                    method: (p.method as string | null) ?? null,
+                    note: (p.note as string | null) ?? null,
+                    created_at: (p.created_at as string | null) ?? null,
+                    account_name: (p.account_name as string | null) ?? null,
+                    account_number: (p.account_number as string | null) ?? null,
+                    bank_name: (p.bank_name as string | null) ?? null,
+                    payer_name: g1<{ full_name?: string }>((p as { payer: unknown }).payer)?.full_name ?? null,
+                  }))}
+                />
+              </div>
             )}
           </div>
         )}

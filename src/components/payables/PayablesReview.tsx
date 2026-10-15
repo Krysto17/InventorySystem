@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatTimestamp } from "@/lib/visits/format";
 import { PayableControls } from "@/components/payables/PayableControls";
 import { RecordPaymentForm } from "@/components/visits/RecordPaymentForm";
+import { PaymentBreakdown, type PaymentRow } from "@/components/payments/PaymentBreakdown";
 import { CloseSettlementButton } from "@/components/visits/CloseSettlementButton";
 import { one as g1 } from "@/lib/db/relation";
 
@@ -15,6 +16,8 @@ type Item = {
   kind: Kind; id: string; label: string; sub: string; amount: number;
   status: string; href?: string; heldBy?: string | null; heldAt?: string | null; note?: string | null;
   visitId?: string; remaining?: number;
+  // Which account each part of a settlement actually went into.
+  payments?: PaymentRow[];
 };
 const KIND_LABEL: Record<Kind, string> = { settlement: "Supplier", advance: "Advance", expense: "Expense" };
 const KIND_VARIANT: Record<Kind, "blue" | "yellow" | "default"> = { settlement: "blue", advance: "yellow", expense: "default" };
@@ -64,11 +67,35 @@ export async function PayablesReview({
 
   // Payments already recorded against each settlement → remaining to pay.
   const settlementIds = (settlements ?? []).map((s) => s.id as string);
+  // The account each part went into, not just the total: a part-paid settlement
+  // is the one case where "who received it?" is the question being asked.
   const { data: paidRows } = settlementIds.length
-    ? await supabase.from("settlement_payments").select("settlement_id, amount").in("settlement_id", settlementIds)
-    : { data: [] as { settlement_id: string; amount: number }[] };
+    ? await supabase.from("settlement_payments")
+        .select(`
+          id, settlement_id, amount, method, note, created_at,
+          account_name, account_number, bank_name,
+          payer:profiles!settlement_payments_paid_by_fkey(full_name)
+        `)
+        .in("settlement_id", settlementIds)
+        .order("created_at", { ascending: true })
+    : { data: [] as Array<Record<string, unknown>> };
   const paidBy = new Map<string, number>();
-  for (const p of paidRows ?? []) paidBy.set(p.settlement_id as string, (paidBy.get(p.settlement_id as string) ?? 0) + Number(p.amount));
+  const paymentsBy = new Map<string, PaymentRow[]>();
+  for (const p of paidRows ?? []) {
+    const sid = p.settlement_id as string;
+    paidBy.set(sid, (paidBy.get(sid) ?? 0) + Number(p.amount));
+    paymentsBy.set(sid, [...(paymentsBy.get(sid) ?? []), {
+      id: p.id as string,
+      amount: Number(p.amount),
+      method: (p.method as string | null) ?? null,
+      note: (p.note as string | null) ?? null,
+      created_at: (p.created_at as string | null) ?? null,
+      account_name: (p.account_name as string | null) ?? null,
+      account_number: (p.account_number as string | null) ?? null,
+      bank_name: (p.bank_name as string | null) ?? null,
+      payer_name: g1<{ full_name?: string }>((p as { payer: unknown }).payer)?.full_name ?? null,
+    }]);
+  }
 
   const items: Item[] = [
     ...(settlements ?? []).map((s): Item => {
@@ -78,6 +105,7 @@ export async function PayablesReview({
         label: g1<{ name: string }>(g1<{ supplier: unknown }>((s as { visit: unknown }).visit)?.supplier)?.name ?? "—",
         sub: siteName(s), amount: remaining, status: s.status as string,
         href: `/visits/${s.visit_id}`, heldBy: heldByName(s), heldAt: s.held_at as string | null,
+        payments: paymentsBy.get(s.id as string) ?? [],
         visitId: s.visit_id as string, remaining,
       };
     }),
@@ -141,6 +169,18 @@ export async function PayablesReview({
             {canHold && <PayableControls kind={i.kind} id={i.id} status={i.status as "approved" | "on_hold"} />}
           </span>
         </div>
+        {(i.payments?.length ?? 0) > 0 && (
+          <div className="mt-1">
+            <details>
+              <summary className="cursor-pointer text-xs font-semibold text-ink-2 hover:underline">
+                Paid so far — {i.payments!.length} payment{i.payments!.length === 1 ? "" : "s"}
+              </summary>
+              <div className="mt-1 rounded border border-line">
+                <PaymentBreakdown payments={i.payments!} />
+              </div>
+            </details>
+          </div>
+        )}
         {canPay && (
           <div className="mt-1">
             <details>
