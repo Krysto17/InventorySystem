@@ -14,7 +14,7 @@ describe("QC analyses sheet (#9)", () => {
     recv = await makeUser({ username: "qas-recv", role: "receiving", siteId });
     qc   = await makeUser({ username: "qas-qc",   role: "qc",        siteId });
     qc2  = await makeUser({ username: "qas-qc2",  role: "qc",        siteId });
-    const { data: s } = await adminClient().from("suppliers").insert({ name: "QAS Supplier" }).select("id").single();
+    const { data: s } = await adminClient().from("suppliers").insert({ name: "Qas Supplier" }).select("id").single();
     supplierId = s!.id as string;
     const { data: mz } = await adminClient().from("material_types").select("id").eq("name", "Monazite").single();
     monaziteId = mz!.id as string;
@@ -50,7 +50,8 @@ describe("QC analyses sheet (#9)", () => {
     const row = sheet.data![0] as Record<string, unknown>;
     const vm = row.visit_material as { material_type: { name: string }; visit: { supplier: { name: string } } };
     expect(vm.material_type.name).toBe("Monazite");
-    expect(vm.visit.supplier.name).toBe("QAS Supplier");
+    // 0168 stores supplier names in Title Case ("QAS" would be saved as "Qas").
+    expect(vm.visit.supplier.name).toBe("Qas Supplier");
 
     // The sheet filters by recorded_by, so an analyst who has recorded nothing
     // gets an empty sheet of their own. That is a WORKFLOW filter, not an

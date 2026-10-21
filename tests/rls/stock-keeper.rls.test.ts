@@ -26,10 +26,14 @@ describe("store keeper confirms and disputes stock", () => {
     owner = await makeUser({ username: "sk-owner", role: "owner", siteId: null });
     mgrA = await makeUser({ username: "sk-mgr", role: "manager", siteId: siteA });
     recv = await makeUser({ username: "sk-recv", role: "receiving", siteId: siteA });
+    // 0168 stores supplier names in Title Case, so read the name back as the
+    // database holds it rather than asserting the literal typed here. The point
+    // of the test is that the keeper sees the SAME name the admin wrote.
     supplierName = `SK ${Date.now()}`;
     const { data: s } = await adminClient().from("suppliers")
-      .insert({ name: supplierName, phone: "08030000000" }).select("id").single();
+      .insert({ name: supplierName, phone: "08030000000" }).select("id, name").single();
     supplierId = s!.id as string;
+    supplierName = s!.name as string;
     const { data: mt } = await adminClient().from("material_types")
       .insert({ name: `Store-Ore ${Date.now()}` }).select("id").single();
     material = mt!.id as string;

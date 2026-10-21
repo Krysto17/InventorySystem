@@ -91,9 +91,18 @@ describe("supplier picker reach", () => {
   describe("awkward names stay findable", () => {
     // Real production names: two carry a double space, three a typographic
     // apostrophe. Typing them as they look produced no match at all.
+    //
+    // `wholeStringMisses` records whether typing the name as it LOOKS still
+    // fails to match. 0168 made supplier names collapse whitespace runs on the
+    // way in, so the double-space name is now STORED single-spaced and a
+    // whole-string search does reach it — that defect is fixed at the source.
+    // The typographic apostrophe is untouched by 0168 (it is not whitespace or
+    // case), so it remains the reason the picker tokenises.
     const cases = [
-      { label: "double space", stored: `Lucky  Elisha ${stamp}`, typed: `Lucky Elisha ${stamp}` },
-      { label: "typographic apostrophe", stored: `Mus\u2019ab Umar ${stamp}`, typed: `Mus'ab Umar ${stamp}` },
+      { label: "double space", stored: `Lucky  Elisha ${stamp}`, typed: `Lucky Elisha ${stamp}`,
+        wholeStringMisses: false },
+      { label: "typographic apostrophe", stored: `Mus\u2019ab Umar ${stamp}`, typed: `Mus'ab Umar ${stamp}`,
+        wholeStringMisses: true },
     ];
     const ids: string[] = [];
 
@@ -111,13 +120,15 @@ describe("supplier picker reach", () => {
     });
 
     for (const [i, c] of cases.entries()) {
-      it(`a whole-string search misses "${c.label}" — the defect`, async () => {
+      it(`a whole-string search ${c.wholeStringMisses ? "misses" : "now reaches"} "${c.label}"`, async () => {
         const { data } = await manager.client.from("suppliers")
           .select("id").ilike("name", `%${c.typed}%`).limit(8);
         expect(
           (data ?? []).some((s) => s.id === ids[i]),
-          "typing the name as it looks must NOT match, which is the bug",
-        ).toBe(false);
+          c.wholeStringMisses
+            ? "typing the name as it looks must NOT match, which is the bug"
+            : "0168 normalises the stored spacing, so the typed name matches",
+        ).toBe(!c.wholeStringMisses);
       });
 
       it(`the tokenised search finds "${c.label}"`, async () => {
