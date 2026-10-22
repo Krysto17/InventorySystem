@@ -53,9 +53,11 @@ export async function Greeting() {
   const firstName = (me.full_name ?? "").trim().split(/\s+/)[0] || me.username;
 
   return (
-    <p className="text-sm text-ink-2">
+    // Same weight and ink as the role heading below it, a step down in size so
+    // the screen still has one title rather than two.
+    <p className="text-sm font-bold text-ink">
       {greetingFor(hour)}
-      {firstName ? <>, <span className="font-medium text-ink">{firstName}</span></> : ""}
+      {firstName ? <>, {firstName}</> : ""}
     </p>
   );
 }
