@@ -7,6 +7,7 @@ import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
 import { VisitQueueTable } from "@/components/visits/VisitQueueTable";
 
 import { one as g1 } from "@/lib/db/relation";
+import { Greeting } from "@/components/dashboard/Greeting";
 
 export default async function ManagerHomePage() {
   const supabase = await createClient();
@@ -39,6 +40,7 @@ export default async function ManagerHomePage() {
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
       <header>
+        <Greeting />
         <h1 className="text-2xl font-bold">Manager</h1>
         <p className="text-sm text-gray-500">{queue.length} visit{queue.length !== 1 ? "s" : ""} awaiting pricing</p>
       </header>

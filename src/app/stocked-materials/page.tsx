@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { StockedMaterialsTable, type StockedRow } from "@/components/stock/StockedMaterialsTable";
+import { Greeting } from "@/components/dashboard/Greeting";
 
 // Every stocked material — supplier, type, weight, paid status — and the store
 // check against it, in one module. Whoever counts the store (its keeper, or the
@@ -76,6 +77,7 @@ export default async function StockedMaterialsPage({
   return (
     <main className="mx-auto max-w-5xl space-y-6 p-6">
       <header>
+        <Greeting />
         <h1 className="text-2xl font-bold">Stocked materials</h1>
         <p className="text-sm text-gray-500">
           {canCheck

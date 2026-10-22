@@ -7,6 +7,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
 import { StockAdjustmentForm } from "@/components/inventory/StockAdjustmentForm";
+import { Greeting } from "@/components/dashboard/Greeting";
 
 export default async function InventoryPage() {
   const me = await getProfile();
@@ -71,6 +72,7 @@ export default async function InventoryPage() {
     <main className="p-6 max-w-4xl mx-auto space-y-6">
       <header className="flex items-center justify-between">
         <div>
+          <Greeting />
           <h1 className="text-2xl font-bold">Inventory Manager</h1>
           <p className="text-sm text-gray-500">{intakeQueue?.length ?? 0} visit{(intakeQueue?.length ?? 0) !== 1 ? "s" : ""} awaiting intake</p>
         </div>

@@ -20,6 +20,7 @@ function defaultTo() {
 }
 
 import { one as g1 } from "@/lib/db/relation";
+import { Greeting } from "@/components/dashboard/Greeting";
 
 
 // Financial figures must never be served from cache — a stale balance reads as
@@ -179,6 +180,7 @@ export default async function OwnerDashboard({
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
+          <Greeting />
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">Owner Dashboard</h1>
           <p className="text-sm text-zinc-500">Cross-site overview · {dateFrom} – {dateTo}</p>
         </div>

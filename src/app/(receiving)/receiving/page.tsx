@@ -5,6 +5,7 @@ import { LiveWorkflow } from "@/components/visits/LiveWorkflow";
 import { DoneList } from "@/components/visits/DoneList";
 import { VisitQueueTable } from "@/components/visits/VisitQueueTable";
 import { toQueueRows } from "@/lib/visits/queue-rows";
+import { Greeting } from "@/components/dashboard/Greeting";
 
 export default async function ReceivingHomePage() {
   const [queue, done] = await Promise.all([
@@ -14,6 +15,7 @@ export default async function ReceivingHomePage() {
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
       <header>
+        <Greeting />
         <h1 className="text-2xl font-bold">Receiving</h1>
         <p className="text-sm text-gray-500">{queue.length} visit{queue.length !== 1 ? "s" : ""} pending analysis</p>
       </header>

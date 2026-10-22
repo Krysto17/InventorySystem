@@ -9,6 +9,7 @@ import { recordGateLog, acknowledgeGatePass } from "./actions";
 import { releaseSupplier } from "@/app/visits/[id]/gate-exit-actions";
 
 import { one as g1 } from "@/lib/db/relation";
+import { Greeting } from "@/components/dashboard/Greeting";
 
 export default async function GateHomePage() {
   const supabase = await createClient();
@@ -28,6 +29,7 @@ export default async function GateHomePage() {
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
       <header>
+        <Greeting />
         <h1 className="text-2xl font-bold">Gate</h1>
         <p className="text-sm text-gray-500">Authorise outgoing material and log movement at the gate.</p>
       </header>
