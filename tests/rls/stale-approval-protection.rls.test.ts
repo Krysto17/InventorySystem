@@ -2,6 +2,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
 import { reviewExpenseAs, reviewAdvanceAs, approvePricingAs, approveCostRunAs } from "../setup/approvals";
 
+// 0171: an approved cost-price run leaves its lots 'consumed', not 'sold'.
+
 /**
  * 0162 — Phase 3F-T7: F-09 stale approval protection.
  *
@@ -557,7 +559,7 @@ describe("stale financial decision protection — approved payables, pricing, co
     const runId = await pendingRun([lot]);
     expect((await approveCostRunAs(owner.client, runId)).error).toBeNull();
     expect((await runStatus(runId)).approval_status).toBe("approved");
-    expect(await lotStatus(lot)).toBe("sold");
+    expect(await lotStatus(lot)).toBe("consumed");
   });
 
   it("35. membership edit first / approve second: refused, no sale", async () => {

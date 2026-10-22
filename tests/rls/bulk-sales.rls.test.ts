@@ -50,7 +50,11 @@ describe("bulk_sales RLS", () => {
     await addStock(siteAId, 5000);
   });
 
-  it("inventory at site A can create a bulk sale for site A", async () => {
+  // 0170 moved recording a sale from inventory to the MANAGER: a sale is the
+  // revenue side of the profit-and-loss statement and the manager owns pricing.
+  // 0045 had previously moved it the other way, so this is a deliberate
+  // reversal, not drift.
+  it("inventory can no longer create a bulk sale — 0170 moved it to the manager", async () => {
     const { error } = await invA.client.from("bulk_sales").insert({
       site_id: siteAId,
       buyer_name: "Buyer A",
@@ -59,7 +63,7 @@ describe("bulk_sales RLS", () => {
       unit_price: 100,
       recorded_by: invA.userId,
     });
-    expect(error).toBeNull();
+    expect(error, "inventory lost this in 0170").not.toBeNull();
   });
 
   it("inventory at site B cannot create a sale for site A", async () => {
@@ -74,7 +78,7 @@ describe("bulk_sales RLS", () => {
     expect(error).not.toBeNull();
   });
 
-  it("non-inventory role cannot create a bulk sale", async () => {
+  it("a role outside sales cannot create a bulk sale", async () => {
     const { error } = await gateA.client.from("bulk_sales").insert({
       site_id: siteAId,
       buyer_name: "Gate Buyer",
@@ -121,19 +125,17 @@ describe("bulk_sales RLS", () => {
     expect(data?.approval_status).toBe("pending");
   });
 
-  it("owner can approve a pending bulk sale and stock decrements", async () => {
+  it("owner approval records the sale and does NOT move stock (0171)", async () => {
     const id = await insertPendingSale(siteAId, invA.userId);
 
-    // Check stock before
-    const { data: before } = await adminClient()
-      .from("stock_movements")
-      .select("weight, direction")
-      .eq("site_id", siteAId)
-      .eq("material_type_id", materialTypeId);
-    const balanceBefore = (before ?? []).reduce(
-      (s, r) => s + (r.direction === "in" ? Number(r.weight) : -Number(r.weight)),
-      0,
-    );
+    const balance = async () => {
+      const { data } = await adminClient()
+        .from("stock_movements").select("weight, direction")
+        .eq("site_id", siteAId).eq("material_type_id", materialTypeId);
+      return (data ?? []).reduce(
+        (s, r) => s + (r.direction === "in" ? Number(r.weight) : -Number(r.weight)), 0);
+    };
+    const before = await balance();
 
     const { error } = await owner.client
       .from("bulk_sales")
@@ -141,17 +143,18 @@ describe("bulk_sales RLS", () => {
       .eq("id", id);
     expect(error).toBeNull();
 
-    // Confirm stock_movements 'out' row was created
-    const { data: after } = await adminClient()
-      .from("stock_movements")
-      .select("weight, direction")
-      .eq("site_id", siteAId)
-      .eq("material_type_id", materialTypeId);
-    const balanceAfter = (after ?? []).reduce(
-      (s, r) => s + (r.direction === "in" ? Number(r.weight) : -Number(r.weight)),
-      0,
-    );
-    expect(balanceAfter).toBeLessThan(balanceBefore);
+    // 0171 split the two events: a cost-price run is what takes material out of
+    // stock, and a sale is what records the buyer and the price. A sale writing
+    // a second `out` would be refused for insufficient stock, which made
+    // selling a batch you had just costed impossible.
+    expect(await balance(), "a sale must not move stock any more").toBe(before);
+    const { data: moves } = await adminClient()
+      .from("stock_movements").select("id").eq("ref_bulk_sale_id", id);
+    expect((moves ?? []).length, "no bulk_sale movement is written").toBe(0);
+
+    const { data: sale } = await adminClient()
+      .from("bulk_sales").select("approval_status").eq("id", id).single();
+    expect(sale!.approval_status, "the sale itself is the record of the sale").toBe("approved");
   });
 
   it("owner can read bulk sales across all sites", async () => {

@@ -67,8 +67,12 @@ describe("stock balance invariant", () => {
     expect(error).not.toBeNull();
   });
 
-  it("bulk sale approval is blocked when stock is insufficient", async () => {
-    // No extra stock seeded for this grade
+  it("bulk sale approval is no longer limited by stock (0171)", async () => {
+    // Before 0171 approval wrote an `out` movement, so the balance guard
+    // refused a sale bigger than stock. The two events are now separate: a
+    // cost-price run empties the yard, and a sale records the buyer and price.
+    // Keeping the old coupling made selling a just-costed batch impossible,
+    // because the run had already taken the weight out.
     const { data: sale } = await adminClient()
       .from("bulk_sales")
       .insert({
@@ -91,6 +95,10 @@ describe("stock balance invariant", () => {
       })
       .eq("id", sale!.id);
 
-    expect(error).not.toBeNull();
+    expect(error, "a sale is revenue, not a stock movement").toBeNull();
+    const { data: moves } = await adminClient()
+      .from("stock_movements").select("id").eq("ref_bulk_sale_id", sale!.id);
+    expect((moves ?? []).length).toBe(0);
   });
+
 });

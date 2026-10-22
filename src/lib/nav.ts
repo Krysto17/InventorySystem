@@ -50,6 +50,8 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Pricing queue", href: "/manager", icon: "pricing" },
     { label: "Payments", href: "/manager/payments", icon: "accounting" },
     { label: "Advances", href: "/manager/advances", icon: "accounting" },
+    { label: "Bulk sales", href: "/manager/bulk-sales", icon: "bulkSales" },
+    { label: "Salaries", href: "/manager/salaries", icon: "employees" },
     { label: "Expenses", href: "/inventory/consumables", icon: "consumables" },
     // General (New-Site) manager only — site managers can't see these (#13).
     { label: "Gate passes", href: "/manager/gate-passes", icon: "gate", generalOnly: true },
@@ -72,6 +74,8 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "To pay", href: "/accounting/payouts", icon: "accounting" },
     { label: "Closed", href: "/accounting/closed", icon: "accounting" },
     { label: "Reports", href: "/accounting/reports", icon: "reports" },
+    { label: "Profit & loss", href: "/accounting/profit-loss", icon: "reports" },
+    { label: "Salaries", href: "/accounting/salaries", icon: "employees" },
   ],
   inventory: [
     { label: "Stock", href: "/inventory", icon: "inventory" },
@@ -95,6 +99,9 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Sample analyses", href: "/owner/samples", icon: "qc" },
     { label: "Ledger", href: "/owner/ledger", icon: "accounting" },
     { label: "Finance breakdown", href: "/owner/finance", icon: "reports" },
+    { label: "Profit & loss", href: "/owner/profit-loss", icon: "reports" },
+    // The owner approves sales; the manager records them. Same screen.
+    { label: "Bulk sales", href: "/manager/bulk-sales", icon: "bulkSales" },
     { label: "Mixing batches", href: "/owner/cost-batches", icon: "bulkSales" },
     { label: "Stock", href: "/inventory", icon: "inventory" },
     { label: "Gate oversight", href: "/owner/gate", icon: "gate" },

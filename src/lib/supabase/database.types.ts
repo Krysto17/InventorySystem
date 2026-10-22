@@ -105,6 +105,42 @@ export type Database = {
           },
         ]
       }
+      salary_entries: {
+        Row: {
+          id: string
+          site_id: string
+          period: string
+          amount_naira: number
+          note: string | null
+          recorded_by: string | null
+          request_key: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          site_id: string
+          period: string
+          amount_naira: number
+          note?: string | null
+          recorded_by?: string | null
+          request_key?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          site_id?: string
+          period?: string
+          amount_naira?: number
+          note?: string | null
+          recorded_by?: string | null
+          request_key?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       advance_shares: {
         Row: {
           id: string
@@ -2550,6 +2586,7 @@ export type Database = {
       delete_batch: { Args: { p_visit_id: string }; Returns: undefined }
       delete_supplier: { Args: { p_supplier_id: string }; Returns: undefined }
       merge_suppliers: { Args: { p_keep: string; p_duplicate: string }; Returns: undefined }
+      profit_and_loss: { Args: { p_from: string; p_to: string }; Returns: { site_id: string; site_name: string; sales_total: number; sales_received: number; fees_collected: number; materials_cash: number; materials_cogs: number; expenses: number; wages_in_expenses: number; salaries: number; corrections: number }[] }
       find_similar_suppliers: { Args: { p_name?: string; p_account_number?: string; p_exclude?: string }; Returns: { id: string; name: string; supplier_code: string | null; account_name: string | null; account_number: string | null; bank_name: string | null; similarity: number; same_account: boolean }[] }
       reopen_processing_fee: { Args: { p_visit_id: string }; Returns: undefined }
       reopen_receiving: { Args: { p_visit_id: string }; Returns: undefined }

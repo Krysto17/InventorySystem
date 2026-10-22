@@ -3,7 +3,9 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 import { approveCostRunAs } from "../setup/approvals";
 
 // Manager-formed mixing batches: the manager submits a PENDING batch (lots stay
-// in stock), the OWNER approves to remove each lot (flip to sold + 'mixed_batch'
+// in stock), the OWNER approves to remove each lot (flip to CONSUMED since 0171
+// — a run has no buyer and no price, so it consumes rather than sells — plus a
+// 'mixed_batch'
 // ledger 'out'); the weighted cost is recorded on attach.
 describe("cost-price mixing batch sells stock on owner approval", () => {
   const rid = Date.now().toString(36);
@@ -63,7 +65,7 @@ describe("cost-price mixing batch sells stock on owner approval", () => {
     expect(Number(runRow!.avg_cost_price_per_kg)).toBe(70); // (100*50 + 200*80)/300
   });
 
-  it("owner approval removes the lots from stock (sold + mixed_batch out); manager cannot approve", async () => {
+  it("owner approval consumes the lots out of stock (consumed + mixed_batch out); manager cannot approve", async () => {
     const lot1 = await makeLot(100, 50);
     const lot2 = await makeLot(200, 80);
     const runId = await pendingBatch([lot1, lot2]);
@@ -79,7 +81,9 @@ describe("cost-price mixing batch sells stock on owner approval", () => {
     expect(error).toBeNull();
 
     const { data: lots } = await adminClient().from("stock_lots").select("status").in("id", [lot1, lot2]);
-    expect((lots ?? []).every((l) => l.status === "sold")).toBe(true);
+    // 0171: consumed, not sold. The material has left the yard, but nobody has
+    // bought it yet — a bulk sale records the buyer and the price.
+    expect((lots ?? []).every((l) => l.status === "consumed")).toBe(true);
 
     const { data: outs } = await adminClient()
       .from("stock_movements").select("direction, reason").eq("reason", "mixed_batch").in("weight", [100, 200]);
@@ -135,11 +139,12 @@ describe("cost-price mixing batch sells stock on owner approval", () => {
       .from("cost_price_runs").select("approval_status").eq("id", run!.id).single();
     expect(still!.approval_status).toBe("pending");
 
-    // The owner can — and that removes the lots from stock.
+    // The owner can — and that consumes the lots out of stock (0171: consumed,
+    // not sold; selling is a separate event with a buyer and a price).
     const { error: apprErr } = await approveCostRunAs(owner.client, run!.id as string);
     expect(apprErr).toBeNull();
     const { data: after } = await adminClient().from("stock_lots").select("status").in("id", [lot1, lot2]);
-    expect((after ?? []).every((l) => l.status === "sold")).toBe(true);
+    expect((after ?? []).every((l) => l.status === "consumed")).toBe(true);
   });
 
   it("inventory cannot create a run on another site", async () => {

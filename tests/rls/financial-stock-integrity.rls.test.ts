@@ -2,6 +2,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
 import { approvePricingAs, approveCostRunAs } from "../setup/approvals";
 
+// 0171: an approved cost-price run leaves its lots 'consumed', not 'sold'.
+
 /**
  * 0161 — Phase 3F-T6: F-07 deduction delete, F-08 reverse_paid_supply, F-10
  * inventory expense site scope.
@@ -304,7 +306,7 @@ describe("financial and stock integrity guards (0161)", () => {
         expect(sale.error.code, `iteration ${i}: only staleness may refuse the sale`).toBe("ST001");
         expect((await lotsOf(v))[0].status, `iteration ${i}`).toBe("available");
       } else {
-        expect((await lotsOf(v))[0].status).toBe("sold");
+        expect((await lotsOf(v))[0].status).toBe("consumed");
       }
       expect(await bucket(), `iteration ${i}`).toBeGreaterThanOrEqual(0);
     }

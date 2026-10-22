@@ -3,6 +3,11 @@ import { readFileSync } from "node:fs";
 import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-clients";
 import { approveCostRunAs } from "../setup/approvals";
 
+// 0171: approving a cost-price run leaves its lots 'consumed', not 'sold' —
+// a run has no buyer and no selling price. Lots set to 'sold' directly in a
+// fixture below are simulating material that really went to a buyer, and
+// stay that way.
+
 /**
  * 0155 — a lot-linked gate pass releases its lot once, and only once.
  *
@@ -371,7 +376,7 @@ describe("lot-linked gate passes release a lot once (0155)", () => {
     await cancel(gm, data!.id as string);
     const res = await approve(await runFor([L]));
     expect(res.error, `sale: ${res.error?.message}`).toBeNull();
-    expect(await lotStatus(L)).toBe("sold");
+    expect(await lotStatus(L)).toBe("consumed");
   });
 
   // ── Races with the sale path ──────────────────────────────────────────────
@@ -416,7 +421,7 @@ describe("lot-linked gate passes release a lot once (0155)", () => {
         expect(await livePasses(L)).toBe(1);
       } else {
         expect(p.error!.code).toBe("GP001");
-        expect(await lotStatus(L)).toBe("sold");
+        expect(await lotStatus(L)).toBe("consumed");
         expect(await livePasses(L)).toBe(0);
       }
     }
@@ -430,7 +435,9 @@ describe("lot-linked gate passes release a lot once (0155)", () => {
       const [s, a] = await Promise.all([approve(runId), ack(gate, data!.id as string)]);
       expect(s.error, `iteration ${i}: sale ${s.error?.code} ${s.error?.message}`).toBeNull();
       expect(a.error, `iteration ${i}: release ${a.error?.code} ${a.error?.message}`).toBeNull();
-      expect([await lotStatus(A), await lotStatus(C), await lotStatus(B)]).toEqual(["sold", "sold", "released"]);
+      // A and C were consumed by the run; B was released by the pass (0171).
+      expect([await lotStatus(A), await lotStatus(C), await lotStatus(B)])
+        .toEqual(["consumed", "consumed", "released"]);
     }
   }, 90_000);
 

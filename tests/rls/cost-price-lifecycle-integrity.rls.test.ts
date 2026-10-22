@@ -3,6 +3,9 @@ import { adminClient, makeUser, type TestUser } from "../setup/supabase-test-cli
 import { approveCostRunAs } from "../setup/approvals";
 import { costPriceRefusal } from "@/lib/cost-price/refusals";
 
+// 0171: an approved run CONSUMES its lots (out of stock, into a batch)
+// rather than selling them; a bulk sale records the buyer and the price.
+
 /**
  * 0160 — cost-price run lifecycle integrity (Phase 3F-T5: F-06, F-15).
  *
@@ -433,7 +436,7 @@ describe("cost-price run lifecycle integrity (0160)", () => {
     expect((await reject(stale)).data).toHaveLength(1);
     const other = await draft(gm, [L]);
     expect((await approve(other)).error).toBeNull();
-    expect(await lotStatus(L)).toBe("sold");
+    expect(await lotStatus(L)).toBe("consumed");
     expect((await inv.client.from("cost_price_runs").update({ approval_status: "pending" }).eq("id", stale).select("id")).data).toHaveLength(1);
 
     const outs = await mixedOuts();
@@ -451,7 +454,7 @@ describe("cost-price run lifecycle integrity (0160)", () => {
     const row = await runRow(stale);
     expect(Number(row.total_weight_kg)).toBe(50);
     expect(Number(row.avg_cost_price_per_kg)).toBe(20);
-    expect(await lotStatus(keep)).toBe("sold");
+    expect(await lotStatus(keep)).toBe("consumed");
   });
 
   it("14. a lot released through the gate cannot be approved", async () => {
@@ -648,7 +651,7 @@ describe("cost-price run lifecycle integrity (0160)", () => {
       expect([x.error, y.error].filter((e) => e?.code === "ST001"),
         `iteration ${i}: the loser is refused as stale`).toHaveLength(1);
       expect(await mixedOuts()).toBe(outs + 1);
-      expect(await lotStatus(L)).toBe("sold");
+      expect(await lotStatus(L)).toBe("consumed");
     }
   }, 120_000);
 });
