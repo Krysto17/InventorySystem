@@ -181,7 +181,7 @@ export default async function OwnerDashboard({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Greeting />
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">Owner Dashboard</h1>
+          <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Owner Dashboard</h2>
           <p className="text-sm text-zinc-500">Cross-site overview · {dateFrom} – {dateTo}</p>
         </div>
         <FilterBar

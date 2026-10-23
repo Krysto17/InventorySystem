@@ -16,7 +16,7 @@ export default async function ReceivingHomePage() {
     <main className="p-6 max-w-4xl mx-auto space-y-6">
       <header>
         <Greeting />
-        <h1 className="text-2xl font-bold">Receiving</h1>
+        <h2 className="text-xl font-semibold">Receiving</h2>
         <p className="text-sm text-gray-500">{queue.length} visit{queue.length !== 1 ? "s" : ""} pending analysis</p>
       </header>
 

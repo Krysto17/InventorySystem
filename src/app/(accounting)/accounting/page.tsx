@@ -49,7 +49,7 @@ export default async function AccountingHomePage() {
     <main className="p-6 max-w-4xl mx-auto space-y-6">
       <header>
         <Greeting />
-        <h1 className="text-2xl font-bold">Accounting</h1>
+        <h2 className="text-xl font-semibold">Accounting</h2>
         <p className="text-sm text-gray-500">{visits?.length ?? 0} visit{(visits?.length ?? 0) !== 1 ? "s" : ""} pending settlement</p>
       </header>
 

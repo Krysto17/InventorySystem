@@ -25,7 +25,7 @@ export default async function ProcessingHomePage() {
       <header className="flex items-center justify-between">
         <div>
           <Greeting />
-          <h1 className="text-2xl font-bold">Processing</h1>
+          <h2 className="text-xl font-semibold">Processing</h2>
           <p className="text-sm text-gray-500">{queue.length} visit{queue.length !== 1 ? "s" : ""} pending</p>
         </div>
         <Link href="/processing/intake" className="px-4 py-2 bg-black text-white rounded text-sm">

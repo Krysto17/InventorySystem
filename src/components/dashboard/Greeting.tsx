@@ -53,11 +53,13 @@ export async function Greeting() {
   const firstName = (me.full_name ?? "").trim().split(/\s+/)[0] || me.username;
 
   return (
-    // Larger than the role heading beneath it, so the person is what the screen
-    // greets first and the role reads as the subtitle.
-    <p className="text-3xl font-bold text-ink">
+    // The page's h1. The role name under it is an h2, a size down — the person
+    // is what the screen greets first and the role reads as the subtitle.
+    // Heading order on the page therefore runs h1 -> h2, so navigating by
+    // heading still follows the visual hierarchy.
+    <h1 className="text-3xl font-bold text-ink">
       {greetingFor(hour)}
       {firstName ? <>, {firstName}</> : ""}
-    </p>
+    </h1>
   );
 }

@@ -73,7 +73,7 @@ export default async function InventoryPage() {
       <header className="flex items-center justify-between">
         <div>
           <Greeting />
-          <h1 className="text-2xl font-bold">Inventory Manager</h1>
+          <h2 className="text-xl font-semibold">Inventory Manager</h2>
           <p className="text-sm text-gray-500">{intakeQueue?.length ?? 0} visit{(intakeQueue?.length ?? 0) !== 1 ? "s" : ""} awaiting intake</p>
         </div>
         <nav className="flex gap-2 text-sm">

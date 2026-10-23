@@ -30,7 +30,7 @@ export default async function GateHomePage() {
     <main className="p-6 max-w-4xl mx-auto space-y-6">
       <header>
         <Greeting />
-        <h1 className="text-2xl font-bold">Gate</h1>
+        <h2 className="text-xl font-semibold">Gate</h2>
         <p className="text-sm text-gray-500">Authorise outgoing material and log movement at the gate.</p>
       </header>
 

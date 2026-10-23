@@ -18,7 +18,7 @@ export default async function QcHomePage() {
     <main className="p-6 max-w-4xl mx-auto space-y-6">
       <header>
         <Greeting />
-        <h1 className="text-2xl font-bold">Quality Control</h1>
+        <h2 className="text-xl font-semibold">Quality Control</h2>
         <p className="text-sm text-gray-500">
           {queue.length} visit{queue.length !== 1 ? "s" : ""} awaiting XRF analysis
         </p>

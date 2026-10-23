@@ -41,7 +41,7 @@ export default async function ManagerHomePage() {
     <main className="p-6 max-w-4xl mx-auto space-y-6">
       <header>
         <Greeting />
-        <h1 className="text-2xl font-bold">Manager</h1>
+        <h2 className="text-xl font-semibold">Manager</h2>
         <p className="text-sm text-gray-500">{queue.length} visit{queue.length !== 1 ? "s" : ""} awaiting pricing</p>
       </header>
 

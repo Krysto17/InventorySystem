@@ -78,7 +78,7 @@ export default async function StockedMaterialsPage({
     <main className="mx-auto max-w-5xl space-y-6 p-6">
       <header>
         <Greeting />
-        <h1 className="text-2xl font-bold">Stocked materials</h1>
+        <h2 className="text-xl font-semibold">Stocked materials</h2>
         <p className="text-sm text-gray-500">
           {canCheck
             ? "Every material taken into stock. Confirm each paid lot is in the store, or raise a dispute."
