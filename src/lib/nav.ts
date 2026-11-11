@@ -100,6 +100,12 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Ledger", href: "/owner/ledger", icon: "accounting" },
     { label: "Finance breakdown", href: "/owner/finance", icon: "reports" },
     { label: "Profit & loss", href: "/owner/profit-loss", icon: "reports" },
+    // The same expense table the managers and inventory use. It was already
+    // owner-aware — the site picker, amending any row, and approving a pending
+    // one are all gated on `isOwner` — but the owner had no link to it, so the
+    // one person who needs every site's expenses in one place could only reach
+    // it by typing the URL. RLS gives the owner all three sites here.
+    { label: "Expenses", href: "/inventory/consumables", icon: "consumables" },
     // The owner approves sales; the manager records them. Same screen.
     { label: "Bulk sales", href: "/manager/bulk-sales", icon: "bulkSales" },
     { label: "Mixing batches", href: "/owner/cost-batches", icon: "bulkSales" },
