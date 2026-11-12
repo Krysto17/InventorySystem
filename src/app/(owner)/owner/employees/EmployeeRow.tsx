@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { setEmployeeStatus } from "./actions";
+import { setEmployeeStatus, resetEmployeePassword } from "./actions";
 
 export type EmployeeRowData = {
   id: string;
@@ -14,6 +14,7 @@ export type EmployeeRowData = {
 
 export function EmployeeRow({ e, isSelf }: { e: EmployeeRowData; isSelf: boolean }) {
   const [state, action, pending] = useActionState(setEmployeeStatus, null);
+  const [reset, resetAction, resetting] = useActionState(resetEmployeePassword, null);
   const disabled = e.status === "disabled";
   const nextStatus = disabled ? "active" : "disabled";
 
@@ -33,6 +34,17 @@ export function EmployeeRow({ e, isSelf }: { e: EmployeeRowData; isSelf: boolean
         {isSelf ? (
           <span className="text-xs text-zinc-400">—</span>
         ) : (
+          <span className="flex items-center gap-2">
+          {/* The temp password is shown once, below, and stored nowhere. */}
+          <form action={resetAction} data-confirm={`Give ${e.full_name} a new temporary password?`}>
+            <input type="hidden" name="userId" value={e.id} />
+            <button
+              disabled={resetting}
+              className="rounded border border-line px-2.5 py-1 text-xs font-medium hover:bg-panel disabled:opacity-50"
+            >
+              {resetting ? "…" : "Reset password"}
+            </button>
+          </form>
           <form action={action}>
             <input type="hidden" name="userId" value={e.id} />
             <input type="hidden" name="status" value={nextStatus} />
@@ -47,10 +59,18 @@ export function EmployeeRow({ e, isSelf }: { e: EmployeeRowData; isSelf: boolean
               {pending ? "…" : disabled ? "Enable" : "Disable"}
             </button>
           </form>
+          </span>
         )}
       </div>
       {state?.error && <p className="text-xs text-red-600">{state.error}</p>}
       {state?.ok && <p className="text-xs text-approve">{state.ok}</p>}
+      {reset?.error && <p className="text-xs text-red-600">{reset.error}</p>}
+      {/* Selectable and monospaced: it gets copied into WhatsApp. */}
+      {reset?.ok && (
+        <p className="mono select-all rounded bg-approve-soft px-2 py-1 text-xs text-approve">
+          {reset.ok}
+        </p>
+      )}
     </li>
   );
 }

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth/get-profile";
-import { provisionUser, setUserStatus } from "@/lib/provisioning/provision-user";
+import { provisionUser, setUserStatus, resetUserPassword } from "@/lib/provisioning/provision-user";
 import { ROLES, type Role } from "@/lib/auth/roles";
 
 async function getEmployeeRole(userId: string): Promise<string | null> {
@@ -70,5 +70,44 @@ export async function setEmployeeStatus(_prev: unknown, formData: FormData) {
     return { ok: status === "disabled" ? "Account disabled." : "Account enabled." };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to update account" };
+  }
+}
+
+/**
+ * Hand an employee a fresh temporary password.
+ *
+ * Same authority as creating an account — owner, or the general manager — with
+ * the same exception: the general manager may not touch an owner account. That
+ * exception matters more here than it does for creating one, because resetting
+ * a password IS taking over the account, so without it a general manager could
+ * let themselves into the owner's.
+ *
+ * The temp password is returned to the owner's screen once and never stored or
+ * logged. There is nowhere to look it up afterwards; if it is lost, reset again.
+ */
+export async function resetEmployeePassword(_prev: unknown, formData: FormData) {
+  const me = await getProfile();
+  if (!me || !(me.role === "owner" || me.is_general_manager)) return { error: "Not authorized" };
+
+  const userId = String(formData.get("userId") ?? "");
+  if (!userId) return { error: "Missing user" };
+
+  // Resetting your own password here would hand you a temp one and then force
+  // you through /set-password; use the normal change-password flow instead.
+  if (userId === me.id) return { error: "Use Set password to change your own." };
+
+  if (me.role !== "owner") {
+    const target = await getEmployeeRole(userId);
+    if (target === "owner") return { error: "Only the owner can reset an owner account" };
+  }
+
+  try {
+    const { tempPassword } = await resetUserPassword(userId);
+    revalidatePath("/owner/employees");
+    return {
+      ok: `Temp password: ${tempPassword} — send via WhatsApp; they must change it on first login.`,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Failed to reset the password" };
   }
 }

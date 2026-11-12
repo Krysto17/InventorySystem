@@ -69,6 +69,49 @@ export async function provisionUser(input: ProvisionInput, createdBy: string) {
   return { userId, username, tempPassword };
 }
 
+/**
+ * Issue a fresh temporary password for an existing account.
+ *
+ * There was no way to do this. The owner could create an account and hand over
+ * a temp password, and could disable one, but nothing anywhere called
+ * updateUserById or generateLink — and `/set-password` only works for someone
+ * who is already signed in. So an employee who forgot their password had no
+ * route back into the app, and neither did the owner on their behalf.
+ *
+ * Deliberately the same shape as provisioning: a random temp password, returned
+ * ONCE to the caller to pass on over WhatsApp, and `must_change_password` set
+ * so the employee has to choose their own on the next login.
+ *
+ * ORDER MATTERS. The password is changed first and the flag second. If the flag
+ * write fails the employee can still get in with the temp password and merely
+ * is not forced to change it, which the owner can retry. The other order would
+ * leave them flagged to change a password that was never actually set — locked
+ * out AND unable to do anything about it.
+ */
+export async function resetUserPassword(userId: string) {
+  const admin = createAdminClient();
+  const tempPassword = generateTempPassword();
+
+  const { error: authErr } = await admin.auth.admin.updateUserById(userId, {
+    password: tempPassword,
+  });
+  if (authErr) throw new Error(authErr.message);
+
+  const { error: profErr } = await admin
+    .from("profiles")
+    .update({ must_change_password: true })
+    .eq("id", userId);
+  if (profErr) {
+    // The password IS changed, so say so rather than implying nothing happened.
+    throw new Error(
+      `Password reset, but the force-change flag did not save (${profErr.message}). ` +
+        "The temp password works; reset again to set the flag.",
+    );
+  }
+
+  return { tempPassword };
+}
+
 // Enable/disable an account. `disabled` accounts keep their data but are bounced
 // to /login by middleware (profiles.status check) and refused at sign-in. Writes
 // to profiles.status are service-role only, hence the admin client.

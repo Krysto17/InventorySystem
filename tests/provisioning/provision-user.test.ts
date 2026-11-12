@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { adminClient, firstSiteId } from "../setup/supabase-test-clients";
-import { provisionUser } from "@/lib/provisioning/provision-user";
+import { provisionUser, resetUserPassword } from "@/lib/provisioning/provision-user";
 
 let ownerId: string;
 
@@ -124,4 +124,50 @@ describe("provisionUser", () => {
     expect(emails).toContain("collider@magneticjoezion.local");
     expect(emails).not.toContain("collide_user@magneticjoezion.local");
   });
+
+  // Before this existed an employee who forgot their password had no way back
+  // in: /set-password only works for someone already signed in, and nothing
+  // called updateUserById. The owner could create and disable accounts, never
+  // reset one.
+  it("issues a working new temp password and forces a change on next login", async () => {
+    const siteId = await firstSiteId();
+    const { userId } = await provisionUser(
+      { fullName: "Reset Me", username: "reset_me", role: "receiving", siteId },
+      ownerId,
+    );
+    const admin = adminClient();
+    // Clear the flag, as a real employee does on their first login.
+    await admin.from("profiles").update({ must_change_password: false }).eq("id", userId);
+
+    const { tempPassword } = await resetUserPassword(userId);
+    expect(tempPassword).toHaveLength(12);
+
+    // The new password actually signs in...
+    const { createClient } = await import("@supabase/supabase-js");
+    const anon = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    );
+    const { error: signInErr } = await anon.auth.signInWithPassword({
+      email: "reset_me@magneticjoezion.local",
+      password: tempPassword,
+    });
+    expect(signInErr, "the temp password must work").toBeNull();
+
+    // ...and the employee is made to choose their own.
+    const { data: prof } = await admin
+      .from("profiles").select("must_change_password").eq("id", userId).single();
+    expect(prof!.must_change_password).toBe(true);
+  }, 30_000);
+
+  it("gives a different password every time", async () => {
+    const siteId = await firstSiteId();
+    const { userId } = await provisionUser(
+      { fullName: "Reset Twice", username: "reset_twice", role: "receiving", siteId },
+      ownerId,
+    );
+    const a = await resetUserPassword(userId);
+    const b = await resetUserPassword(userId);
+    expect(a.tempPassword).not.toBe(b.tempPassword);
+  }, 30_000);
 });
